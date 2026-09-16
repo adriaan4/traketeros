@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Cuota mensual de la peña Traketeros con pago seguro mediante Stripe.">
+  <title>Traketeros · Cuota mensual</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Traketeros">
+    <img src="assets/traketeros.png" alt="Traketeros">
+  </a>
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>PEÑA OFICIAL</small>
+  </div>
+</header>
+
+<main>
+  <section id="membership" class="membership">
+    <div class="copy">
+      <div class="hero-logo-wrap">
+        <img class="hero-logo" src="assets/traketeros.png" alt="Logo de Traketeros">
+      </div>
+      <small>CUOTA DE LA PEÑA</small>
+      <h1>Esto es de<br><em>Traketeros.</em></h1>
+      <p>Únete a la peña Traketeros y mantén tu cuota al día con un pago mensual automático y seguro gestionado por Stripe.</p>
+      <div class="features">
+        <span>✓ Pago con tarjeta</span>
+        <span>✓ Apple Pay*</span>
+        <span>✓ Google Pay*</span>
+        <span>✓ Cobro mensual automático</span>
+        <span>✓ Stripe Checkout seguro</span>
+      </div>
+      <p class="note">* Los métodos de pago disponibles pueden variar según el dispositivo, navegador y configuración de Stripe.</p>
+    </div>
+
+    <div class="plan">
+      <div class="plan-badge">TRAKETEROS</div>
+      <small>CUOTA MENSUAL</small>
+      <h2>Socio de la peña</h2>
+      <div class="price">8,00 € <i>/mes</i></div>
+      <p>Renovación automática cada mes. Puedes cancelar la suscripción cuando corresponda desde Stripe.</p>
+      <button id="pay">Continuar al pago →</button>
+      <label>🔒 Pago seguro gestionado por Stripe</label>
+      <div id="payError"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  TRAKETEROS · Cuota de socio · Pago seguro mediante Stripe
+</footer>
+<script src="app.js"></script>
+</body>
+</html>
