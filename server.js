@@ -2,6 +2,10 @@ import 'dotenv/config';
 import express from 'express';
 import Stripe from 'stripe';
 import path from 'path';
+import crypto from 'crypto';
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import sharp from 'sharp';
 import { fileURLToPath } from 'url';
 
 const app = express();
@@ -348,6 +352,252 @@ app.post(
     }
   }
 );
+
+// =========================
+// FOTOS DE LA PEÑA (se guardan en Cloudinary)
+// =========================
+// Render borra los archivos del servidor al reiniciar, así que las fotos viven en
+// Cloudinary (gratis). Solo hace falta la variable CLOUDINARY_URL (mira el README).
+// Aquí solo se guarda una foto por cada subida: las miniaturas las genera Cloudinary.
+
+const CLOUDINARY_OK = Boolean(process.env.CLOUDINARY_URL);
+if (CLOUDINARY_OK) cloudinary.config({ secure: true });
+else console.warn('Falta CLOUDINARY_URL: el álbum de fotos está desactivado.');
+
+const TAG = 'traketeros';        // etiqueta con la que se listan las fotos de la peña
+const PREFIX = 'traketeros_';    // prefijo del nombre de cada foto en Cloudinary
+const MAX_PHOTOS = Number(process.env.MAX_PHOTOS) || 1500;
+const UPLOAD_CODE = (process.env.UPLOAD_CODE || '').trim(); // opcional: código para poder subir
+const ID_RE = /^[a-z0-9]{8,40}$/;
+const REFRESH_MS = 5 * 60_000;   // cada cuánto se vuelve a leer la lista desde Cloudinary
+
+let photoIndex = [];             // más nuevas primero
+let lastRefresh = 0;
+let refreshing = null;
+
+function toPhoto(r) {
+  if (!r.public_id?.startsWith(PREFIX)) return null;
+  const id = r.public_id.slice(PREFIX.length);
+  if (!ID_RE.test(id)) return null;
+  const name = r.context?.custom?.name ?? r.context?.name ?? '';
+  return {
+    id,
+    publicId: r.public_id,
+    version: r.version,
+    name: String(name),
+    date: Date.parse(r.created_at) || Date.now()
+  };
+}
+
+// Lee la lista de fotos de Cloudinary (se guarda en memoria para no gastar llamadas a su API)
+function refreshPhotos() {
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
+    const items = [];
+    let cursor;
+    do {
+      const opts = { max_results: 500, context: true };
+      if (cursor) opts.next_cursor = cursor;
+      const r = await cloudinary.api.resources_by_tag(TAG, opts);
+      for (const x of r.resources || []) {
+        const p = toPhoto(x);
+        if (p) items.push(p);
+      }
+      cursor = r.next_cursor;
+    } while (cursor && items.length < MAX_PHOTOS);
+
+    items.sort((a, b) => b.date - a.date);
+    photoIndex = items;
+    lastRefresh = Date.now();
+    console.log(`Fotos en Cloudinary: ${items.length}`);
+  })().finally(() => { refreshing = null; });
+  return refreshing;
+}
+
+if (CLOUDINARY_OK) {
+  refreshPhotos().catch((e) => console.error('No se pudo leer Cloudinary:', e.message || e));
+}
+
+// Direcciones que ve la web: miniatura cuadrada, foto grande y enlace de descarga
+function publicPhoto(p) {
+  const base = { secure: true, version: p.version };
+  return {
+    id: p.id,
+    name: p.name,
+    date: p.date,
+    thumb: cloudinary.url(p.publicId, {
+      ...base,
+      transformation: [
+        { width: 480, height: 480, crop: 'fill', gravity: 'auto' },
+        { quality: 'auto', fetch_format: 'auto' }
+      ]
+    }),
+    url: cloudinary.url(p.publicId, { ...base, format: 'jpg' }),
+    download: cloudinary.url(p.publicId, { ...base, format: 'jpg', flags: 'attachment' })
+  };
+}
+
+function photosOnly(req, res, next) {
+  if (!CLOUDINARY_OK) {
+    return res.status(503).json({ error: 'El álbum todavía no está configurado.' });
+  }
+  next();
+}
+
+// Límite sencillo por IP: 20 subidas por hora
+const uploadHits = new Map();
+setInterval(() => {
+  const limit = Date.now() - 3600_000;
+  for (const [ip, times] of uploadHits) {
+    const recent = times.filter((t) => t > limit);
+    if (recent.length) uploadHits.set(ip, recent);
+    else uploadHits.delete(ip);
+  }
+}, 10 * 60_000).unref();
+
+function uploadLimiter(req, res, next) {
+  const now = Date.now();
+  const recent = (uploadHits.get(req.ip) || []).filter((t) => now - t < 3600_000);
+  if (recent.length >= 20) {
+    return res.status(429).json({ error: 'Has subido muchas fotos seguidas. Prueba otra vez dentro de un rato.' });
+  }
+  recent.push(now);
+  uploadHits.set(req.ip, recent);
+  next();
+}
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 10, fields: 5, fieldSize: 200 },
+  fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/i.test(file.mimetype))
+});
+
+function sameSecret(a, b) {
+  const x = Buffer.from(String(a));
+  const y = Buffer.from(String(b));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
+function uploadErrorMessage(err) {
+  if (err.code === 'LIMIT_FILE_SIZE') return 'Una de las fotos pesa demasiado (máximo 15 MB).';
+  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return 'Máximo 10 fotos cada vez.';
+  return 'No se han podido subir las fotos.';
+}
+
+function sendToCloudinary(buffer, options) {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader
+      .upload_stream(options, (err, result) => (err ? reject(err) : resolve(result)))
+      .end(buffer);
+  });
+}
+
+// Lista de fotos (pública)
+app.get('/api/photos', photosOnly, async (req, res) => {
+  try {
+    if (Date.now() - lastRefresh > REFRESH_MS) await refreshPhotos();
+  } catch (e) {
+    console.error('Error leyendo Cloudinary:', e.message || e);
+    if (!lastRefresh) {
+      return res.status(502).json({ error: 'No se han podido cargar las fotos. Inténtalo en un rato.' });
+    }
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    codeRequired: Boolean(UPLOAD_CODE),
+    photos: photoIndex.map(publicPhoto)
+  });
+});
+
+// Subir fotos (público, con código opcional)
+app.post('/api/photos', photosOnly, uploadLimiter, (req, res) => {
+  upload.array('photos', 10)(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: uploadErrorMessage(err) });
+
+    try {
+      if (UPLOAD_CODE && !sameSecret(String(req.body?.code || '').trim(), UPLOAD_CODE)) {
+        return res.status(403).json({ error: 'El código de la peña no es correcto.' });
+      }
+
+      const files = req.files || [];
+      if (!files.length) {
+        return res.status(400).json({ error: 'No he recibido ninguna foto válida (JPG, PNG o WEBP).' });
+      }
+      if (photoIndex.length + files.length > MAX_PHOTOS) {
+        return res.status(409).json({ error: 'El álbum está lleno.' });
+      }
+
+      // Cloudinary usa "|" y "=" para separar datos: se quitan del nombre
+      const name = String(req.body?.name || '').replace(/[|=\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+      let added = 0;
+      let unreadable = 0;
+      let saveFailed = 0;
+
+      for (const f of files) {
+        let jpeg;
+        try {
+          // rotate() aplica la orientación del móvil. Al no llamar a withMetadata(),
+          // se borran los datos EXIF (incluida la ubicación GPS de la foto).
+          // flatten() pinta de blanco los PNG con fondo transparente.
+          jpeg = await sharp(f.buffer, { failOn: 'error' })
+            .rotate()
+            .flatten({ background: '#ffffff' })
+            .resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 82 })
+            .toBuffer();
+        } catch (e) {
+          unreadable++;
+          console.error('Foto no válida:', e.message);
+          continue;
+        }
+
+        try {
+          const id = Date.now().toString(36) + crypto.randomBytes(5).toString('hex');
+          const options = { public_id: PREFIX + id, tags: [TAG], resource_type: 'image', overwrite: false };
+          if (name) options.context = { name };
+
+          const r = await sendToCloudinary(jpeg, options);
+          photoIndex.unshift({
+            id,
+            publicId: r.public_id,
+            version: r.version,
+            name,
+            date: Date.parse(r.created_at) || Date.now()
+          });
+          added++;
+        } catch (e) {
+          saveFailed++;
+          console.error('Cloudinary no ha guardado la foto:', e.message || e);
+        }
+      }
+
+      if (!added) {
+        return saveFailed
+          ? res.status(502).json({ error: 'No se han podido guardar las fotos. Inténtalo otra vez.' })
+          : res.status(400).json({ error: 'No se ha podido leer ninguna de las fotos. Prueba con JPG o PNG.' });
+      }
+      res.json({ ok: true, added, failed: unreadable + saveFailed });
+    } catch (e) {
+      console.error('Error subiendo fotos:', e);
+      res.status(500).json({ error: 'Ha habido un error en el servidor. Inténtalo otra vez.' });
+    }
+  });
+});
+
+// Borrar una foto (solo admin)
+app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
+  const { id } = req.params;
+  if (!ID_RE.test(id)) return res.status(400).json({ error: 'Id no válido' });
+
+  try {
+    await cloudinary.uploader.destroy(PREFIX + id, { resource_type: 'image', invalidate: true });
+    photoIndex = photoIndex.filter((p) => p.id !== id);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'No se pudo borrar la foto.' });
+  }
+});
 
 // =========================
 // SERVIDOR

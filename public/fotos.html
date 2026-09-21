@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Las fotos de la peña Traketeros. Sube las tuyas.">
+  <meta name="theme-color" content="#e3262e">
+  <title>Traketeros · Fotos</title>
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=5">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
+  </a>
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>LA PEÑA DE LOS TRAKETOS 🍻</small>
+  </div>
+  <a class="header-link" href="/">La cuota</a>
+</header>
+
+<main>
+  <div class="eyebrow">📸 EL ÁLBUM DE LA PEÑA</div>
+  <h1 class="photos-title">Nuestras <span>fotos.</span></h1>
+
+  <section class="uploader" aria-labelledby="up-title">
+    <div class="scribble">SUBE LAS TUYAS 👇</div>
+    <h2 id="up-title">Sube tus fotos</h2>
+    <p class="hint">Elige las fotos del móvil y aparecerán aquí para toda la peña.</p>
+
+    <form id="form" novalidate>
+      <input class="file-input" id="file" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+      <label class="pick" for="file">
+        <span class="pick-icon" aria-hidden="true">📷</span>
+        <span id="pickText">Elegir fotos</span>
+      </label>
+      <div class="previews" id="previews" aria-hidden="true"></div>
+
+      <label class="field">
+        <span>Tu nombre (opcional)</span>
+        <input id="name" type="text" maxlength="40" autocomplete="given-name" placeholder="Tu nombre o tu mote">
+      </label>
+
+      <label class="field" id="codeField" hidden>
+        <span>Código de la peña</span>
+        <input id="code" type="password" autocomplete="off" placeholder="Te lo pasa la directiva">
+      </label>
+
+      <button class="btn submit" id="send" type="submit" disabled>Subir fotos</button>
+      <progress class="bar" id="bar" max="100" value="0" hidden></progress>
+      <p class="msg" id="msg" role="status" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <section aria-labelledby="gal-title">
+    <div class="gallery-head">
+      <h2 id="gal-title">Las fotos</h2>
+      <span class="count" id="count"></span>
+    </div>
+
+    <div class="gallery" id="grid"></div>
+    <p class="empty" id="empty" hidden>Todavía no hay ninguna foto. Sube la primera 👆</p>
+    <p class="msg err" id="loadError" role="alert"></p>
+  </section>
+</main>
+
+<dialog class="lb" id="lb" aria-label="Foto ampliada">
+  <div class="lb-box">
+    <img id="lbImg" alt="">
+    <div class="lb-bar">
+      <div class="lb-cap"><span id="lbName"></span><small id="lbDate"></small></div>
+      <div class="lb-actions">
+        <button class="mini" id="lbPrev" type="button">‹ Anterior</button>
+        <button class="mini" id="lbNext" type="button">Siguiente ›</button>
+        <a class="mini" id="lbDl" href="#" rel="noopener">Descargar</a>
+        <button class="mini danger" id="lbDel" type="button" hidden>Borrar</button>
+        <button class="mini" id="lbClose" type="button">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<footer>
+  TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
+</footer>
+
+<script src="fotos.js?v=1"></script>
+</body>
+</html>
