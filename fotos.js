@@ -90,6 +90,7 @@ function showCurrent() {
   $('lbDl').href = p.download;
   $('lbPrev').hidden = $('lbNext').hidden = photos.length < 2;
   $('lbDel').hidden = !IS_ADMIN;
+  $('lbEditName').hidden = !IS_ADMIN;
 }
 
 function openAt(i) {
@@ -113,6 +114,30 @@ document.addEventListener('keydown', (e) => {
   if (!lb.open) return;
   if (e.key === 'ArrowLeft') step(-1);
   if (e.key === 'ArrowRight') step(1);
+});
+
+$('lbEditName').addEventListener('click', async () => {
+  const p = photos[current];
+  if (!p) return;
+
+  const nuevo = prompt('Nombre para esta foto (déjalo en blanco para que salga como "Traketero"):', p.name || '');
+  if (nuevo === null) return; // ha pulsado cancelar
+
+  try {
+    const res = await fetch('/api/admin/photos/' + encodeURIComponent(p.id) + '/name', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nuevo })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(res.status === 401 ? 'Necesitas entrar como administrador.' : (data.error || 'No se pudo cambiar el nombre.'));
+
+    p.name = data.name;
+    showCurrent();
+    renderGallery();
+  } catch (e) {
+    alert(e.message);
+  }
 });
 
 $('lbDel').addEventListener('click', async () => {

@@ -681,6 +681,30 @@ app.post('/api/photos', photosOnly, uploadLimiter, (req, res) => {
   });
 });
 
+// Cambiar (o quitar) el nombre de una foto ya subida (solo admin)
+app.patch('/api/admin/photos/:id/name', adminAuth, photosOnly, async (req, res) => {
+  const { id } = req.params;
+  if (!ID_RE.test(id)) return res.status(400).json({ error: 'Id no válido' });
+
+  // Igual que al subir: fuera '|' y '=' (Cloudinary los usa para separar el context)
+  const name = String(req.body?.name || '').replace(/[|=\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+
+  try {
+    await cloudinary.api.update(PREFIX + id, {
+      resource_type: 'image',
+      type: 'upload',
+      context: { name }
+    });
+    const p = photoIndex.find((x) => x.id === id);
+    if (p) p.name = name;
+    broadcastPhotosChanged();
+    res.json({ ok: true, name });
+  } catch (e) {
+    console.error('No se pudo cambiar el nombre:', e.message || e);
+    res.status(500).json({ error: 'No se pudo cambiar el nombre.' });
+  }
+});
+
 // Borrar una foto (solo admin)
 app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
   const { id } = req.params;
