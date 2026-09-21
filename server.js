@@ -111,6 +111,7 @@ app.post(
         );
         photoIndex = photoIndex.filter((p) => !borrados.has(p.publicId));
         console.log(`Webhook Cloudinary: ${borrados.size} foto(s) quitada(s) al instante`);
+        broadcastPhotosChanged();
       }
 
       res.json({ ok: true });
@@ -467,9 +468,51 @@ if (CLOUDINARY_OK) {
   // Así, si borras una foto directamente desde Cloudinary, desaparece sola de la
   // web como mucho a los pocos minutos, sin depender de que alguien entre a la página.
   setInterval(() => {
-    refreshPhotos().catch((e) => console.error('No se pudo refrescar Cloudinary:', e.message || e));
+    const antes = photoIndex.map((p) => p.publicId).join(',');
+    refreshPhotos()
+      .then(() => {
+        const despues = photoIndex.map((p) => p.publicId).join(',');
+        if (antes !== despues) broadcastPhotosChanged();
+      })
+      .catch((e) => console.error('No se pudo refrescar Cloudinary:', e.message || e));
   }, REFRESH_MS).unref();
 }
+
+// =========================
+// TIEMPO REAL (avisa a la web cuando se sube o se borra una foto)
+// =========================
+// Cada navegador abierto en fotos.html mantiene una conexión escuchando. En
+// cuanto algo cambia, se le avisa por aquí y la página recarga la lista sola,
+// sin que nadie tenga que refrescar a mano.
+
+const sseClients = new Set();
+
+function broadcastPhotosChanged() {
+  const msg = `data: ${JSON.stringify({ type: 'photos-changed' })}\n\n`;
+  for (const res of sseClients) {
+    try { res.write(msg); } catch { /* cliente ya desconectado */ }
+  }
+}
+
+app.get('/api/photos/stream', photosOnly, (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive'
+  });
+  res.flushHeaders?.();
+  res.write(':ok\n\n');
+
+  sseClients.add(res);
+  req.on('close', () => sseClients.delete(res));
+});
+
+// Mantiene la conexión abierta (algunos proxies la cierran si está muchos segundos en silencio)
+setInterval(() => {
+  for (const res of sseClients) {
+    try { res.write(':ping\n\n'); } catch { /* cliente ya desconectado */ }
+  }
+}, 25_000).unref();
 
 // Direcciones que ve la web: miniatura cuadrada, foto grande y enlace de descarga
 function publicPhoto(p) {
@@ -629,6 +672,7 @@ app.post('/api/photos', photosOnly, uploadLimiter, (req, res) => {
           ? res.status(502).json({ error: 'No se han podido guardar las fotos. Inténtalo otra vez.' })
           : res.status(400).json({ error: 'No se ha podido leer ninguna de las fotos. Prueba con JPG o PNG.' });
       }
+      broadcastPhotosChanged();
       res.json({ ok: true, added, failed: unreadable + saveFailed });
     } catch (e) {
       console.error('Error subiendo fotos:', e);
@@ -645,6 +689,7 @@ app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
   try {
     await cloudinary.uploader.destroy(PREFIX + id, { resource_type: 'image', invalidate: true });
     photoIndex = photoIndex.filter((p) => p.id !== id);
+    broadcastPhotosChanged();
     res.json({ ok: true });
   } catch (e) {
     console.error(e);
