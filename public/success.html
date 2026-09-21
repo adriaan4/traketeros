@@ -1,1 +1,56 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ClubPass · Activada</title><link rel="stylesheet" href="styles.css"></head><body><main class="success"><div><div class="check">✓</div><small>CLUBPASS</small><h1>Todo listo.</h1><p>Tu suscripción se ha activado. Los siguientes pagos se realizarán automáticamente según tu ciclo mensual.</p><a href="/">Volver</a></div></main></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#e3262e">
+  <title>Traketeros · ¡Ya estás dentro!</title>
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
+  </a>
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>LA PEÑA DE LOS TRAKETOS 🍻</small>
+  </div>
+</header>
+
+<main class="success">
+  <div class="success-card">
+    <div class="check">✓</div>
+    <div class="eyebrow">PAGO HECHO</div>
+    <h1>¡Ya eres Traketero!</h1>
+    <p>Tu suscripción está activada. Los próximos pagos se harán solos cada mes, así que nadie tiene que ir detrás de nadie.</p>
+    <p id="who" class="who"></p>
+    <a class="btn" href="/">Volver a la peña</a>
+  </div>
+</main>
+
+<footer>
+  TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
+</footer>
+
+<script>
+  // Opcional: muestra con qué email se ha apuntado (si el servidor lo devuelve)
+  (async () => {
+    const id = new URLSearchParams(location.search).get('session_id');
+    if (!id) return;
+    try {
+      const res = await fetch('/api/subscription/' + encodeURIComponent(id));
+      if (!res.ok) return;
+      const d = await res.json();
+      if (d.email) document.getElementById('who').textContent = 'Apuntado con: ' + d.email;
+    } catch (_) { /* si falla, no pasa nada */ }
+  })();
+</script>
+</body>
+</html>

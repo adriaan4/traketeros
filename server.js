@@ -258,7 +258,7 @@ app.get('/api/admin/overview', adminAuth, async (req, res) => {
                 s.items.data[0]?.price?.recurring?.interval ||
                 'month',
 
-              next: s.current_period_end
+              next: s.items.data[0]?.current_period_end ?? s.current_period_end
             }
           : null
       };

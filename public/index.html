@@ -4,21 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Cuota mensual de la peña Traketeros.">
+  <meta name="theme-color" content="#e3262e">
   <title>Traketeros · La peña de los colegas</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 
 <header class="site-header">
   <a class="brand" href="/" aria-label="Traketeros">
-    <img src="assets/traketeros.png" alt="Logo Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
   </a>
 
   <div class="header-copy">
     <strong>TRAKETEROS</strong>
     <small>LA PEÑA DE LOS TRAKETOS 🍻</small>
   </div>
-
 </header>
 
 <main>
@@ -39,7 +43,7 @@
     </div>
 
     <div class="hero-photo">
-      <img src="assets/traketeros_esp.jpeg" alt="Los Traketeros juntos de fiesta">
+      <img src="assets/traketeros_esp.jpeg" width="1080" height="847" alt="Los Traketeros juntos de fiesta">
       <div class="photo-sticker">LOS TRAKETEROS<br>❤️🤍❤️</div>
     </div>
   </section>
@@ -65,10 +69,10 @@
         <span>✓ Pago seguro con Stripe</span>
       </div>
 
-      <button id="pay">Venga, me apunto 🔥</button>
+      <button id="pay" type="button">Venga, me apunto 🔥</button>
 
       <label>🔒 El pago se hace mediante Stripe</label>
-      <div id="payError"></div>
+      <div id="payError" role="alert"></div>
 
       <p class="note">
         * Los métodos disponibles pueden variar según el móvil, navegador y configuración de Stripe.
@@ -92,7 +96,7 @@
       <h2>Los que están detrás de todo esto</h2>
       <p>Y que probablemente la líen más de una vez.</p>
     </div>
-    <img src="assets/traketeros_esp.jpeg" alt="Grupo de Traketeros">
+    <img src="assets/traketeros_esp.jpeg" width="1080" height="847" loading="lazy" alt="Grupo de Traketeros">
   </section>
 </main>
 
@@ -100,6 +104,6 @@
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
-<script src="app.js"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>
