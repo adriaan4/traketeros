@@ -19,4 +19,4 @@ npm start               # http://localhost:3000
 
 ## Regla de oro
 Todo cambio de diseño se hace en `public/`. Lo que esté fuera de `public/` no se ve en la web.
-Cuando cambies `styles.css` o `app.js`, sube el número de `?v=3` en los HTML para saltarte la caché.
+Cuando cambies `styles.css` o `app.js`, sube el número de `?v=4` en los HTML para saltarte la caché.

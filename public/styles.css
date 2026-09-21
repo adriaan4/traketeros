@@ -38,15 +38,18 @@ body {
   margin-top: -4px;
 }
 
+.brand { flex: none; }
+
 .brand img {
   display: block;
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
+  width: 140px;              /* <-- tamaño del logo (ancho) */
+  height: 110px;             /*     y alto */
+  object-fit: cover;
+  object-position: center 10%;
   background: white;
   border: 3px solid var(--black);
-  border-radius: 50%;
-  padding: 3px;
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 var(--black);
 }
 
 .header-copy strong {
@@ -151,6 +154,26 @@ h1 span {
   border: 6px solid var(--black);
   box-shadow: 9px 9px 0 var(--red);
 }
+
+.hearts {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 3px;
+  vertical-align: middle;
+}
+
+.heart {
+  width: 24px;
+  height: 24px;
+  overflow: visible;
+  fill: var(--h);
+  stroke: var(--black);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+.heart.pink { --h: #f03090; }
+.heart.blue { --h: #1a8de6; }
 
 .photo-sticker {
   position: absolute;
@@ -327,38 +350,6 @@ h1 span {
   margin-top: 25px;
   font-size: 12px;
   font-weight: 900;
-}
-
-/* ---------- Franja negra con foto pequeña ---------- */
-.photo-strip {
-  margin-top: 90px;
-  background: var(--black);
-  color: white;
-  padding: 25px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 25px;
-  align-items: center;
-  transform: rotate(-1deg);
-}
-
-.photo-strip h2 {
-  font-family: Bangers, Impact, sans-serif;
-  color: var(--yellow);
-  font-size: 50px;
-  margin: 10px 0;
-}
-
-.photo-strip p { font-weight: 600; }
-
-.photo-strip img {
-  display: block;
-  width: 280px;              /* <-- tamaño de la foto de abajo */
-  max-width: 100%;
-  height: auto;
-  aspect-ratio: 5 / 4;
-  object-fit: cover;
-  border: 5px solid white;
 }
 
 footer {
@@ -541,14 +532,14 @@ td small { color: #666; }
 /* ---------- Móvil ---------- */
 @media (max-width: 800px) {
   .site-header { padding: 12px 4%; }
+  .brand img { width: 108px; height: 85px; }
   .header-pill { display: none; }
   main { width: 90%; margin-top: 25px; }
-  .hero, .membership, .photo-strip { grid-template-columns: 1fr; }
+  .hero, .membership { grid-template-columns: 1fr; }
   h1 { font-size: 70px; }
   .hero-photo { margin-top: 20px; max-width: 260px; }
   .membership { margin-top: 65px; }
   .side-note { margin-top: 10px; }
-  .photo-strip img { justify-self: center; width: 240px; }
   .card { padding: 26px; }
   .stats { grid-template-columns: 1fr 1fr; }
 }
