@@ -1,18 +1,8 @@
-const pay=document.getElementById('pay');
-const payError=document.getElementById('payError');
+// Mantén aquí tu lógica actual de Stripe.
+// Si ya tienes un app.js funcionando, reemplaza este archivo por el tuyo.
+// El botón conserva el id "pay" y el contenedor de errores "payError".
 
-pay?.addEventListener('click', async ()=>{
-  pay.disabled=true;
-  pay.textContent='Abriendo pago…';
-  payError.textContent='';
-  try{
-    const r=await fetch('/api/create-checkout-session',{method:'POST',headers:{'Content-Type':'application/json'}});
-    const d=await r.json();
-    if(!r.ok) throw new Error(d.error||'No se pudo iniciar el pago');
-    location.href=d.url;
-  }catch(e){
-    pay.disabled=false;
-    pay.textContent='Continuar al pago →';
-    payError.textContent=e.message;
-  }
+document.getElementById("pay")?.addEventListener("click", () => {
+  const error = document.getElementById("payError");
+  error.textContent = "Conecta aquí tu enlace o lógica actual de Stripe.";
 });
