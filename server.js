@@ -75,6 +75,52 @@ app.post(
   }
 );
 
+// =========================
+// WEBHOOK CLOUDINARY (borrado al instante)
+// =========================
+// Si borras una foto directamente en el panel de Cloudinary, Cloudinary avisa
+// aquí al instante y la quitamos de la web sin esperar al refresco automático.
+// Hay que activar esta URL en Cloudinary: Console -> Settings -> Webhook
+// Notifications -> Add notification URL:
+//   https://traketeros.onrender.com/api/cloudinary-webhook
+
+app.post(
+  '/api/cloudinary-webhook',
+  express.raw({ type: 'application/json' }),
+  (req, res) => {
+    try {
+      const timestamp = req.headers['x-cld-timestamp'];
+      const signature = req.headers['x-cld-signature'];
+      const rawBody = req.body.toString('utf8');
+
+      const valid = cloudinary.utils.verifyNotificationSignature(
+        rawBody,
+        Number(timestamp),
+        signature
+      );
+
+      if (!valid) {
+        return res.status(401).json({ error: 'Firma no válida' });
+      }
+
+      const body = JSON.parse(rawBody);
+
+      if (body.notification_type === 'delete') {
+        const borrados = new Set(
+          (body.resources || []).map((r) => r.public_id)
+        );
+        photoIndex = photoIndex.filter((p) => !borrados.has(p.publicId));
+        console.log(`Webhook Cloudinary: ${borrados.size} foto(s) quitada(s) al instante`);
+      }
+
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('Error en webhook de Cloudinary:', e.message || e);
+      res.status(400).json({ error: 'Error procesando notificación' });
+    }
+  }
+);
+
 // JSON
 app.use(express.json());
 
@@ -369,7 +415,7 @@ const PREFIX = 'traketeros_';    // prefijo del nombre de cada foto en Cloudinar
 const MAX_PHOTOS = Number(process.env.MAX_PHOTOS) || 1500;
 const UPLOAD_CODE = (process.env.UPLOAD_CODE || '').trim(); // opcional: código para poder subir
 const ID_RE = /^[a-z0-9]{8,40}$/;
-const REFRESH_MS = 5 * 60_000;   // cada cuánto se vuelve a leer la lista desde Cloudinary
+const REFRESH_MS = 2 * 60_000;   // cada cuánto se vuelve a leer la lista desde Cloudinary
 
 let photoIndex = [];             // más nuevas primero
 let lastRefresh = 0;
@@ -416,6 +462,13 @@ function refreshPhotos() {
 
 if (CLOUDINARY_OK) {
   refreshPhotos().catch((e) => console.error('No se pudo leer Cloudinary:', e.message || e));
+
+  // Se vuelve a leer Cloudinary cada REFRESH_MS aunque nadie visite fotos.html.
+  // Así, si borras una foto directamente desde Cloudinary, desaparece sola de la
+  // web como mucho a los pocos minutos, sin depender de que alguien entre a la página.
+  setInterval(() => {
+    refreshPhotos().catch((e) => console.error('No se pudo refrescar Cloudinary:', e.message || e));
+  }, REFRESH_MS).unref();
 }
 
 // Direcciones que ve la web: miniatura cuadrada, foto grande y enlace de descarga
