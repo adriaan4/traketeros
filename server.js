@@ -114,6 +114,32 @@ app.post(
         broadcastPhotosChanged();
       }
 
+      // Cuando cambias el nombre (context) de una foto desde el panel de Cloudinary,
+      // esto actualiza la web al instante sin esperar al refresco automático.
+      if (body.notification_type === 'resource_context_changed') {
+        let changed = false;
+        for (const [publicId, info] of Object.entries(body.resources || {})) {
+          if (!publicId.startsWith(PREFIX)) continue;
+          const id = publicId.slice(PREFIX.length);
+          const p = photoIndex.find((x) => x.id === id);
+          if (!p) continue;
+
+          const nameEntry = [...(info.added || []), ...(info.updated || [])]
+            .find((e) => e.name === 'name');
+          if (nameEntry) {
+            p.name = String(nameEntry.value || '').slice(0, 40);
+            changed = true;
+          } else if ((info.removed || []).some((e) => e.name === 'name')) {
+            p.name = '';
+            changed = true;
+          }
+        }
+        if (changed) {
+          console.log('Webhook Cloudinary: nombre de foto actualizado al instante');
+          broadcastPhotosChanged();
+        }
+      }
+
       res.json({ ok: true });
     } catch (e) {
       console.error('Error en webhook de Cloudinary:', e.message || e);
