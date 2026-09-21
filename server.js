@@ -693,7 +693,9 @@ app.patch('/api/admin/photos/:id/name', adminAuth, photosOnly, async (req, res) 
     await cloudinary.api.update(PREFIX + id, {
       resource_type: 'image',
       type: 'upload',
-      context: { name }
+      // La API de administración de Cloudinary espera el contexto como texto
+      // "clave=valor", no como objeto (el nombre ya viene sin '|' ni '=').
+      context: `name=${name}`
     });
     const p = photoIndex.find((x) => x.id === id);
     if (p) p.name = name;
