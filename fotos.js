@@ -6,7 +6,11 @@
 const $ = (id) => document.getElementById(id);
 
 const IS_ADMIN = new URLSearchParams(location.search).get('admin') === '1';
-const MAX_SELECTED = 30;   // fotos por tanda
+// La app .apk carga esta misma web dentro de un WebView de Android, que se
+// distingue del navegador normal por llevar "; wv)" en su user-agent. Lo
+// usamos solo para saber si estamos dentro de la app (no cambia nada más).
+const IS_APP_WEBVIEW = /; wv\)/.test(navigator.userAgent);
+const MAX_SELECTED = 100;   // fotos por tanda
 const CHUNK = 6;           // fotos por petición
 const MAX_SIDE = 2000;     // las fotos se reducen en el móvil antes de subirlas
 
@@ -88,6 +92,7 @@ function showCurrent() {
   $('lbName').textContent = p.name || 'Traketero';
   $('lbDate').textContent = fecha(p.date);
   $('lbDl').href = p.download;
+  $('lbDl').hidden = IS_APP_WEBVIEW; // dentro de la app no se puede descargar; en la web se deja como siempre
   $('lbPrev').hidden = $('lbNext').hidden = photos.length < 2;
   $('lbDel').hidden = !IS_ADMIN;
   $('lbEditName').hidden = !IS_ADMIN;
@@ -108,68 +113,6 @@ function step(delta) {
 $('lbPrev').addEventListener('click', () => step(-1));
 $('lbNext').addEventListener('click', () => step(1));
 $('lbClose').addEventListener('click', () => lb.close());
-
-// La app envuelta en .apk usa un WebView de Android que no tiene gestor de
-// descargas: el enlace "Descargar" se ve pero no hace nada. Solo en ese caso
-// (se detecta por la marca "; wv)" del user-agent, que el navegador normal no
-// tiene) usamos el panel de "Compartir" de Android para poder guardar la foto.
-// En el navegador de siempre esto no se activa: sigue funcionando como hasta ahora.
-const IS_APP_WEBVIEW = /; wv\)/.test(navigator.userAgent);
-
-// TEMPORAL: caja de diagnóstico visible en pantalla (algunas apps que
-// envuelven la web no muestran los alert() de JavaScript, así que escribimos
-// el texto directamente en la página para poder verlo seguro).
-function debugShow(text) {
-  let box = document.getElementById('dbgBox');
-  if (!box) {
-    box = document.createElement('div');
-    box.id = 'dbgBox';
-    box.style.cssText =
-      'position:fixed;left:0;right:0;bottom:0;max-height:60vh;overflow:auto;' +
-      'background:#000;color:#0f0;font:12px monospace;padding:12px;z-index:999999;' +
-      'white-space:pre-wrap;border-top:3px solid #0f0;';
-    document.body.appendChild(box);
-  }
-  box.textContent += text + '\n\n';
-}
-
-$('lbDl').addEventListener('click', async (e) => {
-  e.preventDefault();
-  debugShow(
-    'IS_APP_WEBVIEW: ' + IS_APP_WEBVIEW +
-    '\nUA: ' + navigator.userAgent +
-    '\nnavigator.share: ' + (typeof navigator.share) +
-    '\nnavigator.canShare: ' + (typeof navigator.canShare) +
-    '\nfetch: ' + (typeof fetch)
-  );
-
-  const p = photos[current];
-  if (!p) { debugShow('No hay foto seleccionada (raro).'); return; }
-
-  try {
-    debugShow('Descargando la imagen…');
-    const res = await fetch(p.download);
-    debugShow('fetch status: ' + res.status);
-    const blob = await res.blob();
-    debugShow('blob recibido, tamaño: ' + blob.size + ' bytes, tipo: ' + blob.type);
-    const file = new File([blob], (p.name || 'foto').replace(/\s+/g, '_') + '.jpg', {
-      type: blob.type || 'image/jpeg'
-    });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      debugShow('canShare con archivos: sí. Llamando a navigator.share()…');
-      await navigator.share({ files: [file] });
-      debugShow('navigator.share() terminó sin error.');
-      return;
-    } else {
-      debugShow('canShare con archivos: NO soportado en esta app.');
-    }
-  } catch (err) {
-    debugShow('Fallo: ' + err.name + ': ' + err.message);
-  }
-
-  debugShow('Probando window.open como último recurso…');
-  window.open(p.download, '_blank');
-});
 lb.addEventListener('click', (e) => { if (e.target === lb) lb.close(); }); // clic en el fondo
 lb.addEventListener('close', () => { $('lbImg').removeAttribute('src'); });
 document.addEventListener('keydown', (e) => {
