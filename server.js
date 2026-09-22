@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import Stripe from 'stripe';
 import path from 'path';
+import fs from 'fs';
 import crypto from 'crypto';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
@@ -801,6 +802,132 @@ app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
     console.error(e);
     res.status(500).json({ error: 'No se pudo borrar la foto.' });
   }
+});
+
+// =========================
+// TRAKETÍMETRO (marcador de cervezas, cubatas, chupitos y porros)
+// =========================
+// Se guarda en memoria y también en un fichero (data/traketimetro.json) para
+// que sobreviva a un reinicio normal del servidor. Ojo: en Render el disco
+// es "efímero", así que en un redeploy o al dormirse el servicio se puede
+// perder (igual que photoIndex). Para una noche de fiesta es más que
+// suficiente.
+
+const TRAKE_TIPOS = ['cervezas', 'cubatas', 'chupitos', 'porros'];
+const TRAKE_DATA_DIR = path.join(__dirname, 'data');
+const TRAKE_FILE = path.join(TRAKE_DATA_DIR, 'traketimetro.json');
+
+let trakeData = {}; // key = nombre en minúsculas -> { name, cervezas, cubatas, chupitos, porros }
+
+function trakeLoad() {
+  try {
+    const raw = fs.readFileSync(TRAKE_FILE, 'utf8');
+    trakeData = JSON.parse(raw) || {};
+  } catch {
+    trakeData = {};
+  }
+}
+
+function trakeSave() {
+  try {
+    fs.mkdirSync(TRAKE_DATA_DIR, { recursive: true });
+    fs.writeFileSync(TRAKE_FILE, JSON.stringify(trakeData), 'utf8');
+  } catch (e) {
+    console.error('No se pudo guardar el traketímetro:', e.message || e);
+  }
+}
+
+trakeLoad();
+
+function trakeList() {
+  return Object.values(trakeData)
+    .map((p) => ({
+      name: p.name,
+      cervezas: p.cervezas || 0,
+      cubatas: p.cubatas || 0,
+      chupitos: p.chupitos || 0,
+      porros: p.porros || 0,
+      total: (p.cervezas || 0) + (p.cubatas || 0) + (p.chupitos || 0) + (p.porros || 0)
+    }))
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'es'));
+}
+
+const sseTrakeClients = new Set();
+
+function broadcastTrakeChanged() {
+  const msg = `data: ${JSON.stringify({ type: 'trake-changed', people: trakeList() })}\n\n`;
+  for (const res of sseTrakeClients) {
+    try { res.write(msg); } catch { /* cliente ya desconectado */ }
+  }
+}
+
+app.get('/api/traketimetro/stream', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive'
+  });
+  res.flushHeaders?.();
+  res.write(':ok\n\n');
+
+  sseTrakeClients.add(res);
+  req.on('close', () => sseTrakeClients.delete(res));
+});
+
+setInterval(() => {
+  for (const res of sseTrakeClients) {
+    try { res.write(':ping\n\n'); } catch { /* cliente ya desconectado */ }
+  }
+}, 25_000).unref();
+
+// Lista de gente + ranking
+app.get('/api/traketimetro', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ people: trakeList() });
+});
+
+function trakeValidate(req, res) {
+  const name = String(req.body?.name || '').trim().slice(0, 30);
+  const tipo = String(req.body?.tipo || '');
+
+  if (!name) {
+    res.status(400).json({ error: 'Falta el nombre.' });
+    return null;
+  }
+  if (!TRAKE_TIPOS.includes(tipo)) {
+    res.status(400).json({ error: 'Tipo no válido.' });
+    return null;
+  }
+  return { name, tipo };
+}
+
+// Sumar una consumición
+app.post('/api/traketimetro/add', (req, res) => {
+  const v = trakeValidate(req, res);
+  if (!v) return;
+
+  const key = v.name.toLowerCase();
+  if (!trakeData[key]) {
+    trakeData[key] = { name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
+  }
+  trakeData[key][v.tipo] = (trakeData[key][v.tipo] || 0) + 1;
+  trakeSave();
+  broadcastTrakeChanged();
+  res.json({ ok: true, people: trakeList() });
+});
+
+// Deshacer la última pulsación (por si te equivocas de nombre o de cuadro)
+app.post('/api/traketimetro/undo', (req, res) => {
+  const v = trakeValidate(req, res);
+  if (!v) return;
+
+  const key = v.name.toLowerCase();
+  if (trakeData[key] && trakeData[key][v.tipo] > 0) {
+    trakeData[key][v.tipo] -= 1;
+    trakeSave();
+    broadcastTrakeChanged();
+  }
+  res.json({ ok: true, people: trakeList() });
 });
 
 // =========================

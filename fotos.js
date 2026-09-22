@@ -6,11 +6,7 @@
 const $ = (id) => document.getElementById(id);
 
 const IS_ADMIN = new URLSearchParams(location.search).get('admin') === '1';
-// La app .apk carga esta misma web dentro de un WebView de Android, que se
-// distingue del navegador normal por llevar "; wv)" en su user-agent. Lo
-// usamos solo para saber si estamos dentro de la app (no cambia nada más).
-const IS_APP_WEBVIEW = /; wv\)/.test(navigator.userAgent);
-const MAX_SELECTED = 100;   // fotos por tanda
+const MAX_SELECTED = 30;   // fotos por tanda
 const CHUNK = 6;           // fotos por petición
 const MAX_SIDE = 2000;     // las fotos se reducen en el móvil antes de subirlas
 
@@ -92,7 +88,6 @@ function showCurrent() {
   $('lbName').textContent = p.name || 'Traketero';
   $('lbDate').textContent = fecha(p.date);
   $('lbDl').href = p.download;
-  $('lbDl').hidden = IS_APP_WEBVIEW; // dentro de la app no se puede descargar; en la web se deja como siempre
   $('lbPrev').hidden = $('lbNext').hidden = photos.length < 2;
   $('lbDel').hidden = !IS_ADMIN;
   $('lbEditName').hidden = !IS_ADMIN;

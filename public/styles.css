@@ -827,3 +827,252 @@ a.mini {
 @media (prefers-reduced-motion: reduce) {
   .ph { transition: none; }
 }
+
+/* ---------- Navegación con varios enlaces en la cabecera ---------- */
+.nav-links {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.nav-links .header-link {
+  margin-left: 0;
+}
+
+@media (max-width: 500px) {
+  .nav-links { gap: 6px; }
+}
+
+/* ---------- Juegos ---------- */
+.juegos-main,
+.trake-main {
+  width: min(760px, 92%);
+  margin: 40px auto 70px;
+}
+
+.section-title {
+  font-family: Bangers, Impact, sans-serif;
+  font-size: 46px;
+  line-height: 1;
+  margin: 10px 0 6px;
+}
+
+.section-title span { color: var(--red); }
+
+.hint {
+  margin: 0 0 26px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 26px;
+}
+
+.tab {
+  border: 3px solid var(--black);
+  background: white;
+  padding: 10px 16px;
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 var(--black);
+  transition: .12s ease;
+}
+
+.tab:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--black); }
+
+.tab.active {
+  background: var(--red);
+  color: white;
+}
+
+.game-card {
+  background: var(--cream);
+  border: 4px solid var(--black);
+  box-shadow: 12px 12px 0 var(--red);
+  padding: 46px 30px;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 16px;
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+
+.game-card .scribble {
+  right: auto;
+  left: 20px;
+}
+
+.game-card .badge {
+  background: var(--yellow);
+  border: 3px solid var(--black);
+  padding: 6px 12px;
+  font-weight: 900;
+  font-size: 12px;
+  transform: rotate(-2deg);
+}
+
+.game-card .pregunta {
+  font-family: Bangers, Impact, sans-serif;
+  font-size: 30px;
+  line-height: 1.25;
+  margin: 0;
+  max-width: 34ch;
+}
+
+.game-card .vuelta {
+  margin: 0;
+  font-weight: 800;
+  color: var(--red);
+}
+
+.game-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.contador {
+  font-weight: 900;
+  background: #f4f0e4;
+  border: 2px solid var(--black);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+/* ---------- Traketímetro ---------- */
+.trake-card { margin-top: 10px; }
+
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border: 4px solid var(--black);
+  background: white;
+  padding: 22px 10px;
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 6px 6px 0 var(--black);
+  transition: .1s ease;
+}
+
+.tile:hover { transform: translate(3px, 3px); box-shadow: 3px 3px 0 var(--black); }
+.tile:active,
+.tile.pulse { transform: translate(6px, 6px); box-shadow: 0 0 0 var(--black); background: var(--yellow); }
+
+.tile-emoji { font-size: 34px; }
+
+.undo {
+  width: 100%;
+  margin-top: 10px;
+  background: white;
+  color: var(--black);
+}
+
+.undo[hidden] { display: none; }
+
+.ranking {
+  margin-top: 60px;
+}
+
+.live-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #0a7a2f;
+  margin-left: 8px;
+  vertical-align: middle;
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .25; }
+}
+
+.ranking-scroll {
+  overflow-x: auto;
+  border: 4px solid var(--black);
+  background: white;
+  box-shadow: 10px 10px 0 var(--red);
+}
+
+.ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 480px;
+}
+
+.ranking-table th,
+.ranking-table td {
+  padding: 12px 10px;
+  text-align: center;
+  border-bottom: 2px solid #eee;
+  font-weight: 700;
+}
+
+.ranking-table thead th {
+  background: var(--red);
+  color: white;
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.ranking-table .rk-name {
+  text-align: left;
+  font-weight: 900;
+}
+
+.ranking-table .rk-pos {
+  font-size: 18px;
+  width: 40px;
+}
+
+.ranking-table .rk-total {
+  font-weight: 900;
+  color: var(--red);
+}
+
+.ranking-table tbody tr:last-child td { border-bottom: none; }
+
+.ranking-vacio {
+  margin: 0;
+  padding: 26px 16px;
+  text-align: center;
+  font-weight: 700;
+  color: #666;
+}
+
+@media (max-width: 500px) {
+  .section-title { font-size: 36px; }
+  .game-card { padding: 34px 20px; }
+  .game-card .pregunta { font-size: 24px; }
+  .tiles { gap: 10px; }
+  .tile { padding: 18px 8px; }
+  .tile-emoji { font-size: 28px; }
+}

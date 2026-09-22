@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Juegos para la peña Traketeros: Yo nunca, Quién es más probable y Bebe el que.">
+  <meta name="theme-color" content="#e3262e">
+  <title>Traketeros · Juegos</title>
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=6">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
+  </a>
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>LA PEÑA DE LOS TRAKETOS 🍻</small>
+  </div>
+  <nav class="nav-links">
+    <a class="header-link" href="/">La cuota</a>
+    <a class="header-link" href="fotos.html">📸 Fotos</a>
+    <a class="header-link" href="traketimetro.html">🍻 Traketímetro</a>
+  </nav>
+</header>
+
+<main class="juegos-main">
+  <div class="eyebrow">🎮 PARA ROMPER EL HIELO</div>
+  <h1 class="section-title">A <span>jugar.</span></h1>
+  <p class="hint">Elige el juego, dale a la carta y a liarla.</p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-modo="yo_nunca" type="button">🙊 Yo nunca</button>
+    <button class="tab" data-modo="mas_probable" type="button">👉 Más probable</button>
+    <button class="tab" data-modo="bebe_el_que" type="button">🍺 Bebe el que</button>
+  </div>
+
+  <section class="game-card" id="carta" role="button" tabindex="0" aria-label="Toca para ver la siguiente pregunta">
+    <div class="scribble">TOCA LA CARTA 👆</div>
+    <div class="badge" id="badge">🙊 Yo nunca</div>
+    <p class="pregunta" id="pregunta">Cargando…</p>
+    <p class="vuelta" id="vuelta" hidden>🔁 ¡Vuelta completa! Empezamos otra vez.</p>
+  </section>
+
+  <div class="game-controls">
+    <span class="contador" id="contador">0 / 0</span>
+    <button class="btn" id="siguiente" type="button">Siguiente ▶</button>
+  </div>
+</main>
+
+<footer>
+  TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
+</footer>
+
+<script src="juegos.js?v=1"></script>
+</body>
+</html>
