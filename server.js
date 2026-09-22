@@ -184,6 +184,11 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
     const domain = `${protocol}://${host}`;
 
+    // Cogemos el precio de la cuota mensual para poder cobrar hoy exactamente
+    // esa misma cantidad como "cuota de entrada" (pago único), además de
+    // arrancar la suscripción.
+    const price = await stripe.prices.retrieve(process.env.STRIPE_PRICE_ID);
+
     console.log('Dominio:', domain);
     console.log('Price ID:', process.env.STRIPE_PRICE_ID);
 
@@ -192,6 +197,20 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
       line_items: [
         {
+          // Cuota de entrada: se cobra HOY, una sola vez, por el mismo
+          // importe que la mensualidad.
+          price_data: {
+            currency: price.currency,
+            product: price.product,
+            unit_amount: price.unit_amount
+          },
+          quantity: 1
+        },
+        {
+          // La suscripción recurrente. Su primer tramo (hoy -> día 1) va
+          // gratis (proration_behavior: 'none' más abajo) porque ese tramo
+          // ya se cobra arriba como cuota de entrada. Así no se cobra dos
+          // veces por los mismos días.
           price: process.env.STRIPE_PRICE_ID,
           quantity: 1
         }
@@ -202,6 +221,17 @@ app.post('/api/create-checkout-session', async (req, res) => {
       billing_address_collection: 'auto',
 
       allow_promotion_codes: true,
+
+      // Todas las suscripciones nuevas quedan ancladas al día 1 de cada mes.
+      // proration_behavior: 'none' evita que Stripe cobre además un
+      // prorrateo por los días entre hoy y el día 1 (esos días ya se cubren
+      // con la cuota de entrada de arriba).
+      subscription_data: {
+        billing_cycle_anchor_config: {
+          day_of_month: 1
+        },
+        proration_behavior: 'none'
+      },
 
       success_url:
         `${domain}/success.html?session_id={CHECKOUT_SESSION_ID}`,
