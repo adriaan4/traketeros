@@ -108,6 +108,35 @@ function step(delta) {
 $('lbPrev').addEventListener('click', () => step(-1));
 $('lbNext').addEventListener('click', () => step(1));
 $('lbClose').addEventListener('click', () => lb.close());
+
+// La app envuelta en .apk usa un WebView de Android que no tiene gestor de
+// descargas: el enlace "Descargar" se ve pero no hace nada. Solo en ese caso
+// (se detecta por la marca "; wv)" del user-agent, que el navegador normal no
+// tiene) usamos el panel de "Compartir" de Android para poder guardar la foto.
+// En el navegador de siempre esto no se activa: sigue funcionando como hasta ahora.
+const IS_APP_WEBVIEW = /; wv\)/.test(navigator.userAgent);
+
+$('lbDl').addEventListener('click', async (e) => {
+  if (!IS_APP_WEBVIEW) return; // navegador normal: se descarga con el enlace de toda la vida
+
+  const p = photos[current];
+  if (!p) return;
+  e.preventDefault();
+
+  try {
+    const res = await fetch(p.download);
+    const blob = await res.blob();
+    const file = new File([blob], (p.name || 'foto').replace(/\s+/g, '_') + '.jpg', {
+      type: blob.type || 'image/jpeg'
+    });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      return;
+    }
+  } catch { /* seguimos abajo con el último recurso */ }
+
+  window.open(p.download, '_blank'); // último recurso dentro de la app
+});
 lb.addEventListener('click', (e) => { if (e.target === lb) lb.close(); }); // clic en el fondo
 lb.addEventListener('close', () => { $('lbImg').removeAttribute('src'); });
 document.addEventListener('keydown', (e) => {
