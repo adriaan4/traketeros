@@ -10,7 +10,15 @@ import { fileURLToPath } from 'url';
 
 const app = express();
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Fijamos la versión de la API de Stripe explícitamente. Sin esto, Stripe usa
+// la versión "por defecto" de la cuenta, que puede ser antigua y no soportar
+// billing_cycle_anchor_config en Checkout Sessions (se añadió el 24/06/2026).
+// Si no se fija, Stripe IGNORA ese parámetro sin avisar y ancla la
+// suscripción a "hoy + 1 mes" en vez de al día 1, que es justo el bug que
+// estabas viendo (factura el 22 oct en vez del 1 oct).
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2026-06-24.dahlia'
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
