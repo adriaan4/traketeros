@@ -197,6 +197,26 @@ app.post('/api/create-checkout-session', async (req, res) => {
     // arrancar la suscripción.
     const price = await stripe.prices.retrieve(process.env.STRIPE_PRICE_ID);
 
+    // Día 1 del mes que viene, a las 00:00 UTC: ahí es cuando arranca de
+    // verdad el cobro mensual recurrente.
+    //
+    // NOTA: antes esto se hacía con billing_cycle_anchor_config +
+    // proration_behavior: 'none', pero Stripe NO permite combinar
+    // proration_behavior: 'none' con un precio de pago único (price_data)
+    // en la misma Checkout Session — de ahí el error "You cannot set
+    // proration_behavior to none in a Checkout Session with one-time
+    // prices". Por eso ahora se usa un periodo de prueba (trial_end) que
+    // termina justo ese día: durante ese periodo no se genera ningún cargo
+    // de la suscripción (así no se cobra dos veces por los días entre hoy
+    // y el día 1), y sí es compatible con la cuota de entrada de pago único.
+    const ahora = new Date();
+    const dia1ProximoMes = new Date(Date.UTC(
+      ahora.getUTCFullYear(),
+      ahora.getUTCMonth() + 1,
+      1, 0, 0, 0
+    ));
+    const trialEnd = Math.floor(dia1ProximoMes.getTime() / 1000);
+
     console.log('Dominio:', domain);
     console.log('Price ID:', process.env.STRIPE_PRICE_ID);
 
@@ -215,10 +235,9 @@ app.post('/api/create-checkout-session', async (req, res) => {
           quantity: 1
         },
         {
-          // La suscripción recurrente. Su primer tramo (hoy -> día 1) va
-          // gratis (proration_behavior: 'none' más abajo) porque ese tramo
-          // ya se cobra arriba como cuota de entrada. Así no se cobra dos
-          // veces por los mismos días.
+          // La suscripción recurrente. No cobra nada hasta que acabe el
+          // periodo de prueba (trialEnd = día 1 del mes que viene), porque
+          // ese primer tramo ya se cobra arriba como cuota de entrada.
           price: process.env.STRIPE_PRICE_ID,
           quantity: 1
         }
@@ -230,15 +249,12 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
       allow_promotion_codes: true,
 
-      // Todas las suscripciones nuevas quedan ancladas al día 1 de cada mes.
-      // proration_behavior: 'none' evita que Stripe cobre además un
-      // prorrateo por los días entre hoy y el día 1 (esos días ya se cubren
-      // con la cuota de entrada de arriba).
+      // La suscripción arranca "en pausa" (trial) hasta el día 1 del mes
+      // que viene. Ese día Stripe cobra ya la cuota completa y a partir de
+      // ahí sigue cobrando cada día 1. El cliente sí paga HOY la cuota de
+      // entrada (arriba), así que no se queda ningún día sin cobrar.
       subscription_data: {
-        billing_cycle_anchor_config: {
-          day_of_month: 1
-        },
-        proration_behavior: 'none'
+        trial_end: trialEnd
       },
 
       success_url:
