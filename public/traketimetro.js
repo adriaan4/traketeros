@@ -1,8 +1,9 @@
 // Traketímetro.
-//   GET  /api/traketimetro             → lista de gente + ranking
-//   POST /api/traketimetro/add         → { name, tipo }
-//   POST /api/traketimetro/undo        → { name, tipo }
-//   GET  /api/traketimetro/stream      → avisos en directo (SSE)
+//   GET   /api/traketimetro             → lista de gente + ranking
+//   POST  /api/traketimetro/add         → { name, tipo, cantidad? }
+//   POST  /api/traketimetro/undo        → { name, tipo, cantidad? }
+//   POST  /api/traketimetro/set         → { name, cervezas, cubatas, chupitos, porros } (corregir a mano)
+//   GET   /api/traketimetro/stream      → avisos en directo (SSE)
 
 const $ = (id) => document.getElementById(id);
 
@@ -23,6 +24,12 @@ let people = [];
 
 function nombreActual() {
   return $('name').value.trim();
+}
+
+function cantidadActual() {
+  const n = Math.round(Number($('cantidad').value));
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, 24);
 }
 
 function decirEstado(text, kind) {
@@ -64,6 +71,9 @@ function pintarRanking() {
       <td>${p.chupitos}</td>
       <td>${p.porros}</td>
       <td class="rk-total">${p.total}</td>
+      <td class="rk-edit">
+        <button class="rk-edit-btn" type="button" data-editar="${escapeHtml(p.name)}" aria-label="Editar cantidades de ${escapeHtml(p.name)}">✏️</button>
+      </td>
     </tr>
   `).join('');
 }
@@ -89,6 +99,7 @@ async function registrar(tipo) {
   }
   store.set('trake-name', name);
 
+  const cantidad = cantidadActual();
   const t = TIPOS[tipo];
   const btn = $('tile-' + tipo);
   btn?.classList.add('pulse');
@@ -98,7 +109,7 @@ async function registrar(tipo) {
     const res = await fetch('/api/traketimetro/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, tipo })
+      body: JSON.stringify({ name, tipo, cantidad })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'No se ha podido apuntar.');
@@ -107,9 +118,9 @@ async function registrar(tipo) {
     actualizarDatalist();
     pintarRanking();
 
-    lastAction = { name, tipo };
+    lastAction = { name, tipo, cantidad };
     $('undo').hidden = false;
-    decirEstado(`${t.emoji} +1 ${t.etiqueta.toLowerCase()} para ${name}`, 'ok');
+    decirEstado(`${t.emoji} +${cantidad} ${t.etiqueta.toLowerCase()}${cantidad > 1 ? 's' : ''} para ${name}`, 'ok');
   } catch (e) {
     decirEstado(e.message || 'Ha habido un error.', 'err');
   }
@@ -117,7 +128,7 @@ async function registrar(tipo) {
 
 async function deshacer() {
   if (!lastAction) return;
-  const { name, tipo } = lastAction;
+  const { name, tipo, cantidad } = lastAction;
   lastAction = null;
   $('undo').hidden = true;
 
@@ -125,7 +136,7 @@ async function deshacer() {
     const res = await fetch('/api/traketimetro/undo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, tipo })
+      body: JSON.stringify({ name, tipo, cantidad })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'No se ha podido deshacer.');
@@ -133,11 +144,82 @@ async function deshacer() {
     people = data.people || people;
     actualizarDatalist();
     pintarRanking();
-    decirEstado(`Deshecho: -1 ${TIPOS[tipo].etiqueta.toLowerCase()} de ${name}`, 'ok');
+    decirEstado(`Deshecho: -${cantidad || 1} ${TIPOS[tipo].etiqueta.toLowerCase()}${(cantidad || 1) > 1 ? 's' : ''} de ${name}`, 'ok');
   } catch (e) {
     decirEstado(e.message || 'Ha habido un error.', 'err');
   }
 }
+
+// ---------- Corregir cantidades a mano ----------
+const editDialog = $('editDialog');
+let editando = null;
+
+function abrirEditor(name) {
+  const p = people.find((x) => x.name === name);
+  if (!p) return;
+
+  editando = name;
+  $('editTitle').textContent = `Editar a ${p.name}`;
+  $('editCervezas').value = p.cervezas;
+  $('editCubatas').value = p.cubatas;
+  $('editChupitos').value = p.chupitos;
+  $('editPorros').value = p.porros;
+  $('editMsg').textContent = '';
+  $('editMsg').className = 'msg';
+
+  if (!editDialog.open) editDialog.showModal();
+}
+
+function numeroEditor(id) {
+  const n = Math.round(Number($(id).value));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, 999);
+}
+
+$('rankingBody').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-editar]');
+  if (!btn) return;
+  abrirEditor(btn.dataset.editar);
+});
+
+$('editCancel').addEventListener('click', () => editDialog.close());
+editDialog.addEventListener('click', (e) => { if (e.target === editDialog) editDialog.close(); });
+editDialog.addEventListener('close', () => { editando = null; });
+
+$('editSave').addEventListener('click', async () => {
+  if (!editando) return;
+
+  const body = {
+    name: editando,
+    cervezas: numeroEditor('editCervezas'),
+    cubatas: numeroEditor('editCubatas'),
+    chupitos: numeroEditor('editChupitos'),
+    porros: numeroEditor('editPorros')
+  };
+
+  const saveBtn = $('editSave');
+  saveBtn.disabled = true;
+  try {
+    const res = await fetch('/api/traketimetro/set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'No se ha podido guardar.');
+
+    people = data.people || people;
+    actualizarDatalist();
+    pintarRanking();
+    editDialog.close();
+    decirEstado(`Cantidades de ${editando} corregidas ✏️`, 'ok');
+  } catch (e) {
+    $('editMsg').textContent = e.message || 'Ha habido un error.';
+    $('editMsg').className = 'msg err';
+  } finally {
+    saveBtn.disabled = false;
+  }
+});
 
 // ---------- En directo (SSE) ----------
 function conectarDirecto() {

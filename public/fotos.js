@@ -88,6 +88,7 @@ function showCurrent() {
   $('lbName').textContent = p.name || 'Traketero';
   $('lbDate').textContent = fecha(p.date);
   $('lbDl').href = p.download;
+  $('lbDl').dataset.name = p.name || 'traketeros';
   $('lbPrev').hidden = $('lbNext').hidden = photos.length < 2;
   $('lbDel').hidden = !IS_ADMIN;
 }
@@ -113,6 +114,45 @@ document.addEventListener('keydown', (e) => {
   if (!lb.open) return;
   if (e.key === 'ArrowLeft') step(-1);
   if (e.key === 'ArrowRight') step(1);
+});
+
+// Descargar la foto al móvil (no solo abrirla en el navegador).
+// En iOS/Android, un <a href> normal a menudo solo abre la imagen a pantalla
+// completa aunque el servidor mande Content-Disposition: attachment. Bajamos
+// la foto como blob y forzamos la descarga desde ahí, que sí funciona.
+$('lbDl').addEventListener('click', async (e) => {
+  const a = e.currentTarget;
+  const url = a.href;
+  if (!url || url === '#') return;
+
+  e.preventDefault();
+  const originalText = a.textContent;
+  try {
+    a.textContent = 'Descargando…';
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('fallo al descargar');
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    const safeName = (a.dataset.name || 'traketeros')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'traketeros';
+
+    const tmp = document.createElement('a');
+    tmp.href = blobUrl;
+    tmp.download = `traketeros-${safeName}.jpg`;
+    document.body.appendChild(tmp);
+    tmp.click();
+    tmp.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+  } catch {
+    // Si algo falla (p. ej. sin conexión), al menos abrimos la foto
+    // para que se pueda guardar a mano.
+    window.open(url, '_blank', 'noopener');
+  } finally {
+    a.textContent = originalText;
+  }
 });
 
 $('lbDel').addEventListener('click', async () => {

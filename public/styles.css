@@ -827,6 +827,7 @@ a.mini {
 @media (prefers-reduced-motion: reduce) {
   .ph { transition: none; }
 }
+}
 
 /* ---------- Navegación con varios enlaces en la cabecera ---------- */
 .nav-links {
@@ -1056,6 +1057,29 @@ a.mini {
 .ranking-table .rk-total {
   font-weight: 900;
   color: var(--red);
+}
+
+.ranking-table .rk-edit {
+  width: 44px;
+}
+
+.ranking-table .rk-edit-btn {
+  border: 3px solid var(--black);
+  background: white;
+  padding: 6px 9px;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--black);
+}
+
+.ranking-table .rk-edit-btn:hover { transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--black); }
+.ranking-table .rk-edit-btn:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--black); }
+
+.edit-title {
+  font-family: Bangers, Impact, sans-serif;
+  font-size: 30px;
+  margin: 0 0 4px;
+  letter-spacing: .3px;
 }
 
 .ranking-table tbody tr:last-child td { border-bottom: none; }

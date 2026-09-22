@@ -889,6 +889,8 @@ app.get('/api/traketimetro', (req, res) => {
 function trakeValidate(req, res) {
   const name = String(req.body?.name || '').trim().slice(0, 30);
   const tipo = String(req.body?.tipo || '');
+  const cantidadRaw = Math.round(Number(req.body?.cantidad));
+  const cantidad = Number.isFinite(cantidadRaw) && cantidadRaw >= 1 ? Math.min(cantidadRaw, 24) : 1;
 
   if (!name) {
     res.status(400).json({ error: 'Falta el nombre.' });
@@ -898,10 +900,10 @@ function trakeValidate(req, res) {
     res.status(400).json({ error: 'Tipo no válido.' });
     return null;
   }
-  return { name, tipo };
+  return { name, tipo, cantidad };
 }
 
-// Sumar una consumición
+// Sumar una o varias consumiciones de golpe
 app.post('/api/traketimetro/add', (req, res) => {
   const v = trakeValidate(req, res);
   if (!v) return;
@@ -910,7 +912,7 @@ app.post('/api/traketimetro/add', (req, res) => {
   if (!trakeData[key]) {
     trakeData[key] = { name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
   }
-  trakeData[key][v.tipo] = (trakeData[key][v.tipo] || 0) + 1;
+  trakeData[key][v.tipo] = (trakeData[key][v.tipo] || 0) + v.cantidad;
   trakeSave();
   broadcastTrakeChanged();
   res.json({ ok: true, people: trakeList() });
@@ -922,11 +924,34 @@ app.post('/api/traketimetro/undo', (req, res) => {
   if (!v) return;
 
   const key = v.name.toLowerCase();
-  if (trakeData[key] && trakeData[key][v.tipo] > 0) {
-    trakeData[key][v.tipo] -= 1;
+  if (trakeData[key]) {
+    trakeData[key][v.tipo] = Math.max(0, (trakeData[key][v.tipo] || 0) - v.cantidad);
     trakeSave();
     broadcastTrakeChanged();
   }
+  res.json({ ok: true, people: trakeList() });
+});
+
+// Corregir las cantidades de una persona a mano (por si se han equivocado)
+app.post('/api/traketimetro/set', (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0, 30);
+  if (!name) return res.status(400).json({ error: 'Falta el nombre.' });
+
+  const clamp = (v) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) && n >= 0 ? Math.min(n, 999) : 0;
+  };
+
+  const key = name.toLowerCase();
+  trakeData[key] = {
+    name: trakeData[key]?.name || name,
+    cervezas: clamp(req.body?.cervezas),
+    cubatas: clamp(req.body?.cubatas),
+    chupitos: clamp(req.body?.chupitos),
+    porros: clamp(req.body?.porros)
+  };
+  trakeSave();
+  broadcastTrakeChanged();
   res.json({ ok: true, people: trakeList() });
 });
 

@@ -43,6 +43,11 @@
       <datalist id="nombres"></datalist>
     </label>
 
+    <label class="field">
+      <span>Cantidad a añadir</span>
+      <input id="cantidad" type="number" inputmode="numeric" min="1" max="24" step="1" value="1">
+    </label>
+
     <div class="tiles">
       <button class="tile" id="tile-cervezas" type="button">
         <span class="tile-emoji">🍺</span>
@@ -82,6 +87,7 @@
             <th>🥃</th>
             <th>🚬</th>
             <th>Total</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="rankingBody"></tbody>
@@ -91,10 +97,41 @@
   </section>
 </main>
 
+<dialog class="lb" id="editDialog" aria-label="Editar cantidades">
+  <div class="lb-box">
+    <h2 class="edit-title" id="editTitle">Editar</h2>
+    <p class="hint">Corrige las cantidades si te has equivocado al apuntar.</p>
+
+    <label class="field">
+      <span>🍺 Cervezas</span>
+      <input id="editCervezas" type="number" inputmode="numeric" min="0" max="999" step="1">
+    </label>
+    <label class="field">
+      <span>🍹 Cubatas</span>
+      <input id="editCubatas" type="number" inputmode="numeric" min="0" max="999" step="1">
+    </label>
+    <label class="field">
+      <span>🥃 Chupitos</span>
+      <input id="editChupitos" type="number" inputmode="numeric" min="0" max="999" step="1">
+    </label>
+    <label class="field">
+      <span>🚬 Porros</span>
+      <input id="editPorros" type="number" inputmode="numeric" min="0" max="999" step="1">
+    </label>
+
+    <p class="msg" id="editMsg" role="status" aria-live="polite"></p>
+
+    <div class="lb-actions">
+      <button class="btn submit" id="editSave" type="button">Guardar cambios</button>
+      <button class="mini" id="editCancel" type="button">Cancelar</button>
+    </div>
+  </div>
+</dialog>
+
 <footer>
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
-<script src="traketimetro.js?v=1"></script>
+<script src="traketimetro.js?v=2"></script>
 </body>
 </html>
