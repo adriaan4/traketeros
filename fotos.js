@@ -117,11 +117,18 @@ $('lbClose').addEventListener('click', () => lb.close());
 const IS_APP_WEBVIEW = /; wv\)/.test(navigator.userAgent);
 
 $('lbDl').addEventListener('click', async (e) => {
-  if (!IS_APP_WEBVIEW) return; // navegador normal: se descarga con el enlace de toda la vida
+  // TEMPORAL: para saber qué soporta esta app exactamente, incluso si la
+  // detección de "es la app envuelta" fallara. Se puede quitar después.
+  e.preventDefault();
+  alert(
+    'IS_APP_WEBVIEW: ' + IS_APP_WEBVIEW +
+    '\nUA: ' + navigator.userAgent +
+    '\nnavigator.share: ' + (typeof navigator.share) +
+    '\nnavigator.canShare: ' + (typeof navigator.canShare)
+  );
 
   const p = photos[current];
   if (!p) return;
-  e.preventDefault();
 
   try {
     const res = await fetch(p.download);
@@ -132,8 +139,12 @@ $('lbDl').addEventListener('click', async (e) => {
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file] });
       return;
+    } else {
+      alert('canShare con archivos: no soportado en esta app');
     }
-  } catch { /* seguimos abajo con el último recurso */ }
+  } catch (err) {
+    alert('Fallo al compartir/descargar: ' + err.message);
+  }
 
   window.open(p.download, '_blank'); // último recurso dentro de la app
 });
