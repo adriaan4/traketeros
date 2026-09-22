@@ -955,6 +955,23 @@ app.post('/api/traketimetro/set', (req, res) => {
   res.json({ ok: true, people: trakeList() });
 });
 
+// Borrar a alguien del ranking por completo (solo admin, desde
+// traketimetro.html?admin=1)
+app.delete('/api/admin/traketimetro/:name', adminAuth, (req, res) => {
+  const name = String(req.params.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Falta el nombre.' });
+
+  const key = name.toLowerCase();
+  if (!trakeData[key]) {
+    return res.status(404).json({ error: 'No existe esa persona en el ranking.' });
+  }
+
+  delete trakeData[key];
+  trakeSave();
+  broadcastTrakeChanged();
+  res.json({ ok: true, people: trakeList() });
+});
+
 // =========================
 // SERVIDOR
 // =========================

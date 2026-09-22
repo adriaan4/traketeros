@@ -1060,7 +1060,8 @@ a.mini {
 }
 
 .ranking-table .rk-edit {
-  width: 44px;
+  min-width: 44px;
+  white-space: nowrap;
 }
 
 .ranking-table .rk-edit-btn {
@@ -1070,6 +1071,10 @@ a.mini {
   font: inherit;
   cursor: pointer;
   box-shadow: 3px 3px 0 var(--black);
+}
+
+.ranking-table .rk-edit-btn + .rk-edit-btn {
+  margin-left: 6px;
 }
 
 .ranking-table .rk-edit-btn:hover { transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--black); }

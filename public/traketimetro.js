@@ -1,11 +1,14 @@
 // Traketímetro.
-//   GET   /api/traketimetro             → lista de gente + ranking
-//   POST  /api/traketimetro/add         → { name, tipo, cantidad? }
-//   POST  /api/traketimetro/undo        → { name, tipo, cantidad? }
-//   POST  /api/traketimetro/set         → { name, cervezas, cubatas, chupitos, porros } (corregir a mano)
-//   GET   /api/traketimetro/stream      → avisos en directo (SSE)
+//   GET    /api/traketimetro              → lista de gente + ranking
+//   POST   /api/traketimetro/add          → { name, tipo, cantidad? }
+//   POST   /api/traketimetro/undo         → { name, tipo, cantidad? }
+//   POST   /api/traketimetro/set          → { name, cervezas, cubatas, chupitos, porros } (corregir a mano)
+//   DELETE /api/admin/traketimetro/:name  → borrar a alguien del ranking (solo admin: abre traketimetro.html?admin=1)
+//   GET    /api/traketimetro/stream       → avisos en directo (SSE)
 
 const $ = (id) => document.getElementById(id);
+
+const IS_ADMIN = new URLSearchParams(location.search).get('admin') === '1';
 
 const TIPOS = {
   cervezas: { emoji: '🍺', etiqueta: 'Cerveza' },
@@ -73,6 +76,7 @@ function pintarRanking() {
       <td class="rk-total">${p.total}</td>
       <td class="rk-edit">
         <button class="rk-edit-btn" type="button" data-editar="${escapeHtml(p.name)}" aria-label="Editar cantidades de ${escapeHtml(p.name)}">✏️</button>
+        ${IS_ADMIN ? `<button class="rk-edit-btn" type="button" data-borrar="${escapeHtml(p.name)}" aria-label="Borrar a ${escapeHtml(p.name)} del ranking">🗑️</button>` : ''}
       </td>
     </tr>
   `).join('');
@@ -177,10 +181,31 @@ function numeroEditor(id) {
 }
 
 $('rankingBody').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-editar]');
-  if (!btn) return;
-  abrirEditor(btn.dataset.editar);
+  const editBtn = e.target.closest('[data-editar]');
+  if (editBtn) { abrirEditor(editBtn.dataset.editar); return; }
+
+  const delBtn = e.target.closest('[data-borrar]');
+  if (delBtn) { borrarPersona(delBtn.dataset.borrar); }
 });
+
+// ---------- Borrar a alguien del ranking (solo admin) ----------
+async function borrarPersona(name) {
+  if (!confirm(`¿Borrar a ${name} del ranking? Se perderán todas sus cantidades.`)) return;
+
+  try {
+    const res = await fetch('/api/admin/traketimetro/' + encodeURIComponent(name), { method: 'DELETE' });
+    if (!res.ok) {
+      throw new Error(res.status === 401 ? 'Necesitas entrar como administrador.' : 'No se ha podido borrar.');
+    }
+    const data = await res.json().catch(() => ({}));
+    people = data.people || people.filter((p) => p.name !== name);
+    actualizarDatalist();
+    pintarRanking();
+    decirEstado(`${name} borrado del ranking 🗑️`, 'ok');
+  } catch (e) {
+    decirEstado(e.message || 'Ha habido un error.', 'err');
+  }
+}
 
 $('editCancel').addEventListener('click', () => editDialog.close());
 editDialog.addEventListener('click', (e) => { if (e.target === editDialog) editDialog.close(); });

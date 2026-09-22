@@ -6,6 +6,24 @@
 const $ = (id) => document.getElementById(id);
 
 const IS_ADMIN = new URLSearchParams(location.search).get('admin') === '1';
+
+// Si esto existe, estamos dentro de la app Android (ver MainActivity.java),
+// que expone este puente para poder guardar descargas de verdad en el
+// dispositivo (el truco del blob de más abajo no funciona solo en un
+// WebView).
+const ANDROID_APP =
+  window.AndroidDownloader && typeof window.AndroidDownloader.guardarArchivo === 'function'
+    ? window.AndroidDownloader
+    : null;
+
+function blobABase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 const MAX_SELECTED = 30;   // fotos por tanda
 const CHUNK = 6;           // fotos por petición
 const MAX_SIDE = 2000;     // las fotos se reducen en el móvil antes de subirlas
@@ -127,25 +145,35 @@ $('lbDl').addEventListener('click', async (e) => {
 
   e.preventDefault();
   const originalText = a.textContent;
+
+  const safeName = (a.dataset.name || 'traketeros')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '') || 'traketeros';
+  const fileName = `traketeros-${safeName}.jpg`;
+
   try {
     a.textContent = 'Descargando…';
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('fallo al descargar');
     const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
 
-    const safeName = (a.dataset.name || 'traketeros')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '') || 'traketeros';
-
-    const tmp = document.createElement('a');
-    tmp.href = blobUrl;
-    tmp.download = `traketeros-${safeName}.jpg`;
-    document.body.appendChild(tmp);
-    tmp.click();
-    tmp.remove();
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+    if (ANDROID_APP) {
+      // Dentro de la app: se lo pasamos a Android para que lo guarde de
+      // verdad en el dispositivo (en Descargas).
+      const base64 = await blobABase64(blob);
+      ANDROID_APP.guardarArchivo(base64, fileName, blob.type || 'image/jpeg');
+    } else {
+      // Navegador normal (móvil o escritorio): truco del blob de siempre.
+      const blobUrl = URL.createObjectURL(blob);
+      const tmp = document.createElement('a');
+      tmp.href = blobUrl;
+      tmp.download = fileName;
+      document.body.appendChild(tmp);
+      tmp.click();
+      tmp.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+    }
   } catch {
     // Si algo falla (p. ej. sin conexión), al menos abrimos la foto
     // para que se pueda guardar a mano.
