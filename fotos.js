@@ -116,37 +116,59 @@ $('lbClose').addEventListener('click', () => lb.close());
 // En el navegador de siempre esto no se activa: sigue funcionando como hasta ahora.
 const IS_APP_WEBVIEW = /; wv\)/.test(navigator.userAgent);
 
+// TEMPORAL: caja de diagnóstico visible en pantalla (algunas apps que
+// envuelven la web no muestran los alert() de JavaScript, así que escribimos
+// el texto directamente en la página para poder verlo seguro).
+function debugShow(text) {
+  let box = document.getElementById('dbgBox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'dbgBox';
+    box.style.cssText =
+      'position:fixed;left:0;right:0;bottom:0;max-height:60vh;overflow:auto;' +
+      'background:#000;color:#0f0;font:12px monospace;padding:12px;z-index:999999;' +
+      'white-space:pre-wrap;border-top:3px solid #0f0;';
+    document.body.appendChild(box);
+  }
+  box.textContent += text + '\n\n';
+}
+
 $('lbDl').addEventListener('click', async (e) => {
-  // TEMPORAL: para saber qué soporta esta app exactamente, incluso si la
-  // detección de "es la app envuelta" fallara. Se puede quitar después.
   e.preventDefault();
-  alert(
+  debugShow(
     'IS_APP_WEBVIEW: ' + IS_APP_WEBVIEW +
     '\nUA: ' + navigator.userAgent +
     '\nnavigator.share: ' + (typeof navigator.share) +
-    '\nnavigator.canShare: ' + (typeof navigator.canShare)
+    '\nnavigator.canShare: ' + (typeof navigator.canShare) +
+    '\nfetch: ' + (typeof fetch)
   );
 
   const p = photos[current];
-  if (!p) return;
+  if (!p) { debugShow('No hay foto seleccionada (raro).'); return; }
 
   try {
+    debugShow('Descargando la imagen…');
     const res = await fetch(p.download);
+    debugShow('fetch status: ' + res.status);
     const blob = await res.blob();
+    debugShow('blob recibido, tamaño: ' + blob.size + ' bytes, tipo: ' + blob.type);
     const file = new File([blob], (p.name || 'foto').replace(/\s+/g, '_') + '.jpg', {
       type: blob.type || 'image/jpeg'
     });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      debugShow('canShare con archivos: sí. Llamando a navigator.share()…');
       await navigator.share({ files: [file] });
+      debugShow('navigator.share() terminó sin error.');
       return;
     } else {
-      alert('canShare con archivos: no soportado en esta app');
+      debugShow('canShare con archivos: NO soportado en esta app.');
     }
   } catch (err) {
-    alert('Fallo al compartir/descargar: ' + err.message);
+    debugShow('Fallo: ' + err.name + ': ' + err.message);
   }
 
-  window.open(p.download, '_blank'); // último recurso dentro de la app
+  debugShow('Probando window.open como último recurso…');
+  window.open(p.download, '_blank');
 });
 lb.addEventListener('click', (e) => { if (e.target === lb) lb.close(); }); // clic en el fondo
 lb.addEventListener('close', () => { $('lbImg').removeAttribute('src'); });
