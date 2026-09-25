@@ -1105,3 +1105,23 @@ a.mini {
   .tile { padding: 18px 8px; }
   .tile-emoji { font-size: 28px; }
 }
+
+/* ---------- Aviso de mantenimiento del pago ---------- */
+.mantenimiento-pago {
+  margin-top: 18px;
+  padding: 16px;
+  background: var(--yellow);
+  border: 3px solid var(--black);
+  box-shadow: 4px 4px 0 var(--black);
+  border-radius: 8px;
+}
+.mantenimiento-pago strong {
+  display: block;
+  font-size: 17px;
+  margin-bottom: 6px;
+}
+.mantenimiento-pago p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+}
