@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Traketímetro: apunta cervezas, cubatas, chupitos y porros, y mira el ranking de la peña.">
+  <meta name="theme-color" content="#e3262e">
+  <title>Traketeros · Traketímetro</title>
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=6">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
+  </a>
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>LA PEÑA DE LOS TRAKETOS 🍻</small>
+  </div>
+  <nav class="nav-links">
+    <a class="header-link" href="/">La cuota</a>
+    <a class="header-link" href="fotos.html">📸 Fotos</a>
+    <a class="header-link" href="juegos.html">🎮 Juegos</a>
+  </nav>
+</header>
+
+<main class="trake-main">
+  <div class="eyebrow">🍻 EL MARCADOR DE LA NOCHE</div>
+  <h1 class="section-title">Traketí<span>metro.</span></h1>
+  <p class="hint">Pon tu nombre y toca cada vez que caiga algo. El ranking se actualiza para todos en directo.</p>
+
+  <section class="card trake-card">
+    <div class="scribble">EMPIEZA AQUÍ 👇</div>
+
+    <label class="field">
+      <span>Tu nombre</span>
+      <input id="name" type="text" maxlength="30" list="nombres" autocomplete="off" placeholder="Escribe tu nombre">
+      <datalist id="nombres"></datalist>
+    </label>
+
+    <label class="field">
+      <span>Cantidad a añadir</span>
+      <input id="cantidad" type="number" inputmode="numeric" min="1" max="24" step="1" value="1">
+    </label>
+
+    <div class="tiles">
+      <button class="tile" id="tile-cervezas" type="button">
+        <span class="tile-emoji">🍺</span>
+        <span>Cerveza</span>
+      </button>
+      <button class="tile" id="tile-cubatas" type="button">
+        <span class="tile-emoji">🍹</span>
+        <span>Cubata</span>
+      </button>
+      <button class="tile" id="tile-chupitos" type="button">
+        <span class="tile-emoji">🥃</span>
+        <span>Chupito</span>
+      </button>
+      <button class="tile" id="tile-porros" type="button">
+        <span class="tile-emoji">🚬</span>
+        <span>Porro</span>
+      </button>
+    </div>
+
+    <p class="msg" id="msg" role="status" aria-live="polite"></p>
+    <button class="btn undo" id="undo" type="button" hidden>↩️ Deshacer el último</button>
+  </section>
+
+  <section class="ranking">
+    <div class="gallery-head">
+      <h2>Ranking <span class="live-dot" aria-hidden="true"></span></h2>
+    </div>
+
+    <div class="ranking-scroll">
+      <table class="ranking-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Nombre</th>
+            <th>🍺</th>
+            <th>🍹</th>
+            <th>🥃</th>
+            <th>🚬</th>
+            <th>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rankingBody"></tbody>
+      </table>
+      <p class="ranking-vacio" id="rankingVacio">Todavía no ha apuntado nadie. ¡Sé el primero! 🍻</p>
+    </div>
+  </section>
+</main>
+
+<dialog class="lb" id="editDialog" aria-label="Editar cantidades">
+  <div class="lb-box">
+    <h2 class="edit-title" id="editTitle">Editar</h2>
+    <p class="hint">Corrige las cantidades si te has equivocado al apuntar.</p>
+
+    <label class="field">
+      <span>🍺 Cervezas</span>
+      <input id="editCervezas" type="number" inputmode="numeric" min="0" max="999" step="1">
+    </label>
+    <label class="field">
+      <span>🍹 Cubatas</span>
+      <input id="editCubatas" type="number" inputmode="numeric" min="0" max="999" step="1">
+    </label>
+    <label class="field">
+      <span>🥃 Chupitos</span>
+      <input id="editChupitos" type="number" inputmode="numeric" min="0" max="999" step="1">
+    </label>
+    <label class="field">
+      <span>🚬 Porros</span>
+      <input id="editPorros" type="number" inputmode="numeric" min="0" max="999" step="1">
+    </label>
+
+    <p class="msg" id="editMsg" role="status" aria-live="polite"></p>
+
+    <div class="lb-actions">
+      <button class="btn submit" id="editSave" type="button">Guardar cambios</button>
+      <button class="mini" id="editCancel" type="button">Cancelar</button>
+    </div>
+  </div>
+</dialog>
+
+<footer>
+  TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
+</footer>
+
+<script src="traketimetro.js?v=3"></script>
+</body>
+</html>
