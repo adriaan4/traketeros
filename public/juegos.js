@@ -494,8 +494,15 @@ function impActualizarBoton1() {
   const maxImp = Math.max(1, imp.jugadores.length - 1);
   const input = $('impNumImpostores');
   input.max = String(maxImp);
-  if (Number(input.value) > maxImp) input.value = String(maxImp);
-  if (Number(input.value) < 1 || !input.value) input.value = '1';
+
+  // Solo recortamos si ya hay un número escrito fuera de rango. Si el campo
+  // está vacío (el usuario lo ha borrado para escribir otro número) lo dejamos
+  // tal cual, si no, no le deja escribir nada que no sea 1 o el máximo.
+  if (input.value !== '') {
+    const val = Number(input.value);
+    if (val > maxImp) input.value = String(maxImp);
+    else if (val < 1) input.value = '1';
+  }
 }
 
 function impRenderLista() {
@@ -534,6 +541,10 @@ $('impAddForm').addEventListener('submit', (e) => {
 });
 
 $('impNumImpostores').addEventListener('input', impActualizarBoton1);
+$('impNumImpostores').addEventListener('blur', () => {
+  if ($('impNumImpostores').value === '') $('impNumImpostores').value = '1';
+  impActualizarBoton1();
+});
 
 $('impContinuar1').addEventListener('click', () => {
   if (imp.jugadores.length < 3) {
@@ -662,6 +673,8 @@ $('impSiguienteJugador').addEventListener('click', () => {
   } else {
     $('impPaso3').hidden = true;
     $('impPaso4').hidden = false;
+    const idx = Math.floor(Math.random() * imp.jugadores.length);
+    $('impEmpieza').textContent = `🎲 Empieza ${imp.jugadores[idx]}`;
   }
 });
 

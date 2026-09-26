@@ -922,6 +922,11 @@ a.mini {
   color: white;
 }
 
+.game-card[hidden],
+.game-controls[hidden] {
+  display: none;
+}
+
 .game-card {
   background: var(--cream);
   border: 4px solid var(--black);
@@ -993,6 +998,13 @@ a.mini {
 }
 
 .imp-step[hidden] { display: none; }
+
+.imp-empieza {
+  font-family: Bangers, Impact, sans-serif;
+  font-size: 24px;
+  color: var(--red);
+  margin: 4px 0 20px;
+}
 
 .imp-add {
   display: flex;
