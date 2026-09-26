@@ -90,6 +90,14 @@ function renderGallery() {
     cap.textContent = p.name || 'Traketero';
 
     btn.append(img, cap);
+
+    if (p.desc) {
+      const desc = document.createElement('span');
+      desc.className = 'ph-desc';
+      desc.textContent = p.desc;
+      btn.append(desc);
+    }
+
     btn.addEventListener('click', () => openAt(i));
     grid.append(btn);
   });
@@ -104,6 +112,8 @@ function showCurrent() {
   $('lbImg').src = p.url;
   $('lbImg').alt = p.name ? `Foto de ${p.name}` : 'Foto de la peña';
   $('lbName').textContent = p.name || 'Traketero';
+  $('lbDesc').textContent = p.desc || '';
+  $('lbDesc').hidden = !p.desc;
   $('lbDate').textContent = fecha(p.date);
   $('lbDl').href = p.download;
   $('lbDl').dataset.name = p.name || 'traketeros';
@@ -255,11 +265,12 @@ async function shrink(file) {
   }
 }
 
-function sendChunk(files, name, code, onProgress) {
+function sendChunk(files, name, desc, code, onProgress) {
   return new Promise((resolve, reject) => {
     const fd = new FormData();
     files.forEach((f) => fd.append('photos', f, f.name));
     fd.append('name', name);
+    fd.append('desc', desc);
     if (code) fd.append('code', code);
 
     const xhr = new XMLHttpRequest();
@@ -284,6 +295,7 @@ $('form').addEventListener('submit', async (e) => {
   if (!selected.length) return;
 
   const name = $('name').value.trim();
+  const desc = $('desc').value.trim();
   const code = $('code').value.trim();
   const send = $('send');
   const bar = $('bar');
@@ -299,7 +311,7 @@ $('form').addEventListener('submit', async (e) => {
     for (let i = 0; i < selected.length; i += CHUNK) {
       const group = await Promise.all(selected.slice(i, i + CHUNK).map(shrink));
       say(`Subiendo ${Math.min(i + CHUNK, selected.length)} de ${selected.length}…`);
-      const res = await sendChunk(group, name, code, (f) => {
+      const res = await sendChunk(group, name, desc, code, (f) => {
         bar.value = ((done + group.length * f) / selected.length) * 100;
       });
       done += group.length;
@@ -309,6 +321,7 @@ $('form').addEventListener('submit', async (e) => {
     store.set('traketeros_name', name);
     store.set('traketeros_code', code);
 
+    $('desc').value = ''; // la descripción es de esas fotos concretas, no se recuerda para la próxima
     fileInput.value = '';
     selected = [];
     previews.replaceChildren();

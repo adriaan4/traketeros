@@ -638,13 +638,20 @@ td small { color: #666; }
   font-weight: 900;
 }
 
-.field input {
+.field input,
+.field textarea {
   width: 100%;
   padding: 12px;
   border: 3px solid var(--black);
   background: var(--cream);
   font: inherit;
   font-weight: 700;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 56px;
+  font-weight: 600;
 }
 
 .submit {
@@ -742,12 +749,24 @@ td small { color: #666; }
 
 .ph-cap {
   display: block;
-  padding: 10px 2px 11px;
+  padding: 10px 2px 0;
   overflow: hidden;
   font-size: 12px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ph-desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  padding: 3px 2px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #444;
 }
 
 .empty {
@@ -798,6 +817,15 @@ td small { color: #666; }
 }
 
 .lb-cap { font-weight: 900; }
+.lb-desc {
+  margin: 4px 0;
+  max-width: 46ch;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #444;
+}
+.lb-desc[hidden] { display: none; }
 .lb-cap small { display: block; font-weight: 600; color: #555; }
 .lb-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 

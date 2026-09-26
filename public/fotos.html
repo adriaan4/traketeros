@@ -51,6 +51,11 @@
         <input id="name" type="text" maxlength="40" autocomplete="given-name" placeholder="Tu nombre o tu mote">
       </label>
 
+      <label class="field">
+        <span>Descripción (opcional)</span>
+        <textarea id="desc" maxlength="140" rows="2" placeholder="Ej: aquí está el pana Juanico con la cerveza el ludao"></textarea>
+      </label>
+
       <label class="field" id="codeField" hidden>
         <span>Código de la peña</span>
         <input id="code" type="password" autocomplete="off" placeholder="Te lo pasa la directiva">
@@ -78,7 +83,11 @@
   <div class="lb-box">
     <img id="lbImg" alt="">
     <div class="lb-bar">
-      <div class="lb-cap"><span id="lbName"></span><small id="lbDate"></small></div>
+      <div class="lb-cap">
+        <span id="lbName"></span>
+        <p id="lbDesc" class="lb-desc" hidden></p>
+        <small id="lbDate"></small>
+      </div>
       <div class="lb-actions">
         <button class="mini" id="lbPrev" type="button">‹ Anterior</button>
         <button class="mini" id="lbNext" type="button">Siguiente ›</button>
