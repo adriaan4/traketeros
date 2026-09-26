@@ -2,7 +2,7 @@
 //   GET    /api/traketimetro              → lista de gente + ranking
 //   POST   /api/traketimetro/add          → { name, tipo, cantidad? }
 //   POST   /api/traketimetro/undo         → { name, tipo, cantidad? }
-//   POST   /api/traketimetro/set          → { name, cervezas, cubatas, chupitos, porros } (corregir a mano; SOLO admin)
+//   POST   /api/traketimetro/set          → { name, cervezas, cubatas, chupitos, porros } (corregir a mano)
 //   DELETE /api/admin/traketimetro/:name  → borrar a alguien del ranking (solo admin: abre traketimetro.html?admin=1)
 //   GET    /api/traketimetro/stream       → avisos en directo (SSE)
 
@@ -75,7 +75,7 @@ function pintarRanking() {
       <td>${p.porros}</td>
       <td class="rk-total">${p.total}</td>
       <td class="rk-edit">
-        ${IS_ADMIN ? `<button class="rk-edit-btn" type="button" data-editar="${escapeHtml(p.name)}" aria-label="Editar cantidades de ${escapeHtml(p.name)}">✏️</button>` : ''}
+        <button class="rk-edit-btn" type="button" data-editar="${escapeHtml(p.name)}" aria-label="Editar cantidades de ${escapeHtml(p.name)}">✏️</button>
         ${IS_ADMIN ? `<button class="rk-edit-btn" type="button" data-borrar="${escapeHtml(p.name)}" aria-label="Borrar a ${escapeHtml(p.name)} del ranking">🗑️</button>` : ''}
       </td>
     </tr>
@@ -231,7 +231,7 @@ $('editSave').addEventListener('click', async () => {
       body: JSON.stringify(body)
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(res.status === 401 ? 'Necesitas entrar como administrador.' : (data.error || 'No se ha podido guardar.'));
+    if (!res.ok) throw new Error(data.error || 'No se ha podido guardar.');
 
     people = data.people || people;
     actualizarDatalist();
