@@ -983,6 +983,151 @@ a.mini {
   font-size: 13px;
 }
 
+/* ---------- Impostor ---------- */
+.impostor { margin-top: 6px; }
+
+.imp-h {
+  font-family: Bangers, Impact, sans-serif;
+  font-size: 30px;
+  margin: 0 0 6px;
+}
+
+.imp-step[hidden] { display: none; }
+
+.imp-add {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.imp-add input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  border: 3px solid var(--black);
+  background: var(--cream);
+  font: inherit;
+  font-weight: 700;
+}
+
+.imp-jugadores {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.imp-jugadores li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: white;
+  border: 3px solid var(--black);
+  padding: 10px 14px;
+  font-weight: 800;
+}
+
+.imp-jugadores .imp-quitar {
+  border: 2px solid var(--black);
+  background: var(--red);
+  color: white;
+  font-weight: 900;
+  font-size: 13px;
+  line-height: 1;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.imp-vacio {
+  font-weight: 700;
+  color: #666;
+  margin: 0 0 18px;
+}
+
+.imp-vacio[hidden] { display: none; }
+
+.imp-categorias-grupo {
+  margin: 18px 0 8px;
+  font-weight: 900;
+  font-size: 13px;
+  color: var(--red);
+}
+
+.imp-categorias-grupo:first-child { margin-top: 0; }
+
+.imp-categorias-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.imp-cat-btn {
+  border: 3px solid var(--black);
+  background: white;
+  padding: 9px 14px;
+  font: inherit;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--black);
+  transition: .12s ease;
+}
+
+.imp-cat-btn:hover { transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--black); }
+
+.imp-cat-btn.active {
+  background: var(--yellow);
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 var(--black);
+}
+
+.btn.ghost {
+  background: white;
+  color: var(--black);
+}
+
+#impContinuar1, #impContinuar2, #impVolver2, #impOtraRonda, #impReiniciar {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+}
+
+.imp-carta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 220px;
+  background: var(--cream);
+  border: 4px solid var(--black);
+  box-shadow: 12px 12px 0 var(--red);
+  padding: 40px 24px;
+  font-family: Bangers, Impact, sans-serif;
+  font-size: 28px;
+  line-height: 1.3;
+  text-align: center;
+  cursor: pointer;
+  transition: .12s ease;
+}
+
+.imp-carta:hover { transform: translate(3px, 3px); box-shadow: 9px 9px 0 var(--red); }
+
+.imp-carta.revelado { font-size: 22px; }
+.imp-carta.es-impostor { background: #ffe3e3; }
+.imp-carta.visto { cursor: default; background: white; color: #777; font-size: 18px; }
+.imp-carta.visto:hover { transform: none; box-shadow: 12px 12px 0 var(--red); }
+
+#impSiguienteJugador { margin-top: 18px; width: 100%; }
+
+@media (max-width: 600px) {
+  .imp-add { flex-direction: column; }
+  .imp-carta { font-size: 24px; min-height: 190px; padding: 30px 18px; }
+}
+
 /* ---------- Traketímetro ---------- */
 .trake-card { margin-top: 10px; }
 

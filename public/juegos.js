@@ -437,6 +437,255 @@ const PREGUNTAS = {
   'Bebe el que …haya pensado que una amistad podía convertirse en algo diferente.'
   ]
 };
+// Categorías y palabras para el juego del Impostor. Los jugadores normales
+// reciben la palabra exacta; el impostor solo recibe el nombre de la
+// categoría de la que ha salido esa palabra, a modo de pista.
+const CATEGORIAS_IMPOSTOR = [
+  { grupo: '🔥 Difíciles', nombre: 'Futbolistas', palabras: ['Mbappé', 'Vinícius Jr.', 'Haaland', 'Bellingham', 'Lamine Yamal', 'Rodri', 'Pedri', 'Nico Williams', 'Julián Álvarez', 'Musiala'] },
+  { grupo: '🔥 Difíciles', nombre: 'Marcas de ropa', palabras: ['Nike', 'Adidas', 'Puma', 'New Balance', 'Jordan', 'Lacoste', 'Tommy Hilfiger', 'Calvin Klein', 'The North Face', "Levi's"] },
+  { grupo: '🔥 Difíciles', nombre: 'Coches', palabras: ['BMW', 'Mercedes', 'Audi', 'Porsche', 'Ferrari', 'Lamborghini', 'Tesla', 'Cupra', 'Volkswagen', 'Toyota'] },
+  { grupo: '🔥 Difíciles', nombre: 'Redes sociales', palabras: ['Instagram', 'TikTok', 'Snapchat', 'WhatsApp', 'Telegram', 'Twitter/X', 'Twitch', 'YouTube', 'Discord', 'BeReal'] },
+  { grupo: '🔥 Difíciles', nombre: 'Comida', palabras: ['Pizza', 'Hamburguesa', 'Kebab', 'Burrito', 'Taco', 'Nachos', 'Panini', 'Hot dog', 'Sándwich', 'Shawarma'] },
+  { grupo: '🔥 Difíciles', nombre: 'Bebidas', palabras: ['Coca-Cola', 'Pepsi', 'Fanta', 'Sprite', 'Aquarius', 'Red Bull', 'Monster', 'Nestea', 'Cerveza', 'Agua con gas'] },
+  { grupo: '🔥 Difíciles', nombre: 'Países', palabras: ['España', 'Portugal', 'Italia', 'Francia', 'Grecia', 'Croacia', 'Argentina', 'Brasil', 'México', 'Colombia'] },
+  { grupo: '🔥 Difíciles', nombre: 'Ciudades', palabras: ['Madrid', 'Barcelona', 'Sevilla', 'Valencia', 'Málaga', 'Lisboa', 'París', 'Roma', 'Londres', 'Nueva York'] },
+  { grupo: '🔥 Difíciles', nombre: 'Videojuegos', palabras: ['GTA V', 'Fortnite', 'Minecraft', 'Call of Duty', 'EA Sports FC', 'Rocket League', 'Valorant', 'FIFA', 'Roblox', 'Among Us'] },
+  { grupo: '🔥 Difíciles', nombre: 'Películas / sagas', palabras: ['Harry Potter', 'Star Wars', 'Marvel', 'Fast & Furious', 'Jurassic Park', 'Toy Story', 'Shrek', 'El Señor de los Anillos', 'Piratas del Caribe', 'Transformers'] },
+  { grupo: '🔥 Difíciles', nombre: 'Famosos / creadores', palabras: ['Ibai', 'El Rubius', 'AuronPlay', 'IlloJuan', 'TheGrefg', 'MrBeast', 'Jordi Wild', 'Quevedo', 'Bad Bunny', 'Bizarrap'] },
+  { grupo: '🔥 Difíciles', nombre: 'Animales', palabras: ['León', 'Tigre', 'Jaguar', 'Leopardo', 'Guepardo', 'Pantera', 'Puma', 'Lobo', 'Zorro', 'Hiena'] },
+
+  { grupo: '☠️ Muy difíciles', nombre: 'Futbolistas españoles', palabras: ['Pedri', 'Gavi', 'Dani Olmo', 'Mikel Merino', 'Fabián Ruiz', 'Rodri', 'Nico Williams', 'Ferran Torres', 'Dani Carvajal', 'Martín Zubimendi'] },
+  { grupo: '☠️ Muy difíciles', nombre: 'Clubes de fútbol', palabras: ['Real Madrid', 'Atlético de Madrid', 'Sevilla', 'Valencia', 'Villarreal', 'Real Betis', 'Athletic Club', 'Real Sociedad', 'Celta', 'Getafe'] },
+  { grupo: '☠️ Muy difíciles', nombre: 'Marcas de lujo', palabras: ['Rolex', 'Gucci', 'Prada', 'Dior', 'Louis Vuitton', 'Versace', 'Armani', 'Balenciaga', 'Chanel', 'Burberry'] },
+  { grupo: '☠️ Muy difíciles', nombre: 'Apps', palabras: ['Instagram', 'TikTok', 'Snapchat', 'Telegram', 'WhatsApp', 'Discord', 'Twitch', 'Spotify', 'Netflix', 'Uber'] },
+  { grupo: '☠️ Muy difíciles', nombre: 'Lugares de fiesta', palabras: ['Discoteca', 'Pub', 'Bar', 'Sala de conciertos', 'Festival', 'Karaoke', 'Casino', 'Playa', 'Chiringuito', 'Terraza'] },
+  { grupo: '☠️ Muy difíciles', nombre: 'Objetos cotidianos', palabras: ['Móvil', 'Llaves', 'Cartera', 'Auriculares', 'Reloj', 'Gafas', 'Mochila', 'Cargador', 'Mando', 'Mechero'] },
+  { grupo: '☠️ Muy difíciles', nombre: 'Profesiones', palabras: ['Policía', 'Bombero', 'Médico', 'Enfermero', 'Abogado', 'Profesor', 'Periodista', 'Camarero', 'Piloto', 'Futbolista'] },
+  { grupo: '☠️ Muy difíciles', nombre: 'Lugares', palabras: ['Hotel', 'Hospital', 'Aeropuerto', 'Estación', 'Colegio', 'Gimnasio', 'Cárcel', 'Centro comercial', 'Parque', 'Universidad'] },
+
+  { grupo: '💀 Nivel imposible', nombre: 'Cosas redondas', palabras: ['Pelota', 'Moneda', 'Reloj', 'Plato', 'Rueda', 'Donut', 'Globo', 'Anillo', 'CD', 'Galleta'] },
+  { grupo: '💀 Nivel imposible', nombre: 'Cosas que hacen ruido', palabras: ['Moto', 'Aspiradora', 'Taladro', 'Secador', 'Microondas', 'Lavadora', 'Altavoz', 'Sirena', 'Timbre', 'Avión'] },
+  { grupo: '💀 Nivel imposible', nombre: 'Cosas de una discoteca', palabras: ['DJ', 'Barra', 'Altavoces', 'Luces', 'Pista', 'Vasos', 'Camarero', 'Seguridad', 'Sofá', 'Baño'] },
+  { grupo: '💀 Nivel imposible', nombre: 'Cosas de un estadio', palabras: ['Césped', 'Gradas', 'Portería', 'Marcador', 'Árbitro', 'Banquillo', 'Vestuario', 'Focos', 'Aficionados', 'Megafonía'] },
+  { grupo: '💀 Nivel imposible', nombre: 'Cosas que llevas de viaje', palabras: ['Maleta', 'Pasaporte', 'Móvil', 'Cargador', 'Dinero', 'Auriculares', 'Ropa', 'Cepillo de dientes', 'Gafas de sol', 'Mochila'] }
+];
+
+// ---------- Estado del Impostor ----------
+const imp = {
+  jugadores: [],           // nombres
+  categorias: new Set(),   // índices seleccionados de CATEGORIAS_IMPOSTOR
+  numImpostores: 1,
+  roles: [],               // paralelo a jugadores: true = impostor
+  palabra: '',
+  categoriaUsada: '',
+  turno: 0,
+  fase: 0                  // 0=nombre, 1=revelado, 2=ya visto
+};
+
+function impActualizarBoton1() {
+  const min = 3;
+  $('impError1').textContent = '';
+  const ok = imp.jugadores.length >= min;
+  $('impContinuar1').disabled = !ok;
+
+  // El número de impostores nunca puede llegar a todos los jugadores.
+  const maxImp = Math.max(1, imp.jugadores.length - 1);
+  const input = $('impNumImpostores');
+  input.max = String(maxImp);
+  if (Number(input.value) > maxImp) input.value = String(maxImp);
+  if (Number(input.value) < 1 || !input.value) input.value = '1';
+}
+
+function impRenderLista() {
+  const ul = $('impLista');
+  ul.replaceChildren();
+  imp.jugadores.forEach((nombre, i) => {
+    const li = document.createElement('li');
+    const span = document.createElement('span');
+    span.textContent = nombre;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'imp-quitar';
+    btn.textContent = 'Quitar';
+    btn.setAttribute('aria-label', `Quitar a ${nombre}`);
+    btn.addEventListener('click', () => {
+      imp.jugadores.splice(i, 1);
+      impRenderLista();
+      impActualizarBoton1();
+    });
+    li.append(span, btn);
+    ul.append(li);
+  });
+  $('impVacio').hidden = imp.jugadores.length > 0;
+}
+
+$('impAddForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = $('impNombre');
+  const nombre = input.value.trim().slice(0, 20);
+  if (!nombre) return;
+  imp.jugadores.push(nombre);
+  input.value = '';
+  input.focus();
+  impRenderLista();
+  impActualizarBoton1();
+});
+
+$('impNumImpostores').addEventListener('input', impActualizarBoton1);
+
+$('impContinuar1').addEventListener('click', () => {
+  if (imp.jugadores.length < 3) {
+    $('impError1').textContent = 'Necesitáis al menos 3 personas para jugar.';
+    return;
+  }
+  const maxImp = imp.jugadores.length - 1;
+  let n = Math.round(Number($('impNumImpostores').value) || 1);
+  if (n < 1) n = 1;
+  if (n > maxImp) n = maxImp;
+  imp.numImpostores = n;
+
+  impRenderCategorias();
+  $('impPaso1').hidden = true;
+  $('impPaso2').hidden = false;
+});
+
+function impRenderCategorias() {
+  const cont = $('impCategorias');
+  cont.replaceChildren();
+  let grupoActual = null;
+  let lista = null;
+
+  CATEGORIAS_IMPOSTOR.forEach((cat, i) => {
+    if (cat.grupo !== grupoActual) {
+      grupoActual = cat.grupo;
+      const titulo = document.createElement('div');
+      titulo.className = 'imp-categorias-grupo';
+      titulo.textContent = grupoActual;
+      cont.append(titulo);
+      lista = document.createElement('div');
+      lista.className = 'imp-categorias-lista';
+      cont.append(lista);
+    }
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'imp-cat-btn';
+    btn.textContent = cat.nombre;
+    btn.classList.toggle('active', imp.categorias.has(i));
+    btn.addEventListener('click', () => {
+      if (imp.categorias.has(i)) imp.categorias.delete(i);
+      else imp.categorias.add(i);
+      btn.classList.toggle('active', imp.categorias.has(i));
+      $('impContinuar2').disabled = imp.categorias.size === 0;
+    });
+    lista.append(btn);
+  });
+
+  $('impContinuar2').disabled = imp.categorias.size === 0;
+}
+
+$('impVolver2').addEventListener('click', () => {
+  $('impPaso2').hidden = true;
+  $('impPaso1').hidden = false;
+});
+
+$('impContinuar2').addEventListener('click', () => {
+  if (imp.categorias.size === 0) {
+    $('impError2').textContent = 'Elige al menos una categoría.';
+    return;
+  }
+  $('impError2').textContent = '';
+  impRepartir();
+  $('impPaso2').hidden = true;
+  $('impPaso3').hidden = false;
+});
+
+// Baraja los papeles y elige la palabra al azar entre TODAS las categorías
+// marcadas (una sola palabra, no una por categoría).
+function impRepartir() {
+  const pool = [];
+  imp.categorias.forEach((i) => {
+    const cat = CATEGORIAS_IMPOSTOR[i];
+    cat.palabras.forEach((palabra) => pool.push({ palabra, categoria: cat.nombre }));
+  });
+  const elegida = pool[Math.floor(Math.random() * pool.length)];
+  imp.palabra = elegida.palabra;
+  imp.categoriaUsada = elegida.categoria;
+
+  const orden = barajar(imp.jugadores.length);
+  imp.roles = imp.jugadores.map(() => false);
+  orden.slice(0, imp.numImpostores).forEach((i) => { imp.roles[i] = true; });
+
+  imp.turno = 0;
+  impMostrarTurno();
+}
+
+function impMostrarTurno() {
+  const nombre = imp.jugadores[imp.turno];
+  imp.fase = 0;
+  $('impTurnoHint').textContent = `Pásale el móvil a ${nombre} (que nadie más mire) 👀`;
+
+  const carta = $('impCartaJugador');
+  carta.className = 'imp-carta';
+  carta.textContent = nombre;
+  carta.hidden = false;
+  $('impSiguienteJugador').hidden = true;
+}
+
+$('impCartaJugador').addEventListener('click', () => {
+  const carta = $('impCartaJugador');
+  const esImpostor = imp.roles[imp.turno];
+
+  if (imp.fase === 0) {
+    imp.fase = 1;
+    carta.classList.add('revelado');
+    if (esImpostor) {
+      carta.classList.add('es-impostor');
+      carta.innerHTML = `🕵️ Eres el <strong>IMPOSTOR</strong><br>Pista: ${imp.categoriaUsada}`;
+    } else {
+      carta.innerHTML = `🤫 La palabra es:<br><strong>${imp.palabra}</strong>`;
+    }
+  } else if (imp.fase === 1) {
+    imp.fase = 2;
+    carta.className = 'imp-carta visto';
+    carta.textContent = 'Ya lo has visto ✅ — pásasela a la siguiente persona';
+    $('impSiguienteJugador').hidden = false;
+  }
+});
+
+$('impSiguienteJugador').addEventListener('click', () => {
+  imp.turno++;
+  if (imp.turno < imp.jugadores.length) {
+    impMostrarTurno();
+  } else {
+    $('impPaso3').hidden = true;
+    $('impPaso4').hidden = false;
+  }
+});
+
+$('impOtraRonda').addEventListener('click', () => {
+  $('impPaso4').hidden = true;
+  $('impPaso3').hidden = false;
+  impRepartir();
+});
+
+$('impReiniciar').addEventListener('click', () => {
+  imp.jugadores = [];
+  imp.categorias = new Set();
+  imp.numImpostores = 1;
+  imp.roles = [];
+  imp.turno = 0;
+  $('impNumImpostores').value = '1';
+  impRenderLista();
+  impActualizarBoton1();
+  $('impError1').textContent = '';
+  $('impPaso4').hidden = true;
+  $('impPaso1').hidden = false;
+});
+
+impRenderLista();
+impActualizarBoton1();
+
 // ---------- Lógica del juego ----------
 const $ = (id) => document.getElementById(id);
 
@@ -497,8 +746,16 @@ function cambiarModo(clave) {
   document.querySelectorAll('.tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.modo === clave);
   });
-  nuevaVuelta(false);
-  siguienteCarta();
+
+  const esImpostor = clave === 'impostor';
+  $('carta').hidden = esImpostor;
+  $('gameControls').hidden = esImpostor;
+  $('impostor').hidden = !esImpostor;
+
+  if (!esImpostor) {
+    nuevaVuelta(false);
+    siguienteCarta();
+  }
 }
 
 document.querySelectorAll('.tab').forEach((b) => {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Juegos para la peña Traketeros: Yo nunca, Quién es más probable y Bebe el que.">
+  <meta name="description" content="Juegos para la peña Traketeros: Yo nunca, Quién es más probable, Bebe el que y el Impostor.">
   <meta name="theme-color" content="#e3262e">
   <title>Traketeros · Juegos</title>
   <link rel="icon" href="assets/traketeros.png">
@@ -38,6 +38,7 @@
     <button class="tab active" data-modo="yo_nunca" type="button">🙊 Yo nunca</button>
     <button class="tab" data-modo="mas_probable" type="button">👉 Más probable</button>
     <button class="tab" data-modo="bebe_el_que" type="button">🍺 Bebe el que</button>
+    <button class="tab" data-modo="impostor" type="button">🕵️ Impostor</button>
   </div>
 
   <section class="game-card" id="carta" role="button" tabindex="0" aria-label="Toca para ver la siguiente pregunta">
@@ -47,16 +48,67 @@
     <p class="vuelta" id="vuelta" hidden>🔁 ¡Vuelta completa! Empezamos otra vez.</p>
   </section>
 
-  <div class="game-controls">
+  <div class="game-controls" id="gameControls">
     <span class="contador" id="contador">0 / 0</span>
     <button class="btn" id="siguiente" type="button">Siguiente ▶</button>
   </div>
+
+  <section class="impostor" id="impostor" hidden aria-label="Juego del impostor">
+
+    <div class="imp-step" id="impPaso1">
+      <h2 class="imp-h">¿Quién juega?</h2>
+      <p class="hint">Añade a todos los que estéis y decide cuántos impostores queréis.</p>
+
+      <form class="imp-add" id="impAddForm">
+        <input id="impNombre" type="text" maxlength="20" autocomplete="off" placeholder="Nombre de quien juega">
+        <button class="btn" id="impAddBtn" type="submit">Añadir</button>
+      </form>
+
+      <ul class="imp-jugadores" id="impLista"></ul>
+      <p class="imp-vacio" id="impVacio">Todavía no has añadido a nadie.</p>
+
+      <label class="field">
+        <span>Número de impostores</span>
+        <input id="impNumImpostores" type="number" min="1" value="1" inputmode="numeric">
+      </label>
+
+      <button class="btn submit" id="impContinuar1" type="button" disabled>Continuar ▶</button>
+      <p class="msg err" id="impError1"></p>
+    </div>
+
+    <div class="imp-step" id="impPaso2" hidden>
+      <h2 class="imp-h">Elige categorías</h2>
+      <p class="hint">Puedes marcar varias: la palabra saldrá al azar entre todas las que elijas.</p>
+
+      <div id="impCategorias"></div>
+
+      <button class="btn submit" id="impContinuar2" type="button" disabled>Continuar ▶</button>
+      <button class="btn ghost" id="impVolver2" type="button">◀ Volver</button>
+      <p class="msg err" id="impError2"></p>
+    </div>
+
+    <div class="imp-step" id="impPaso3" hidden>
+      <p class="hint" id="impTurnoHint">Pásale el móvil a la primera persona.</p>
+
+      <button class="imp-carta" id="impCartaJugador" type="button"></button>
+
+      <button class="btn submit" id="impSiguienteJugador" type="button" hidden>Siguiente jugador ▶</button>
+    </div>
+
+    <div class="imp-step" id="impPaso4" hidden>
+      <h2 class="imp-h">¡Ya está repartido! 🕵️</h2>
+      <p class="hint">Ahora a hablar de la palabra sin decirla, hasta pillar al impostor.</p>
+      <button class="btn submit" id="impOtraRonda" type="button">Otra ronda (mismas categorías) 🔁</button>
+      <button class="btn ghost" id="impReiniciar" type="button">Empezar de cero</button>
+    </div>
+
+  </section>
 </main>
 
 <footer>
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
-<script src="juegos.js?v=1"></script>
+<script src="juegos.js?v=2"></script>
 </body>
 </html>
