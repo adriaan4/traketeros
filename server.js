@@ -957,18 +957,20 @@ app.post('/api/traketimetro/add', (req, res) => {
   const key = v.name.toLowerCase();
   let esNuevo = false;
   if (!trakeData[key]) {
-    // Persona nueva: le asignamos un token de propiedad. Solo se devuelve al
-    // que la crea (más abajo), así luego solo ese navegador podrá corregir
-    // sus cantidades a mano (aparte del admin).
+    // Persona nueva de verdad: le asignamos un token de propiedad y solo se
+    // lo devolvemos a quien la crea (más abajo). Así solo ese navegador
+    // podrá corregir sus cantidades a mano después (aparte del admin).
+    //
+    // OJO: a alguien que YA existiera (por ejemplo, gente del ranking de
+    // antes de tener este sistema) nunca se le asigna dueño aquí solo por
+    // tocarle una casilla — si no, cualquiera podría "adueñarse" de otro con
+    // solo darle a un botón de cerveza. Esas personas antiguas sin dueño
+    // solo las puede corregir el admin, hasta que se les borre y se
+    // vuelvan a apuntar desde cero (con eso sí obtienen un token nuevo).
     trakeData[key] = {
       name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0,
       token: crypto.randomBytes(16).toString('hex')
     };
-    esNuevo = true;
-  } else if (!trakeData[key].token) {
-    // Compatibilidad: gente que ya existía antes de tener este sistema de
-    // permisos. La "reclama" quien la vuelva a tocar primero.
-    trakeData[key].token = crypto.randomBytes(16).toString('hex');
     esNuevo = true;
   }
   trakeData[key][v.tipo] = (trakeData[key][v.tipo] || 0) + v.cantidad;
