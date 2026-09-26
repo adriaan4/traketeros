@@ -6,6 +6,24 @@
 const $ = (id) => document.getElementById(id);
 
 const IS_ADMIN = new URLSearchParams(location.search).get('admin') === '1';
+
+// Si esto existe, estamos dentro de la app Android (ver MainActivity.java),
+// que expone este puente para poder guardar descargas de verdad en el
+// dispositivo (el truco del blob de más abajo no funciona solo en un
+// WebView).
+const ANDROID_APP =
+  window.AndroidDownloader && typeof window.AndroidDownloader.guardarArchivo === 'function'
+    ? window.AndroidDownloader
+    : null;
+
+function blobABase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 const MAX_SELECTED = 30;   // fotos por tanda
 const CHUNK = 6;           // fotos por petición
 const MAX_SIDE = 2000;     // las fotos se reducen en el móvil antes de subirlas
@@ -72,6 +90,14 @@ function renderGallery() {
     cap.textContent = p.name || 'Traketero';
 
     btn.append(img, cap);
+
+    if (p.desc) {
+      const desc = document.createElement('span');
+      desc.className = 'ph-desc';
+      desc.textContent = p.desc;
+      btn.append(desc);
+    }
+
     btn.addEventListener('click', () => openAt(i));
     grid.append(btn);
   });
@@ -86,11 +112,13 @@ function showCurrent() {
   $('lbImg').src = p.url;
   $('lbImg').alt = p.name ? `Foto de ${p.name}` : 'Foto de la peña';
   $('lbName').textContent = p.name || 'Traketero';
+  $('lbDesc').textContent = p.desc || '';
+  $('lbDesc').hidden = !p.desc;
   $('lbDate').textContent = fecha(p.date);
   $('lbDl').href = p.download;
+  $('lbDl').dataset.name = p.name || 'traketeros';
   $('lbPrev').hidden = $('lbNext').hidden = photos.length < 2;
   $('lbDel').hidden = !IS_ADMIN;
-  $('lbEditName').hidden = !IS_ADMIN;
 }
 
 function openAt(i) {
@@ -116,27 +144,52 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight') step(1);
 });
 
-$('lbEditName').addEventListener('click', async () => {
-  const p = photos[current];
-  if (!p) return;
+// Descargar la foto al móvil (no solo abrirla en el navegador).
+// En iOS/Android, un <a href> normal a menudo solo abre la imagen a pantalla
+// completa aunque el servidor mande Content-Disposition: attachment. Bajamos
+// la foto como blob y forzamos la descarga desde ahí, que sí funciona.
+$('lbDl').addEventListener('click', async (e) => {
+  const a = e.currentTarget;
+  const url = a.href;
+  if (!url || url === '#') return;
 
-  const nuevo = prompt('Nombre para esta foto (déjalo en blanco para que salga como "Traketero"):', p.name || '');
-  if (nuevo === null) return; // ha pulsado cancelar
+  e.preventDefault();
+  const originalText = a.textContent;
+
+  const safeName = (a.dataset.name || 'traketeros')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '') || 'traketeros';
+  const fileName = `traketeros-${safeName}.jpg`;
 
   try {
-    const res = await fetch('/api/admin/photos/' + encodeURIComponent(p.id) + '/name', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: nuevo })
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(res.status === 401 ? 'Necesitas entrar como administrador.' : (data.error || 'No se pudo cambiar el nombre.'));
+    a.textContent = 'Descargando…';
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('fallo al descargar');
+    const blob = await res.blob();
 
-    p.name = data.name;
-    showCurrent();
-    renderGallery();
-  } catch (e) {
-    alert(e.message);
+    if (ANDROID_APP) {
+      // Dentro de la app: se lo pasamos a Android para que lo guarde de
+      // verdad en el dispositivo (en Descargas).
+      const base64 = await blobABase64(blob);
+      ANDROID_APP.guardarArchivo(base64, fileName, blob.type || 'image/jpeg');
+    } else {
+      // Navegador normal (móvil o escritorio): truco del blob de siempre.
+      const blobUrl = URL.createObjectURL(blob);
+      const tmp = document.createElement('a');
+      tmp.href = blobUrl;
+      tmp.download = fileName;
+      document.body.appendChild(tmp);
+      tmp.click();
+      tmp.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+    }
+  } catch {
+    // Si algo falla (p. ej. sin conexión), al menos abrimos la foto
+    // para que se pueda guardar a mano.
+    window.open(url, '_blank', 'noopener');
+  } finally {
+    a.textContent = originalText;
   }
 });
 
@@ -212,11 +265,12 @@ async function shrink(file) {
   }
 }
 
-function sendChunk(files, name, code, onProgress) {
+function sendChunk(files, name, desc, code, onProgress) {
   return new Promise((resolve, reject) => {
     const fd = new FormData();
     files.forEach((f) => fd.append('photos', f, f.name));
     fd.append('name', name);
+    fd.append('desc', desc);
     if (code) fd.append('code', code);
 
     const xhr = new XMLHttpRequest();
@@ -241,6 +295,7 @@ $('form').addEventListener('submit', async (e) => {
   if (!selected.length) return;
 
   const name = $('name').value.trim();
+  const desc = $('desc').value.trim();
   const code = $('code').value.trim();
   const send = $('send');
   const bar = $('bar');
@@ -256,7 +311,7 @@ $('form').addEventListener('submit', async (e) => {
     for (let i = 0; i < selected.length; i += CHUNK) {
       const group = await Promise.all(selected.slice(i, i + CHUNK).map(shrink));
       say(`Subiendo ${Math.min(i + CHUNK, selected.length)} de ${selected.length}…`);
-      const res = await sendChunk(group, name, code, (f) => {
+      const res = await sendChunk(group, name, desc, code, (f) => {
         bar.value = ((done + group.length * f) / selected.length) * 100;
       });
       done += group.length;
@@ -266,6 +321,7 @@ $('form').addEventListener('submit', async (e) => {
     store.set('traketeros_name', name);
     store.set('traketeros_code', code);
 
+    $('desc').value = ''; // la descripción es de esas fotos concretas, no se recuerda para la próxima
     fileInput.value = '';
     selected = [];
     previews.replaceChildren();
@@ -283,22 +339,4 @@ $('form').addEventListener('submit', async (e) => {
   }
 });
 
-// ---------- Tiempo real ----------
-// El servidor avisa por aquí en cuanto alguien sube o borra una foto (la suya
-// o la de otro), así que recargamos la lista sola, sin que nadie tenga que
-// refrescar la página a mano. Si se corta la conexión (móvil, wifi...), el
-// propio navegador la reconecta solo.
-function listenForChanges() {
-  try {
-    const es = new EventSource('/api/photos/stream');
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.type === 'photos-changed') loadPhotos();
-      } catch { /* mensaje no válido: se ignora */ }
-    };
-  } catch { /* el navegador no soporta EventSource: no pasa nada, se queda como antes */ }
-}
-
 loadPhotos();
-listenForChanges();

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 
@@ -22,7 +22,11 @@
     <strong>TRAKETEROS</strong>
     <small>LA PEÑA DE LOS TRAKETOS 🍻</small>
   </div>
-  <a class="header-link" href="/">La cuota</a>
+  <nav class="nav-links">
+    <a class="header-link" href="/">La cuota</a>
+    <a class="header-link" href="juegos.html">🎮 Juegos</a>
+    <a class="header-link" href="traketimetro.html">🍻 Traketímetro</a>
+  </nav>
 </header>
 
 <main>
@@ -45,6 +49,11 @@
       <label class="field">
         <span>Tu nombre (opcional)</span>
         <input id="name" type="text" maxlength="40" autocomplete="given-name" placeholder="Tu nombre o tu mote">
+      </label>
+
+      <label class="field">
+        <span>Descripción (opcional)</span>
+        <textarea id="desc" maxlength="140" rows="2" placeholder="Ej: aquí está el pana Juanico con la cerveza el ludao"></textarea>
       </label>
 
       <label class="field" id="codeField" hidden>
@@ -74,12 +83,15 @@
   <div class="lb-box">
     <img id="lbImg" alt="">
     <div class="lb-bar">
-      <div class="lb-cap"><span id="lbName"></span><small id="lbDate"></small></div>
+      <div class="lb-cap">
+        <span id="lbName"></span>
+        <p id="lbDesc" class="lb-desc" hidden></p>
+        <small id="lbDate"></small>
+      </div>
       <div class="lb-actions">
         <button class="mini" id="lbPrev" type="button">‹ Anterior</button>
         <button class="mini" id="lbNext" type="button">Siguiente ›</button>
         <a class="mini" id="lbDl" href="#" rel="noopener">Descargar</a>
-        <button class="mini" id="lbEditName" type="button" hidden>Editar nombre</button>
         <button class="mini danger" id="lbDel" type="button" hidden>Borrar</button>
         <button class="mini" id="lbClose" type="button">Cerrar</button>
       </div>
@@ -91,6 +103,6 @@
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
-<script src="fotos.js?v=3"></script>
+<script src="fotos.js?v=2"></script>
 </body>
 </html>

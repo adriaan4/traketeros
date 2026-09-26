@@ -133,13 +133,25 @@ app.post(
           const p = photoIndex.find((x) => x.id === id);
           if (!p) continue;
 
-          const nameEntry = [...(info.added || []), ...(info.updated || [])]
-            .find((e) => e.name === 'name');
+          const added_ = info.added || [];
+          const updated_ = info.updated || [];
+          const removed_ = info.removed || [];
+
+          const nameEntry = [...added_, ...updated_].find((e) => e.name === 'name');
           if (nameEntry) {
             p.name = String(nameEntry.value || '').slice(0, 40);
             changed = true;
-          } else if ((info.removed || []).some((e) => e.name === 'name')) {
+          } else if (removed_.some((e) => e.name === 'name')) {
             p.name = '';
+            changed = true;
+          }
+
+          const descEntry = [...added_, ...updated_].find((e) => e.name === 'desc');
+          if (descEntry) {
+            p.desc = String(descEntry.value || '').slice(0, 140);
+            changed = true;
+          } else if (removed_.some((e) => e.name === 'desc')) {
+            p.desc = '';
             changed = true;
           }
         }
@@ -503,16 +515,24 @@ let photoIndex = [];             // más nuevas primero
 let lastRefresh = 0;
 let refreshing = null;
 
+// Cloudinary usa "|" y "=" para separar los campos del context, así que se
+// quitan de cualquier texto que vaya a guardarse ahí (nombre o descripción).
+function sanitizeText(str, maxLen) {
+  return String(str || '').replace(/[|=\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, maxLen);
+}
+
 function toPhoto(r) {
   if (!r.public_id?.startsWith(PREFIX)) return null;
   const id = r.public_id.slice(PREFIX.length);
   if (!ID_RE.test(id)) return null;
   const name = r.context?.custom?.name ?? r.context?.name ?? '';
+  const desc = r.context?.custom?.desc ?? r.context?.desc ?? '';
   return {
     id,
     publicId: r.public_id,
     version: r.version,
     name: String(name),
+    desc: String(desc),
     date: Date.parse(r.created_at) || Date.now()
   };
 }
@@ -601,6 +621,7 @@ function publicPhoto(p) {
   return {
     id: p.id,
     name: p.name,
+    desc: p.desc,
     date: p.date,
     thumb: cloudinary.url(p.publicId, {
       ...base,
@@ -704,8 +725,8 @@ app.post('/api/photos', photosOnly, uploadLimiter, (req, res) => {
         return res.status(409).json({ error: 'El álbum está lleno.' });
       }
 
-      // Cloudinary usa "|" y "=" para separar datos: se quitan del nombre
-      const name = String(req.body?.name || '').replace(/[|=\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+      const name = sanitizeText(req.body?.name, 40);
+      const desc = sanitizeText(req.body?.desc, 140); // pie de foto: una línea o dos
       let added = 0;
       let unreadable = 0;
       let saveFailed = 0;
@@ -731,7 +752,10 @@ app.post('/api/photos', photosOnly, uploadLimiter, (req, res) => {
         try {
           const id = Date.now().toString(36) + crypto.randomBytes(5).toString('hex');
           const options = { public_id: PREFIX + id, tags: [TAG], resource_type: 'image', overwrite: false };
-          if (name) options.context = { name };
+          const context = {};
+          if (name) context.name = name;
+          if (desc) context.desc = desc;
+          if (Object.keys(context).length) options.context = context;
 
           const r = await sendToCloudinary(jpeg, options);
           photoIndex.unshift({
@@ -739,6 +763,7 @@ app.post('/api/photos', photosOnly, uploadLimiter, (req, res) => {
             publicId: r.public_id,
             version: r.version,
             name,
+            desc,
             date: Date.parse(r.created_at) || Date.now()
           });
           added++;
@@ -762,29 +787,32 @@ app.post('/api/photos', photosOnly, uploadLimiter, (req, res) => {
   });
 });
 
-// Cambiar (o quitar) el nombre de una foto ya subida (solo admin)
+// Cambiar (o quitar) el nombre y/o la descripción de una foto ya subida (solo admin)
 app.patch('/api/admin/photos/:id/name', adminAuth, photosOnly, async (req, res) => {
   const { id } = req.params;
   if (!ID_RE.test(id)) return res.status(400).json({ error: 'Id no válido' });
 
-  // Igual que al subir: fuera '|' y '=' (Cloudinary los usa para separar el context)
-  const name = String(req.body?.name || '').replace(/[|=\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  const p = photoIndex.find((x) => x.id === id);
+
+  // Si el body no trae el campo, se conserva el valor que ya había (para no
+  // borrar la descripción al cambiar solo el nombre, o al revés).
+  const name = req.body?.name !== undefined ? sanitizeText(req.body.name, 40) : (p?.name || '');
+  const desc = req.body?.desc !== undefined ? sanitizeText(req.body.desc, 140) : (p?.desc || '');
 
   try {
     await cloudinary.api.update(PREFIX + id, {
       resource_type: 'image',
       type: 'upload',
       // La API de administración de Cloudinary espera el contexto como texto
-      // "clave=valor", no como objeto (el nombre ya viene sin '|' ni '=').
-      context: `name=${name}`
+      // "clave=valor|clave=valor", no como objeto (ya vienen sin '|' ni '=').
+      context: `name=${name}|desc=${desc}`
     });
-    const p = photoIndex.find((x) => x.id === id);
-    if (p) p.name = name;
+    if (p) { p.name = name; p.desc = desc; }
     broadcastPhotosChanged();
-    res.json({ ok: true, name });
+    res.json({ ok: true, name, desc });
   } catch (e) {
-    console.error('No se pudo cambiar el nombre:', e.message || e);
-    res.status(500).json({ error: 'No se pudo cambiar el nombre.' });
+    console.error('No se pudo cambiar el nombre/descripción:', e.message || e);
+    res.status(500).json({ error: 'No se pudo cambiar el nombre o la descripción.' });
   }
 });
 
