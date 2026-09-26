@@ -437,6 +437,8 @@ const PREGUNTAS = {
   'Bebe el que …haya pensado que una amistad podía convertirse en algo diferente.'
   ]
 };
+const $ = (id) => document.getElementById(id);
+
 // Categorías y palabras para el juego del Impostor. Los jugadores normales
 // reciben la palabra exacta; el impostor solo recibe el nombre de la
 // categoría de la que ha salido esa palabra, a modo de pista.
@@ -687,7 +689,6 @@ impRenderLista();
 impActualizarBoton1();
 
 // ---------- Lógica del juego ----------
-const $ = (id) => document.getElementById(id);
 
 const MODOS = {
   yo_nunca: { etiqueta: 'Yo nunca', emoji: '🙊', preguntas: PREGUNTAS.yo_nunca },
