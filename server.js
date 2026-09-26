@@ -807,19 +807,22 @@ app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
 // =========================
 // TRAKETÍMETRO (marcador de cervezas, cubatas, chupitos y porros)
 // =========================
-// Se guarda en memoria y también en un fichero (data/traketimetro.json) para
-// que sobreviva a un reinicio normal del servidor. Ojo: en Render el disco
-// es "efímero", así que en un redeploy o al dormirse el servicio se puede
-// perder (igual que photoIndex). Para una noche de fiesta es más que
-// suficiente.
+// Se guarda en memoria, en un fichero local (data/traketimetro.json) como
+// caché rápida, y además se respalda en Cloudinary (como archivo "raw") cada
+// vez que cambia algo. En Render el disco es "efímero": el fichero local se
+// puede perder en un redeploy o al dormirse el servicio. Cloudinary sí es
+// persistente de verdad, así que al arrancar el servidor intentamos cargar
+// primero desde ahí; el fichero local es solo un plan B si Cloudinary no
+// está configurado o falla justo en ese momento.
 
 const TRAKE_TIPOS = ['cervezas', 'cubatas', 'chupitos', 'porros'];
 const TRAKE_DATA_DIR = path.join(__dirname, 'data');
 const TRAKE_FILE = path.join(TRAKE_DATA_DIR, 'traketimetro.json');
+const TRAKE_CLOUD_ID = 'traketeros_data/traketimetro'; // public_id del respaldo en Cloudinary
 
-let trakeData = {}; // key = nombre en minúsculas -> { name, cervezas, cubatas, chupitos, porros }
+let trakeData = {}; // key = nombre en minúsculas -> { name, cervezas, cubatas, chupitos, porros, token }
 
-function trakeLoad() {
+function trakeLoadLocal() {
   try {
     const raw = fs.readFileSync(TRAKE_FILE, 'utf8');
     trakeData = JSON.parse(raw) || {};
@@ -828,13 +831,56 @@ function trakeLoad() {
   }
 }
 
-function trakeSave() {
+function trakeSaveLocal() {
   try {
     fs.mkdirSync(TRAKE_DATA_DIR, { recursive: true });
     fs.writeFileSync(TRAKE_FILE, JSON.stringify(trakeData), 'utf8');
   } catch (e) {
-    console.error('No se pudo guardar el traketímetro:', e.message || e);
+    console.error('No se pudo guardar el traketímetro localmente:', e.message || e);
   }
+}
+
+// Sube el estado actual a Cloudinary. No bloquea la respuesta al usuario:
+// se llama sin esperarla (fire-and-forget) desde trakeSave().
+async function trakeSaveCloud() {
+  if (!CLOUDINARY_OK) return;
+  try {
+    const b64 = Buffer.from(JSON.stringify(trakeData)).toString('base64');
+    await cloudinary.uploader.upload(`data:application/json;base64,${b64}`, {
+      resource_type: 'raw',
+      public_id: TRAKE_CLOUD_ID,
+      overwrite: true,
+      invalidate: true
+    });
+  } catch (e) {
+    console.error('No se pudo respaldar el traketímetro en Cloudinary:', e.message || e);
+  }
+}
+
+// Guarda en ambos sitios: fichero local (rápido, por si Cloudinary tarda) y
+// Cloudinary (el que de verdad sobrevive a un redeploy).
+function trakeSave() {
+  trakeSaveLocal();
+  trakeSaveCloud();
+}
+
+// Intenta cargar el respaldo desde Cloudinary; si no hay o falla, usa el
+// fichero local como plan B.
+async function trakeLoad() {
+  if (CLOUDINARY_OK) {
+    try {
+      const info = await cloudinary.api.resource(TRAKE_CLOUD_ID, { resource_type: 'raw' });
+      const resp = await fetch(info.secure_url, { cache: 'no-store' });
+      if (resp.ok) {
+        trakeData = await resp.json();
+        console.log('Traketímetro: datos cargados desde Cloudinary.');
+        return;
+      }
+    } catch (e) {
+      console.warn('Traketímetro: no se pudo cargar el respaldo de Cloudinary (usando plan B):', e.message || e);
+    }
+  }
+  trakeLoadLocal();
 }
 
 trakeLoad();
@@ -909,13 +955,26 @@ app.post('/api/traketimetro/add', (req, res) => {
   if (!v) return;
 
   const key = v.name.toLowerCase();
+  let esNuevo = false;
   if (!trakeData[key]) {
-    trakeData[key] = { name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
+    // Persona nueva: le asignamos un token de propiedad. Solo se devuelve al
+    // que la crea (más abajo), así luego solo ese navegador podrá corregir
+    // sus cantidades a mano (aparte del admin).
+    trakeData[key] = {
+      name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0,
+      token: crypto.randomBytes(16).toString('hex')
+    };
+    esNuevo = true;
+  } else if (!trakeData[key].token) {
+    // Compatibilidad: gente que ya existía antes de tener este sistema de
+    // permisos. La "reclama" quien la vuelva a tocar primero.
+    trakeData[key].token = crypto.randomBytes(16).toString('hex');
+    esNuevo = true;
   }
   trakeData[key][v.tipo] = (trakeData[key][v.tipo] || 0) + v.cantidad;
   trakeSave();
   broadcastTrakeChanged();
-  res.json({ ok: true, people: trakeList() });
+  res.json({ ok: true, people: trakeList(), token: esNuevo ? trakeData[key].token : undefined });
 });
 
 // Deshacer la última pulsación (por si te equivocas de nombre o de cuadro)
@@ -932,19 +991,49 @@ app.post('/api/traketimetro/undo', (req, res) => {
   res.json({ ok: true, people: trakeList() });
 });
 
+// ¿Puede este request corregir las cantidades de "key"? Sí si trae el token
+// de propiedad correcto, o si trae las credenciales de admin (usuario y
+// clave). Si no, se responde 401 pidiendo autenticación (el navegador, igual
+// que ya hace con el borrado, muestra automáticamente el cuadro de usuario y
+// clave del admin).
+function trakePuedeEditar(req, res, key) {
+  const token = String(req.body?.token || '');
+  if (token && trakeData[key]?.token && token === trakeData[key].token) return true;
+
+  const h = req.headers.authorization || '';
+  if (h.startsWith('Basic ')) {
+    const raw = Buffer.from(h.slice(6), 'base64').toString();
+    const i = raw.indexOf(':');
+    const u = raw.slice(0, i);
+    const p = raw.slice(i + 1);
+    if (u === process.env.ADMIN_USER && p === process.env.ADMIN_PASSWORD) return true;
+    res.set('WWW-Authenticate', 'Basic realm="Admin"').status(401).json({ error: 'Credenciales incorrectas.' });
+    return false;
+  }
+
+  res.set('WWW-Authenticate', 'Basic realm="Admin"')
+    .status(401)
+    .json({ error: 'Solo puedes corregir tus propios datos (o entrar como administrador).' });
+  return false;
+}
+
 // Corregir las cantidades de una persona a mano (por si se han equivocado)
 app.post('/api/traketimetro/set', (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 30);
   if (!name) return res.status(400).json({ error: 'Falta el nombre.' });
+
+  const key = name.toLowerCase();
+  if (!trakeData[key]) return res.status(404).json({ error: 'Esa persona no existe todavía.' });
+  if (!trakePuedeEditar(req, res, key)) return;
 
   const clamp = (v) => {
     const n = Math.round(Number(v));
     return Number.isFinite(n) && n >= 0 ? Math.min(n, 999) : 0;
   };
 
-  const key = name.toLowerCase();
   trakeData[key] = {
-    name: trakeData[key]?.name || name,
+    ...trakeData[key],
+    name: trakeData[key].name || name,
     cervezas: clamp(req.body?.cervezas),
     cubatas: clamp(req.body?.cubatas),
     chupitos: clamp(req.body?.chupitos),
