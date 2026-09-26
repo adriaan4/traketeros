@@ -2,7 +2,7 @@
 //   GET    /api/traketimetro              → lista de gente + ranking
 //   POST   /api/traketimetro/add          → { name, tipo, cantidad? }
 //   POST   /api/traketimetro/undo         → { name, tipo, cantidad? }
-//   POST   /api/traketimetro/set          → { name, token, cervezas, cubatas, chupitos, porros } (corregir a mano; solo el dueño del token o el admin)
+//   POST   /api/traketimetro/set          → { name, cervezas, cubatas, chupitos, porros } (corregir a mano; SOLO admin)
 //   DELETE /api/admin/traketimetro/:name  → borrar a alguien del ranking (solo admin: abre traketimetro.html?admin=1)
 //   GET    /api/traketimetro/stream       → avisos en directo (SSE)
 
@@ -24,21 +24,6 @@ const store = {
 
 let lastAction = null; // { name, tipo } — para poder deshacer
 let people = [];
-
-// Tokens de propiedad: qué nombres puede corregir este navegador. Se rellena
-// solo la primera vez que se apunta a alguien nuevo (el servidor lo manda).
-function misTokens() {
-  try { return JSON.parse(store.get('trake-tokens') || '{}'); } catch { return {}; }
-}
-function guardarToken(name, token) {
-  if (!token) return;
-  const t = misTokens();
-  t[name.toLowerCase()] = token;
-  store.set('trake-tokens', JSON.stringify(t));
-}
-function esMio(name) {
-  return Boolean(misTokens()[name.toLowerCase()]);
-}
 
 function nombreActual() {
   return $('name').value.trim();
@@ -90,7 +75,7 @@ function pintarRanking() {
       <td>${p.porros}</td>
       <td class="rk-total">${p.total}</td>
       <td class="rk-edit">
-        ${(IS_ADMIN || esMio(p.name)) ? `<button class="rk-edit-btn" type="button" data-editar="${escapeHtml(p.name)}" aria-label="Editar cantidades de ${escapeHtml(p.name)}">✏️</button>` : ''}
+        ${IS_ADMIN ? `<button class="rk-edit-btn" type="button" data-editar="${escapeHtml(p.name)}" aria-label="Editar cantidades de ${escapeHtml(p.name)}">✏️</button>` : ''}
         ${IS_ADMIN ? `<button class="rk-edit-btn" type="button" data-borrar="${escapeHtml(p.name)}" aria-label="Borrar a ${escapeHtml(p.name)} del ranking">🗑️</button>` : ''}
       </td>
     </tr>
@@ -134,7 +119,6 @@ async function registrar(tipo) {
     if (!res.ok) throw new Error(data.error || 'No se ha podido apuntar.');
 
     people = data.people || people;
-    if (data.token) guardarToken(name, data.token);
     actualizarDatalist();
     pintarRanking();
 
@@ -232,7 +216,6 @@ $('editSave').addEventListener('click', async () => {
 
   const body = {
     name: editando,
-    token: misTokens()[editando.toLowerCase()] || '',
     cervezas: numeroEditor('editCervezas'),
     cubatas: numeroEditor('editCubatas'),
     chupitos: numeroEditor('editChupitos'),
@@ -248,7 +231,7 @@ $('editSave').addEventListener('click', async () => {
       body: JSON.stringify(body)
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(res.status === 401 ? 'Solo puedes corregir tus propios datos (o entra como administrador).' : (data.error || 'No se ha podido guardar.'));
+    if (!res.ok) throw new Error(res.status === 401 ? 'Necesitas entrar como administrador.' : (data.error || 'No se ha podido guardar.'));
 
     people = data.people || people;
     actualizarDatalist();

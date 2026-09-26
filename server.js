@@ -820,7 +820,7 @@ const TRAKE_DATA_DIR = path.join(__dirname, 'data');
 const TRAKE_FILE = path.join(TRAKE_DATA_DIR, 'traketimetro.json');
 const TRAKE_CLOUD_ID = 'traketeros_data/traketimetro'; // public_id del respaldo en Cloudinary
 
-let trakeData = {}; // key = nombre en minúsculas -> { name, cervezas, cubatas, chupitos, porros, token }
+let trakeData = {}; // key = nombre en minúsculas -> { name, cervezas, cubatas, chupitos, porros }
 
 function trakeLoadLocal() {
   try {
@@ -955,28 +955,13 @@ app.post('/api/traketimetro/add', (req, res) => {
   if (!v) return;
 
   const key = v.name.toLowerCase();
-  let esNuevo = false;
   if (!trakeData[key]) {
-    // Persona nueva de verdad: le asignamos un token de propiedad y solo se
-    // lo devolvemos a quien la crea (más abajo). Así solo ese navegador
-    // podrá corregir sus cantidades a mano después (aparte del admin).
-    //
-    // OJO: a alguien que YA existiera (por ejemplo, gente del ranking de
-    // antes de tener este sistema) nunca se le asigna dueño aquí solo por
-    // tocarle una casilla — si no, cualquiera podría "adueñarse" de otro con
-    // solo darle a un botón de cerveza. Esas personas antiguas sin dueño
-    // solo las puede corregir el admin, hasta que se les borre y se
-    // vuelvan a apuntar desde cero (con eso sí obtienen un token nuevo).
-    trakeData[key] = {
-      name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0,
-      token: crypto.randomBytes(16).toString('hex')
-    };
-    esNuevo = true;
+    trakeData[key] = { name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
   }
   trakeData[key][v.tipo] = (trakeData[key][v.tipo] || 0) + v.cantidad;
   trakeSave();
   broadcastTrakeChanged();
-  res.json({ ok: true, people: trakeList(), token: esNuevo ? trakeData[key].token : undefined });
+  res.json({ ok: true, people: trakeList() });
 });
 
 // Deshacer la última pulsación (por si te equivocas de nombre o de cuadro)
@@ -993,40 +978,15 @@ app.post('/api/traketimetro/undo', (req, res) => {
   res.json({ ok: true, people: trakeList() });
 });
 
-// ¿Puede este request corregir las cantidades de "key"? Sí si trae el token
-// de propiedad correcto, o si trae las credenciales de admin (usuario y
-// clave). Si no, se responde 401 pidiendo autenticación (el navegador, igual
-// que ya hace con el borrado, muestra automáticamente el cuadro de usuario y
-// clave del admin).
-function trakePuedeEditar(req, res, key) {
-  const token = String(req.body?.token || '');
-  if (token && trakeData[key]?.token && token === trakeData[key].token) return true;
-
-  const h = req.headers.authorization || '';
-  if (h.startsWith('Basic ')) {
-    const raw = Buffer.from(h.slice(6), 'base64').toString();
-    const i = raw.indexOf(':');
-    const u = raw.slice(0, i);
-    const p = raw.slice(i + 1);
-    if (u === process.env.ADMIN_USER && p === process.env.ADMIN_PASSWORD) return true;
-    res.set('WWW-Authenticate', 'Basic realm="Admin"').status(401).json({ error: 'Credenciales incorrectas.' });
-    return false;
-  }
-
-  res.set('WWW-Authenticate', 'Basic realm="Admin"')
-    .status(401)
-    .json({ error: 'Solo puedes corregir tus propios datos (o entrar como administrador).' });
-  return false;
-}
-
-// Corregir las cantidades de una persona a mano (por si se han equivocado)
-app.post('/api/traketimetro/set', (req, res) => {
+// Corregir las cantidades de una persona a mano: SOLO el admin (usuario y
+// clave). El navegador pedirá el login automáticamente si hace falta, igual
+// que ya hace con el borrado.
+app.post('/api/traketimetro/set', adminAuth, (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 30);
   if (!name) return res.status(400).json({ error: 'Falta el nombre.' });
 
   const key = name.toLowerCase();
   if (!trakeData[key]) return res.status(404).json({ error: 'Esa persona no existe todavía.' });
-  if (!trakePuedeEditar(req, res, key)) return;
 
   const clamp = (v) => {
     const n = Math.round(Number(v));
