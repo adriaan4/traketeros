@@ -3,23 +3,17 @@
 
 const btn = document.getElementById('pay');
 const err = document.getElementById('payError');
-const LABEL = btn ? btn.textContent : '';
 
 // Si vuelve de Stripe sin pagar (cancel_url = /?cancelled=1)
-if (err && new URLSearchParams(location.search).get('cancelled')) {
+if (new URLSearchParams(location.search).get('cancelled') && err) {
   err.textContent = 'Pago cancelado. Cuando quieras, lo intentas otra vez 😉';
 }
 
-function reset() {
-  if (!btn) return;
-  btn.disabled = false;
-  btn.textContent = LABEL;
-}
-
 btn?.addEventListener('click', async () => {
-  err.textContent = '';
+  const textoOriginal = btn.textContent;
+  if (err) err.textContent = '';
   btn.disabled = true;
-  btn.textContent = 'Abriendo pago…';
+  btn.textContent = 'Un momento…';
 
   try {
     const res = await fetch('/api/create-checkout-session', {
@@ -34,10 +28,16 @@ btn?.addEventListener('click', async () => {
     }
     window.location.href = data.url;
   } catch (e) {
-    err.textContent = e.message || 'Ha habido un error. Inténtalo de nuevo.';
-    reset();
+    if (err) err.textContent = e.message || 'Ha habido un error. Inténtalo de nuevo.';
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
   }
 });
 
-// Si el usuario vuelve atrás desde Stripe, el botón tiene que seguir funcionando
-window.addEventListener('pageshow', (e) => { if (e.persisted) reset(); });
+// Si el usuario vuelve atrás desde Stripe, el botón debe seguir funcionando
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted && btn) {
+    btn.disabled = false;
+    btn.textContent = btn.dataset.label || 'Venga, me apunto 🔥';
+  }
+});
