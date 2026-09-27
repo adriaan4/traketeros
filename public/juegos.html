@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Juegos para la peña Traketeros: Yo nunca, Quién es más probable, Bebe el que y el Impostor.">
-  <meta name="theme-color" content="#e3262e">
+  <meta name="theme-color" content="#ff2596">
   <title>Traketeros · Juegos</title>
   <link rel="icon" href="assets/traketeros.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
 
@@ -92,13 +92,17 @@
 
       <button class="imp-carta" id="impCartaJugador" type="button"></button>
 
-      <button class="btn submit" id="impSiguienteJugador" type="button" hidden>Siguiente jugador ▶</button>
+      <button class="btn submit" id="impSiguienteJugador" type="button" hidden disabled>Siguiente jugador ▶</button>
     </div>
 
     <div class="imp-step" id="impPaso4" hidden>
       <h2 class="imp-h">¡Ya está repartido! 🕵️</h2>
       <p class="hint">Ahora a hablar de la palabra sin decirla, hasta pillar al impostor.</p>
-      <p class="imp-empieza" id="impEmpieza"></p>
+      <div class="imp-empieza-row">
+        <p class="imp-empieza" id="impEmpieza"></p>
+        <button class="btn ghost imp-revelar-btn" id="impRevelar" type="button">🕵️ Revelar impostor</button>
+      </div>
+      <p class="imp-revelado" id="impRevelado" hidden></p>
       <button class="btn submit" id="impOtraRonda" type="button">Otra ronda (mismas categorías) 🔁</button>
       <button class="btn ghost" id="impReiniciar" type="button">Empezar de cero</button>
     </div>
@@ -110,6 +114,6 @@
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
-<script src="juegos.js?v=2"></script>
+<script src="juegos.js?v=3"></script>
 </body>
 </html>

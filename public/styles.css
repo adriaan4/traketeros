@@ -1,9 +1,9 @@
 :root {
-  --red: #e3262e;
-  --dark-red: #9d1118;
-  --cream: #fff8e8;
-  --yellow: #ffd447;
-  --black: #171717;
+  --red: #ff2596;      /* rosa/magenta del logo */
+  --dark-red: #c2007a; /* magenta oscuro, sombras y hover */
+  --cream: #fff3fa;    /* fondo clarito con tinte rosa */
+  --yellow: #00a8e6;   /* azul cian del logo, color de acento */
+  --black: #1a0018;    /* casi negro con tinte morado, para contornos */
   --white: #fff;
 }
 
@@ -15,8 +15,8 @@ body {
   margin: 0;
   overflow-x: hidden;
   background:
-    radial-gradient(circle at 10% 10%, rgba(255,212,71,.22) 0 3px, transparent 4px),
-    radial-gradient(circle at 90% 80%, rgba(227,38,46,.12) 0 4px, transparent 5px),
+    radial-gradient(circle at 10% 10%, rgba(0,168,230,.22) 0 3px, transparent 4px),
+    radial-gradient(circle at 90% 80%, rgba(255,37,150,.14) 0 4px, transparent 5px),
     var(--cream);
   color: var(--black);
   font-family: Inter, Arial, sans-serif;
@@ -172,8 +172,8 @@ h1 span {
   stroke-linejoin: round;
 }
 
-.heart.pink { --h: #f03090; }
-.heart.blue { --h: #1a8de6; }
+.heart.pink { --h: var(--red); }
+.heart.blue { --h: var(--yellow); }
 
 .photo-sticker {
   position: absolute;
@@ -789,7 +789,7 @@ td small { color: #666; }
   overflow: visible;
 }
 
-.lb::backdrop { background: rgba(23, 23, 23, .88); }
+.lb::backdrop { background: rgba(26, 0, 24, .88); }
 
 .lb-box {
   display: grid;
@@ -999,12 +999,36 @@ a.mini {
 
 .imp-step[hidden] { display: none; }
 
+.imp-empieza-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 0 14px;
+}
+
 .imp-empieza {
   font-family: Bangers, Impact, sans-serif;
   font-size: 24px;
   color: var(--red);
-  margin: 4px 0 20px;
+  margin: 0;
 }
+
+.imp-revelar-btn {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.imp-revelado {
+  background: var(--cream);
+  border: 3px solid var(--black);
+  box-shadow: 5px 5px 0 var(--yellow);
+  padding: 12px 16px;
+  font-weight: 800;
+  margin: 0 0 18px;
+}
+
+.imp-revelado[hidden] { display: none; }
 
 .imp-add {
   display: flex;

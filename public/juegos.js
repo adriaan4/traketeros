@@ -642,7 +642,9 @@ function impMostrarTurno() {
   carta.className = 'imp-carta';
   carta.textContent = nombre;
   carta.hidden = false;
-  $('impSiguienteJugador').hidden = true;
+  const btnSiguiente = $('impSiguienteJugador');
+  btnSiguiente.hidden = true;
+  btnSiguiente.disabled = true;
 }
 
 $('impCartaJugador').addEventListener('click', () => {
@@ -662,9 +664,20 @@ $('impCartaJugador').addEventListener('click', () => {
     imp.fase = 2;
     carta.className = 'imp-carta visto';
     carta.textContent = 'Ya lo has visto ✅ — pásasela a la siguiente persona';
-    $('impSiguienteJugador').hidden = false;
+    const btnSiguiente = $('impSiguienteJugador');
+    btnSiguiente.hidden = false;
+    btnSiguiente.disabled = false;
   }
 });
+
+// Por si acaso: aunque el botón esté oculto, nunca deja pasar a la siguiente
+// persona si todavía no ha visto su palabra/rol (fase < 2).
+$('impSiguienteJugador').addEventListener('click', (e) => {
+  if (imp.fase < 2) {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }
+}, true);
 
 $('impSiguienteJugador').addEventListener('click', () => {
   imp.turno++;
@@ -678,13 +691,31 @@ $('impSiguienteJugador').addEventListener('click', () => {
   }
 });
 
+$('impRevelar').addEventListener('click', () => {
+  const impostores = imp.jugadores.filter((_, i) => imp.roles[i]);
+  const texto = impostores.length > 1
+    ? `🕵️ Los impostores eran: ${impostores.join(', ')}`
+    : `🕵️ El impostor era: ${impostores[0]}`;
+  const revelado = $('impRevelado');
+  revelado.textContent = texto;
+  revelado.hidden = false;
+});
+
+function impOcultarRevelado() {
+  const revelado = $('impRevelado');
+  revelado.hidden = true;
+  revelado.textContent = '';
+}
+
 $('impOtraRonda').addEventListener('click', () => {
+  impOcultarRevelado();
   $('impPaso4').hidden = true;
   $('impPaso3').hidden = false;
   impRepartir();
 });
 
 $('impReiniciar').addEventListener('click', () => {
+  impOcultarRevelado();
   imp.jugadores = [];
   imp.categorias = new Set();
   imp.numImpostores = 1;
