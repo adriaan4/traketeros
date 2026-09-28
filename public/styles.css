@@ -1334,3 +1334,38 @@ a.mini {
   font-size: 15px;
   line-height: 1.4;
 }
+
+/* ---------- Lista de la cuota (quién ha pagado) ---------- */
+.cuota-box { margin-top: 22px; }
+.cuota-box h3 {
+  font-family: Bangers, Impact, sans-serif;
+  font-size: 30px;
+  margin: 0 0 4px;
+}
+.cuota-hint { margin: 0 0 12px; font-size: 14px; }
+.cuota-list { list-style: none; margin: 0; padding: 0; }
+.cuota-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: #ffe3f1;
+  border: 3px solid var(--black);
+  border-radius: 8px;
+}
+.cuota-row.paid { background: #b7f0c1; }
+.cuota-name { font-weight: 900; font-size: 17px; }
+.cuota-btns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cuota-btns .mini { background: white; }
+.cuota-yes.active { background: #2fbf55; color: white; }
+.cuota-no.active { background: var(--red); color: white; }
+.cuota-upload { display: inline-block; background: var(--yellow); color: white; }
+.cuota-upload.busy { opacity: .6; pointer-events: none; }
+.cuota-ok { font-weight: 800; font-size: 13px; }
+.cuota-loading { padding: 12px; font-weight: 700; }
+.cuota-msg { min-height: 1.4em; margin: 10px 0 0; font-size: 14px; font-weight: 800; }
+.cuota-msg.bad { color: #b00020; }
+.mini.danger { background: var(--red); color: white; }

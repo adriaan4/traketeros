@@ -1052,6 +1052,238 @@ app.delete('/api/admin/traketimetro/:name', adminAuth, (req, res) => {
 });
 
 // =========================
+// CUOTA: quién ha pagado + justificante por correo
+// =========================
+// El estado (quién ha marcado "He pagado" y si ha mandado justificante) se
+// guarda igual que el traketímetro: en memoria, en un fichero local y con
+// respaldo en Cloudinary (en Render el disco se borra al redesplegar).
+//
+// Los justificantes se mandan por correo con Resend (por HTTP, porque Render
+// gratis bloquea el SMTP). Variables de entorno:
+//   RESEND_API_KEY   (obligatoria para enviar justificantes)
+//   CUOTA_EMAIL_TO   (opcional, por defecto trakeballer@gmail.com)
+//   RESEND_FROM      (opcional, por defecto onboarding@resend.dev)
+
+const CUOTA_NOMBRES = [
+  'Miguel', 'Isabel', 'Laura', 'Lucía', 'Aurora', 'Carlota', 'Carol',
+  'Cristina', 'David', 'Elisa', 'Paula', 'Rubén', 'Silvia', 'Xulia'
+];
+const CUOTA_EMAIL_TO = (process.env.CUOTA_EMAIL_TO || 'trakeballer@gmail.com').trim();
+const CUOTA_EMAIL_FROM = (process.env.RESEND_FROM || 'Traketeros <onboarding@resend.dev>').trim();
+const CUOTA_FILE = path.join(TRAKE_DATA_DIR, 'cuota.json');
+const CUOTA_CLOUD_ID = 'traketeros_data/cuota';
+
+let cuotaData = {}; // nombre -> { paid: boolean, receipt: boolean }
+
+function cuotaSaveLocal() {
+  try {
+    fs.mkdirSync(TRAKE_DATA_DIR, { recursive: true });
+    fs.writeFileSync(CUOTA_FILE, JSON.stringify(cuotaData), 'utf8');
+  } catch (e) {
+    console.error('No se pudo guardar la cuota localmente:', e.message || e);
+  }
+}
+
+async function cuotaSaveCloud() {
+  if (!CLOUDINARY_OK) return;
+  try {
+    const b64 = Buffer.from(JSON.stringify(cuotaData)).toString('base64');
+    await cloudinary.uploader.upload(`data:application/json;base64,${b64}`, {
+      resource_type: 'raw',
+      public_id: CUOTA_CLOUD_ID,
+      overwrite: true,
+      invalidate: true
+    });
+  } catch (e) {
+    console.error('No se pudo respaldar la cuota en Cloudinary:', e.message || e);
+  }
+}
+
+function cuotaSave() {
+  cuotaSaveLocal();
+  cuotaSaveCloud();
+}
+
+async function cuotaLoad() {
+  if (CLOUDINARY_OK) {
+    try {
+      const info = await cloudinary.api.resource(CUOTA_CLOUD_ID, { resource_type: 'raw' });
+      const resp = await fetch(info.secure_url, { cache: 'no-store' });
+      if (resp.ok) {
+        cuotaData = (await resp.json()) || {};
+        console.log('Cuota: datos cargados desde Cloudinary.');
+        return;
+      }
+    } catch (e) {
+      console.warn('Cuota: no se pudo cargar el respaldo de Cloudinary (usando plan B):', e.message || e);
+    }
+  }
+  try {
+    cuotaData = JSON.parse(fs.readFileSync(CUOTA_FILE, 'utf8')) || {};
+  } catch {
+    cuotaData = {};
+  }
+}
+
+cuotaLoad();
+
+function cuotaList() {
+  return CUOTA_NOMBRES.map((name) => ({
+    name,
+    paid: Boolean(cuotaData[name]?.paid),
+    receipt: Boolean(cuotaData[name]?.receipt)
+  }));
+}
+
+// Solo se aceptan los nombres de la lista (evita que se cuelen otros)
+function cuotaNombre(req, res) {
+  const name = String(req.body?.name || '').trim();
+  if (!CUOTA_NOMBRES.includes(name)) {
+    res.status(400).json({ error: 'Ese nombre no está en la lista.' });
+    return null;
+  }
+  return name;
+}
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Lista pública
+app.get('/api/cuota', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ people: cuotaList() });
+});
+
+// Marcar "He pagado" / "No he pagado"
+app.post('/api/cuota/status', (req, res) => {
+  const name = cuotaNombre(req, res);
+  if (!name) return;
+
+  const paid = req.body?.paid === true;
+  cuotaData[name] = { paid, receipt: paid ? Boolean(cuotaData[name]?.receipt) : false };
+  cuotaSave();
+  res.json({ ok: true, people: cuotaList() });
+});
+
+// Límite sencillo por IP: 10 justificantes por hora
+const receiptHits = new Map();
+setInterval(() => {
+  const limit = Date.now() - 3600_000;
+  for (const [ip, times] of receiptHits) {
+    const recent = times.filter((t) => t > limit);
+    if (recent.length) receiptHits.set(ip, recent);
+    else receiptHits.delete(ip);
+  }
+}, 10 * 60_000).unref();
+
+function receiptLimiter(req, res, next) {
+  const now = Date.now();
+  const recent = (receiptHits.get(req.ip) || []).filter((t) => now - t < 3600_000);
+  if (recent.length >= 10) {
+    return res.status(429).json({ error: 'Demasiados intentos seguidos. Prueba otra vez dentro de un rato.' });
+  }
+  recent.push(now);
+  receiptHits.set(req.ip, recent);
+  next();
+}
+
+const receiptUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 1, fields: 5, fieldSize: 200 },
+  fileFilter: (req, file, cb) => cb(null, /^image\//i.test(file.mimetype))
+});
+
+// Subir el justificante: se reduce la foto y se manda por correo
+app.post('/api/cuota/receipt', receiptLimiter, (req, res) => {
+  receiptUpload.single('receipt')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({
+        error: err.code === 'LIMIT_FILE_SIZE'
+          ? 'La foto pesa demasiado (máximo 15 MB).'
+          : 'No se ha podido subir la foto.'
+      });
+    }
+
+    try {
+      const name = cuotaNombre(req, res);
+      if (!name) return;
+
+      if (!cuotaData[name]?.paid) {
+        return res.status(400).json({ error: 'Primero pulsa "He pagado".' });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: 'No he recibido ninguna imagen.' });
+      }
+      if (!process.env.RESEND_API_KEY) {
+        return res.status(503).json({ error: 'El envío de justificantes todavía no está configurado.' });
+      }
+
+      let jpeg;
+      try {
+        jpeg = await sharp(req.file.buffer, { failOn: 'error' })
+          .rotate()
+          .flatten({ background: '#ffffff' })
+          .resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 85 })
+          .toBuffer();
+      } catch (e) {
+        console.error('Justificante no válido:', e.message);
+        return res.status(400).json({ error: 'No he podido leer esa imagen. Prueba con una captura o foto JPG/PNG.' });
+      }
+
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: CUOTA_EMAIL_FROM,
+          to: [CUOTA_EMAIL_TO],
+          subject: `Justificante de cuota · ${name}`,
+          html: `<p><b>${escHtml(name)}</b> ha marcado que ha pagado la cuota y te manda el justificante (adjunto).</p>`,
+          attachments: [
+            { filename: `justificante-${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')}.jpg`, content: jpeg.toString('base64') }
+          ]
+        })
+      });
+
+      if (!r.ok) {
+        console.error('Resend error:', r.status, await r.text().catch(() => ''));
+        return res.status(502).json({ error: 'No se ha podido enviar el correo. Inténtalo otra vez.' });
+      }
+
+      cuotaData[name] = { paid: true, receipt: true };
+      cuotaSave();
+      res.json({ ok: true, people: cuotaList() });
+    } catch (e) {
+      console.error('Error enviando justificante:', e);
+      res.status(500).json({ error: 'Ha habido un error en el servidor. Inténtalo otra vez.' });
+    }
+  });
+});
+
+// ADMIN: ver el estado (sirve para que el navegador pida usuario y clave)
+app.get('/api/admin/cuota', adminAuth, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ people: cuotaList() });
+});
+
+// ADMIN: reiniciar a todos, o solo a uno si viene "name"
+app.post('/api/admin/cuota/reset', adminAuth, (req, res) => {
+  const name = req.body?.name;
+  if (name !== undefined) {
+    if (!CUOTA_NOMBRES.includes(name)) return res.status(400).json({ error: 'Ese nombre no está en la lista.' });
+    delete cuotaData[name];
+  } else {
+    cuotaData = {};
+  }
+  cuotaSave();
+  res.json({ ok: true, people: cuotaList() });
+});
+
+// =========================
 // SERVIDOR
 // =========================
 
