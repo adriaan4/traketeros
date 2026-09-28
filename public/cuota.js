@@ -32,15 +32,25 @@ function render(people) {
     yes.type = 'button';
     yes.className = 'mini cuota-yes' + (p.paid ? ' active' : '');
     yes.textContent = 'He pagado';
-    yes.addEventListener('click', () => setPaid(p.name, true));
+    if (p.paid) {
+      yes.disabled = true; // una vez marcado, solo el admin puede quitarlo
+    } else {
+      yes.addEventListener('click', () => {
+        if (confirm('¿Confirmas que ' + p.name + ' ha pagado la cuota? Después solo el admin podrá cambiarlo.')) {
+          setPaid(p.name, true);
+        }
+      });
+    }
+    btns.appendChild(yes);
 
-    const no = document.createElement('button');
-    no.type = 'button';
-    no.className = 'mini cuota-no' + (!p.paid ? ' active' : '');
-    no.textContent = 'No he pagado';
-    no.addEventListener('click', () => setPaid(p.name, false));
-
-    btns.append(yes, no);
+    if (!p.paid) {
+      const no = document.createElement('button');
+      no.type = 'button';
+      no.className = 'mini cuota-no active';
+      no.textContent = 'No he pagado';
+      no.disabled = true;
+      btns.appendChild(no);
+    }
 
     if (p.paid && p.receipt) {
       const ok = document.createElement('span');

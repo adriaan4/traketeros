@@ -1176,8 +1176,11 @@ app.post('/api/cuota/status', (req, res) => {
   const name = cuotaNombre(req, res);
   if (!name) return;
 
-  const paid = req.body?.paid === true;
-  cuotaData[name] = { paid, receipt: paid ? Boolean(cuotaData[name]?.receipt) : false };
+  // Desde la web pública solo se puede marcar "He pagado". Quitarlo lo hace el admin.
+  if (req.body?.paid !== true) {
+    return res.status(403).json({ error: 'Solo el admin puede quitar un pago.' });
+  }
+  cuotaData[name] = { paid: true, receipt: Boolean(cuotaData[name]?.receipt) };
   cuotaSave();
   res.json({ ok: true, people: cuotaList() });
 });
@@ -1266,8 +1269,13 @@ app.post('/api/cuota/receipt', receiptLimiter, (req, res) => {
       });
 
       if (!r.ok) {
-        console.error('Resend error:', r.status, await r.text().catch(() => ''));
-        return res.status(502).json({ error: 'No se ha podido enviar el correo. Inténtalo otra vez.' });
+        const raw = await r.text().catch(() => '');
+        console.error('Resend error:', r.status, raw);
+        let detail = '';
+        try { detail = JSON.parse(raw).message || ''; } catch {}
+        return res.status(502).json({
+          error: 'No se ha podido enviar el correo.' + (detail ? ` Resend dice (${r.status}): ${detail}` : ` (código ${r.status})`)
+        });
       }
 
       cuotaData[name] = { paid: true, receipt: true };
@@ -1284,6 +1292,16 @@ app.post('/api/cuota/receipt', receiptLimiter, (req, res) => {
 app.get('/api/admin/cuota', adminAuth, (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({ people: cuotaList() });
+});
+
+// ADMIN: marcar a una persona como pagado / no pagado
+app.post('/api/admin/cuota/status', adminAuth, (req, res) => {
+  const name = String(req.body?.name || '');
+  if (!cuotaPeople.includes(name)) return res.status(400).json({ error: 'Ese nombre no está en la lista.' });
+  const paid = req.body?.paid === true;
+  cuotaData[name] = { paid, receipt: paid ? Boolean(cuotaData[name]?.receipt) : false };
+  cuotaSave();
+  res.json({ ok: true, people: cuotaList() });
 });
 
 // ADMIN: reiniciar a todos, o solo a uno si viene "name"

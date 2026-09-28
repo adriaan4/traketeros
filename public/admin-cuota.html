@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
 
@@ -49,6 +49,11 @@
       <input class="search" id="newName" type="text" maxlength="30" placeholder="Añadir persona…">
       <button class="mini" id="addBtn" type="button">Añadir</button>
     </div>
+    <div class="cuota-filters">
+      <button class="mini" type="button" data-filter="all">Todos</button>
+      <button class="mini" type="button" data-filter="paid">Han pagado</button>
+      <button class="mini" type="button" data-filter="unpaid">Faltan</button>
+    </div>
     <div class="scroll">
       <table>
         <thead><tr><th>Nombre</th><th>Estado</th><th>Justificante</th><th></th></tr></thead>
@@ -58,6 +63,6 @@
   </section>
 </main>
 
-<script src="admin-cuota.js?v=2"></script>
+<script src="admin-cuota.js?v=3"></script>
 </body>
 </html>

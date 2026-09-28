@@ -6,6 +6,7 @@ const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 let people = [];
+let filter = 'all';
 
 function showGate(titulo, texto) {
   document.querySelector('main').innerHTML =
@@ -19,14 +20,20 @@ function render() {
   $('stat-receipt').textContent = people.filter((p) => p.receipt).length;
   $('stat-missing').textContent = people.length - paid;
 
-  $('people').innerHTML = people
+  const shown = people.filter((p) => filter === 'all' || (filter === 'paid' ? p.paid : !p.paid));
+  $('people').innerHTML = shown.length ? shown
     .map((p) =>
       '<tr><td><b>' + esc(p.name) + '</b></td>' +
       '<td><span class="status ' + (p.paid ? 'on' : 'off') + '">' + (p.paid ? 'HA PAGADO' : 'NO HA PAGADO') + '</span></td>' +
       '<td>' + (p.receipt ? '✅ enviado' : '—') + '</td>' +
-      '<td><button class="mini" type="button" data-action="reset" data-name="' + esc(p.name) + '">Reiniciar</button> ' +
+      '<td><button class="mini" type="button" data-action="toggle" data-name="' + esc(p.name) + '">' +
+      (p.paid ? 'Marcar como NO pagado' : 'Marcar como pagado') + '</button> ' +
       '<button class="mini danger" type="button" data-action="remove" data-name="' + esc(p.name) + '">Quitar</button></td></tr>')
-    .join('');
+    .join('') : '<tr><td colspan="4">Nadie en esta lista.</td></tr>';
+
+  document.querySelectorAll('[data-filter]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.filter === filter);
+  });
 }
 
 async function load() {
@@ -37,6 +44,21 @@ async function load() {
     return showGate('Sin conexión', 'No se ha podido conectar con el servidor.');
   }
   if (!res.ok) return showGate('Acceso denegado', 'Entra con el usuario y la clave de administrador.');
+  people = (await res.json()).people;
+  render();
+}
+
+async function toggle(name) {
+  const p = people.find((x) => x.name === name);
+  if (!p) return;
+  const paid = !p.paid;
+  if (!paid && !confirm('¿Marcar a ' + name + ' como NO pagado? Se borra también el estado del justificante.')) return;
+  const res = await fetch('/api/admin/cuota/status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, paid })
+  });
+  if (!res.ok) return alert('No se ha podido cambiar.');
   people = (await res.json()).people;
   render();
 }
@@ -89,7 +111,10 @@ $('people').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-name]');
   if (!b) return;
   if (b.dataset.action === 'remove') remove(b.dataset.name);
-  else reset(b.dataset.name);
+  else toggle(b.dataset.name);
+});
+document.querySelectorAll('[data-filter]').forEach((b) => {
+  b.addEventListener('click', () => { filter = b.dataset.filter; render(); });
 });
 
 load();

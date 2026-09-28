@@ -1373,3 +1373,7 @@ a.mini {
 .cuota-msg.bad { color: #b00020; }
 .mini.danger { background: var(--red); color: white; }
 .add-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+
+.cuota-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.cuota-filters .mini.active { background: #2fbf55; color: white; }
+.cuota-yes:disabled, .cuota-no:disabled { cursor: default; opacity: 1; }
