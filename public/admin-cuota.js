@@ -24,7 +24,8 @@ function render() {
       '<tr><td><b>' + esc(p.name) + '</b></td>' +
       '<td><span class="status ' + (p.paid ? 'on' : 'off') + '">' + (p.paid ? 'HA PAGADO' : 'NO HA PAGADO') + '</span></td>' +
       '<td>' + (p.receipt ? '✅ enviado' : '—') + '</td>' +
-      '<td><button class="mini" type="button" data-name="' + esc(p.name) + '">Reiniciar</button></td></tr>')
+      '<td><button class="mini" type="button" data-action="reset" data-name="' + esc(p.name) + '">Reiniciar</button> ' +
+      '<button class="mini danger" type="button" data-action="remove" data-name="' + esc(p.name) + '">Quitar</button></td></tr>')
     .join('');
 }
 
@@ -53,11 +54,42 @@ async function reset(name) {
   render();
 }
 
+async function remove(name) {
+  if (!confirm('¿Quitar a ' + name + ' de la lista? Dejará de salir en la web.')) return;
+  const res = await fetch('/api/admin/cuota/remove', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+  if (!res.ok) return alert('No se ha podido quitar.');
+  people = (await res.json()).people;
+  render();
+}
+
+async function add() {
+  const name = $('newName').value.trim();
+  if (!name) return;
+  const res = await fetch('/api/admin/cuota/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return alert(data.error || 'No se ha podido añadir.');
+  $('newName').value = '';
+  people = data.people;
+  render();
+}
+
+$('addBtn').addEventListener('click', add);
+$('newName').addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
 $('refresh').addEventListener('click', load);
 $('resetAll').addEventListener('click', () => reset());
 $('people').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-name]');
-  if (b) reset(b.dataset.name);
+  if (!b) return;
+  if (b.dataset.action === 'remove') remove(b.dataset.name);
+  else reset(b.dataset.name);
 });
 
 load();

@@ -1064,8 +1064,8 @@ app.delete('/api/admin/traketimetro/:name', adminAuth, (req, res) => {
 //   CUOTA_EMAIL_TO   (opcional, por defecto trakeballer@gmail.com)
 //   RESEND_FROM      (opcional, por defecto onboarding@resend.dev)
 
-const CUOTA_NOMBRES = [
-  'Miguel', 'Isabel', 'Laura', 'Lucía', 'Aurora', 'Carlota', 'Carol',
+const CUOTA_NOMBRES_INICIALES = [
+  'Adrián', 'Miguel', 'Isabel', 'Laura', 'Lucía', 'Aurora', 'Carlota', 'Carol',
   'Cristina', 'David', 'Elisa', 'Paula', 'Rubén', 'Silvia', 'Xulia'
 ];
 const CUOTA_EMAIL_TO = (process.env.CUOTA_EMAIL_TO || 'trakeballer@gmail.com').trim();
@@ -1073,12 +1073,28 @@ const CUOTA_EMAIL_FROM = (process.env.RESEND_FROM || 'Traketeros <onboarding@res
 const CUOTA_FILE = path.join(TRAKE_DATA_DIR, 'cuota.json');
 const CUOTA_CLOUD_ID = 'traketeros_data/cuota';
 
+let cuotaPeople = [...CUOTA_NOMBRES_INICIALES]; // la lista se puede cambiar desde el admin
 let cuotaData = {}; // nombre -> { paid: boolean, receipt: boolean }
+
+function cuotaSnapshot() {
+  return JSON.stringify({ people: cuotaPeople, status: cuotaData });
+}
+
+// Acepta el formato nuevo ({ people, status }) y el antiguo (solo el estado)
+function cuotaApply(raw) {
+  if (raw && Array.isArray(raw.people)) {
+    cuotaPeople = raw.people.map(String);
+    cuotaData = raw.status || {};
+  } else {
+    cuotaPeople = [...CUOTA_NOMBRES_INICIALES];
+    cuotaData = raw || {};
+  }
+}
 
 function cuotaSaveLocal() {
   try {
     fs.mkdirSync(TRAKE_DATA_DIR, { recursive: true });
-    fs.writeFileSync(CUOTA_FILE, JSON.stringify(cuotaData), 'utf8');
+    fs.writeFileSync(CUOTA_FILE, cuotaSnapshot(), 'utf8');
   } catch (e) {
     console.error('No se pudo guardar la cuota localmente:', e.message || e);
   }
@@ -1087,7 +1103,7 @@ function cuotaSaveLocal() {
 async function cuotaSaveCloud() {
   if (!CLOUDINARY_OK) return;
   try {
-    const b64 = Buffer.from(JSON.stringify(cuotaData)).toString('base64');
+    const b64 = Buffer.from(cuotaSnapshot()).toString('base64');
     await cloudinary.uploader.upload(`data:application/json;base64,${b64}`, {
       resource_type: 'raw',
       public_id: CUOTA_CLOUD_ID,
@@ -1110,7 +1126,7 @@ async function cuotaLoad() {
       const info = await cloudinary.api.resource(CUOTA_CLOUD_ID, { resource_type: 'raw' });
       const resp = await fetch(info.secure_url, { cache: 'no-store' });
       if (resp.ok) {
-        cuotaData = (await resp.json()) || {};
+        cuotaApply(await resp.json());
         console.log('Cuota: datos cargados desde Cloudinary.');
         return;
       }
@@ -1119,16 +1135,16 @@ async function cuotaLoad() {
     }
   }
   try {
-    cuotaData = JSON.parse(fs.readFileSync(CUOTA_FILE, 'utf8')) || {};
+    cuotaApply(JSON.parse(fs.readFileSync(CUOTA_FILE, 'utf8')));
   } catch {
-    cuotaData = {};
+    cuotaApply(null);
   }
 }
 
 cuotaLoad();
 
 function cuotaList() {
-  return CUOTA_NOMBRES.map((name) => ({
+  return cuotaPeople.map((name) => ({
     name,
     paid: Boolean(cuotaData[name]?.paid),
     receipt: Boolean(cuotaData[name]?.receipt)
@@ -1138,7 +1154,7 @@ function cuotaList() {
 // Solo se aceptan los nombres de la lista (evita que se cuelen otros)
 function cuotaNombre(req, res) {
   const name = String(req.body?.name || '').trim();
-  if (!CUOTA_NOMBRES.includes(name)) {
+  if (!cuotaPeople.includes(name)) {
     res.status(400).json({ error: 'Ese nombre no está en la lista.' });
     return null;
   }
@@ -1241,10 +1257,10 @@ app.post('/api/cuota/receipt', receiptLimiter, (req, res) => {
         body: JSON.stringify({
           from: CUOTA_EMAIL_FROM,
           to: [CUOTA_EMAIL_TO],
-          subject: `Justificante de cuota · ${name}`,
-          html: `<p><b>${escHtml(name)}</b> ha marcado que ha pagado la cuota y te manda el justificante (adjunto).</p>`,
+          subject: `${name} ha pagado su cuota mensual`,
+          html: `<p><b>${escHtml(name)}</b> ha pagado su cuota mensual. Justificante adjunto.</p>`,
           attachments: [
-            { filename: `justificante-${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')}.jpg`, content: jpeg.toString('base64') }
+            { filename: `justificante-${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')}.jpg`, content: jpeg.toString('base64') }
           ]
         })
       });
@@ -1274,11 +1290,34 @@ app.get('/api/admin/cuota', adminAuth, (req, res) => {
 app.post('/api/admin/cuota/reset', adminAuth, (req, res) => {
   const name = req.body?.name;
   if (name !== undefined) {
-    if (!CUOTA_NOMBRES.includes(name)) return res.status(400).json({ error: 'Ese nombre no está en la lista.' });
+    if (!cuotaPeople.includes(name)) return res.status(400).json({ error: 'Ese nombre no está en la lista.' });
     delete cuotaData[name];
   } else {
     cuotaData = {};
   }
+  cuotaSave();
+  res.json({ ok: true, people: cuotaList() });
+});
+
+// ADMIN: quitar a una persona de la lista
+app.post('/api/admin/cuota/remove', adminAuth, (req, res) => {
+  const name = String(req.body?.name || '');
+  if (!cuotaPeople.includes(name)) return res.status(400).json({ error: 'Ese nombre no está en la lista.' });
+  cuotaPeople = cuotaPeople.filter((n) => n !== name);
+  delete cuotaData[name];
+  cuotaSave();
+  res.json({ ok: true, people: cuotaList() });
+});
+
+// ADMIN: añadir a una persona a la lista (por si quitas a alguien sin querer)
+app.post('/api/admin/cuota/add', adminAuth, (req, res) => {
+  const name = String(req.body?.name || '').replace(/[\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 30);
+  if (!name) return res.status(400).json({ error: 'Falta el nombre.' });
+  if (cuotaPeople.some((n) => n.toLowerCase() === name.toLowerCase())) {
+    return res.status(409).json({ error: 'Ya está en la lista.' });
+  }
+  if (cuotaPeople.length >= 60) return res.status(400).json({ error: 'La lista está llena.' });
+  cuotaPeople.push(name);
   cuotaSave();
   res.json({ ok: true, people: cuotaList() });
 });
