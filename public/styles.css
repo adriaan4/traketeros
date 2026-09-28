@@ -1364,6 +1364,9 @@ a.mini {
 .cuota-no.active { background: var(--red); color: white; }
 .cuota-upload { display: inline-block; background: var(--yellow); color: white; }
 .cuota-upload.busy { opacity: .6; pointer-events: none; }
+.cuota-send { background: #2fbf55 !important; color: white; }
+.cuota-send:disabled { opacity: .45; cursor: not-allowed; }
+.cuota-file { font-size: 12px; font-weight: 700; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cuota-ok { font-weight: 800; font-size: 13px; }
 .cuota-loading { padding: 12px; font-weight: 700; }
 .cuota-msg { min-height: 1.4em; margin: 10px 0 0; font-size: 14px; font-weight: 800; }

@@ -4,12 +4,17 @@
 const list = document.getElementById('cuotaList');
 const msg = document.getElementById('cuotaMsg');
 
+// Fotos elegidas que aún no se han enviado (nombre -> File)
+const pending = new Map();
+let lastPeople = [];
+
 function say(text, bad) {
   msg.textContent = text || '';
   msg.className = 'cuota-msg' + (bad ? ' bad' : '');
 }
 
 function render(people) {
+  lastPeople = people;
   list.innerHTML = '';
   for (const p of people) {
     const li = document.createElement('li');
@@ -43,18 +48,39 @@ function render(people) {
       ok.textContent = '✅ Justificante enviado';
       btns.appendChild(ok);
     } else if (p.paid) {
+      const picked = pending.get(p.name);
+
       const label = document.createElement('label');
       label.className = 'mini cuota-upload';
-      label.textContent = '📎 Subir justificante';
+      label.textContent = '📎 Adjuntar justificante';
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
       input.hidden = true;
       input.addEventListener('change', () => {
-        if (input.files[0]) sendReceipt(p.name, input.files[0], label);
+        if (input.files[0]) {
+          pending.set(p.name, input.files[0]);
+          say('');
+          render(lastPeople);
+        }
       });
       label.appendChild(input);
-      btns.appendChild(label);
+
+      const send = document.createElement('button');
+      send.type = 'button';
+      send.className = 'mini cuota-send';
+      send.textContent = 'Enviar';
+      send.disabled = !picked;
+      send.addEventListener('click', () => sendReceipt(p.name, picked, send));
+
+      btns.append(label, send);
+
+      if (picked) {
+        const file = document.createElement('span');
+        file.className = 'cuota-file';
+        file.textContent = picked.name;
+        btns.appendChild(file);
+      }
     }
 
     li.appendChild(btns);
@@ -82,6 +108,7 @@ async function load() {
 
 async function setPaid(name, paid) {
   say('');
+  if (!paid) pending.delete(name);
   try {
     const data = await api('/api/cuota/status', {
       method: 'POST',
@@ -89,24 +116,28 @@ async function setPaid(name, paid) {
       body: JSON.stringify({ name, paid })
     });
     render(data.people);
-    if (paid) say(name + ', ahora sube la foto del justificante 📎');
+    if (paid) say(name + ', ahora adjunta el justificante y pulsa Enviar 📎');
   } catch (e) {
     say(e.message, true);
   }
 }
 
-async function sendReceipt(name, file, label) {
+async function sendReceipt(name, file, sendBtn) {
   say('Enviando justificante…');
-  label.classList.add('busy');
+  sendBtn.disabled = true;
+  const upload = sendBtn.parentElement.querySelector('.cuota-upload');
+  if (upload) upload.classList.add('busy');
   const form = new FormData();
   form.append('name', name);
   form.append('receipt', file);
   try {
     const data = await api('/api/cuota/receipt', { method: 'POST', body: form });
+    pending.delete(name);
     render(data.people);
     say('¡Justificante enviado, ' + name + '! 🍻');
   } catch (e) {
-    label.classList.remove('busy');
+    sendBtn.disabled = false;
+    if (upload) upload.classList.remove('busy');
     say(e.message, true);
   }
 }
