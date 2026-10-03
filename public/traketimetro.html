@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 
@@ -71,9 +71,56 @@
     <button class="btn undo" id="undo" type="button" hidden>↩️ Deshacer el último</button>
   </section>
 
+
+  <section class="card admin-fechas" id="adminFechas" hidden>
+    <div class="scribble">SOLO ADMIN 🔧</div>
+    <h2 class="edit-title">Fechas del Traketímetro</h2>
+    <p class="hint">Crea fechas especiales (San Miguel, San Roque...). Mientras dura una fecha, lo que se apunte cuenta para el mes y también para esa fecha, y su ganador sale en el salón.</p>
+
+    <ul class="fechas-list" id="fechasList"></ul>
+
+    <label class="field">
+      <span>Nombre de la fecha</span>
+      <input id="fechaNombre" type="text" maxlength="40" placeholder="San Miguel, San Roque...">
+    </label>
+    <div class="fechas-row">
+      <label class="field">
+        <span>Desde</span>
+        <input id="fechaInicio" type="date">
+      </label>
+      <label class="field">
+        <span>Hasta (opcional)</span>
+        <input id="fechaFin" type="date">
+      </label>
+    </div>
+    <button class="btn submit" id="fechaAdd" type="button">Añadir fecha</button>
+    <p class="msg" id="fechaMsg" role="status" aria-live="polite"></p>
+
+    <h3 class="admin-sub">🏆 Cubata de Oro a mano</h3>
+    <p class="hint">Para cambiar quién ganó un mes o una fecha ya cerrada. Déjalo vacío para volver al ganador automático.</p>
+    <label class="field">
+      <span>Mes o fecha</span>
+      <select id="ganadorPeriodo"></select>
+    </label>
+    <label class="field">
+      <span>Ganador</span>
+      <input id="ganadorNombre" type="text" maxlength="30" placeholder="Nombre">
+    </label>
+    <button class="btn submit" id="ganadorSave" type="button">Guardar ganador</button>
+    <p class="msg" id="ganadorMsg" role="status" aria-live="polite"></p>
+  </section>
+
   <section class="ranking">
     <div class="gallery-head">
       <h2>Ranking <span class="live-dot" aria-hidden="true"></span></h2>
+    </div>
+
+    <div class="periodo-bar">
+      <label class="field periodo-field">
+        <span>Ver ranking de</span>
+        <select id="periodo"></select>
+      </label>
+      <p class="periodo-info" id="periodoInfo"></p>
     </div>
 
     <div class="ranking-scroll">
@@ -132,6 +179,6 @@
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
-<script src="traketimetro.js?v=2"></script>
+<script src="traketimetro.js?v=3"></script>
 </body>
 </html>

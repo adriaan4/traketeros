@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 
@@ -58,6 +58,25 @@
     </div>
   </section>
 
+  <section class="countdown" aria-label="Cuenta atrás para San Roque">
+    <div class="eyebrow">⏳ CUENTA ATRÁS</div>
+    <h2 class="countdown-title">San <span>Roque</span> 2027</h2>
+    <div class="countdown-grid" id="countdown" role="timer" aria-live="off">
+      <div class="cd-box"><b id="cd-d">--</b><small>días</small></div>
+      <div class="cd-box"><b id="cd-h">--</b><small>horas</small></div>
+      <div class="cd-box"><b id="cd-m">--</b><small>min</small></div>
+      <div class="cd-box"><b id="cd-s">--</b><small>seg</small></div>
+    </div>
+    <p class="countdown-note" id="cdNote">13 de agosto de 2027</p>
+  </section>
+
+  <section class="salon" aria-label="Salón del Cubata de Oro">
+    <div class="eyebrow">🏆 SALÓN DEL CUBATA</div>
+    <h2 class="salon-title">Cubatas <span>de Oro</span></h2>
+    <p class="hint">Los ganadores del Traketímetro de cada mes y de cada fecha grande.</p>
+    <div class="salon-grid" id="salonGrid"><p class="salon-vacio">Cargando…</p></div>
+  </section>
+
   <section id="membership" class="membership">
     <div class="card">
       <div class="scribble">PARA LOS NUESTROS 👇</div>
@@ -97,5 +116,6 @@
 </footer>
 
 <script src="cuota.js?v=3"></script>
+<script src="salon.js?v=1"></script>
 </body>
 </html>

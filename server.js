@@ -835,6 +835,16 @@ app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
 // =========================
 // TRAKETÍMETRO (marcador de cervezas, cubatas, chupitos y porros)
 // =========================
+// Los datos se organizan por MESES: cada mes tiene su propio ranking y al
+// empezar un mes nuevo arranca de cero solo (el mes se calcula con la hora de
+// Madrid, no hace falta ninguna tarea programada). Los meses ya cerrados se
+// guardan y de ahí sale el "Salón del Cubata de Oro".
+// Además el admin puede crear FECHAS especiales (San Miguel, San Roque...):
+// mientras dura una fecha, lo que se apunta cuenta para el mes Y para esa fecha.
+//
+// Puntuación (oculta, solo sirve para ordenar): porro 3, cubata 3, chupito 2,
+// cerveza 1.
+//
 // Se guarda en memoria, en un fichero local (data/traketimetro.json) como
 // caché rápida, y además se respalda en Cloudinary (como archivo "raw") cada
 // vez que cambia algo. En Render el disco es "efímero": el fichero local se
@@ -844,18 +854,52 @@ app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
 // está configurado o falla justo en ese momento.
 
 const TRAKE_TIPOS = ['cervezas', 'cubatas', 'chupitos', 'porros'];
+const TRAKE_PUNTOS = { porros: 3, cubatas: 3, chupitos: 2, cervezas: 1 };
 const TRAKE_DATA_DIR = path.join(__dirname, 'data');
 const TRAKE_FILE = path.join(TRAKE_DATA_DIR, 'traketimetro.json');
 const TRAKE_CLOUD_ID = 'traketeros_data/traketimetro'; // public_id del respaldo en Cloudinary
+const MESES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-let trakeData = {}; // key = nombre en minúsculas -> { name, cervezas, cubatas, chupitos, porros }
+// Estructura:
+// {
+//   version: 2,
+//   months:    { 'YYYY-MM': { <nombre en minúsculas>: { name, cervezas, cubatas, chupitos, porros } } },
+//   events:    [ { id, name, start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' } ],
+//   eventData: { <id>: { <nombre en minúsculas>: {...} } },
+//   overrides: { 'm:YYYY-MM' | 'e:<id>': 'Nombre del ganador a mano' }
+// }
+let trakeData = trakeEmpty();
+
+function trakeEmpty() {
+  return { version: 2, months: {}, events: [], eventData: {}, overrides: {} };
+}
+
+// Los datos antiguos eran un único ranking sin fechas. Eran los de septiembre
+// de 2026, así que pasan a ser el mes 2026-09 (y el Cubata de Oro de septiembre
+// es de Mañas). Octubre arranca de cero.
+function trakeNormalize(raw) {
+  if (raw && raw.version === 2 && raw.months && typeof raw.months === 'object') {
+    return {
+      version: 2,
+      months: raw.months,
+      events: Array.isArray(raw.events) ? raw.events : [],
+      eventData: raw.eventData || {},
+      overrides: raw.overrides || {}
+    };
+  }
+  const d = trakeEmpty();
+  if (raw && typeof raw === 'object' && Object.keys(raw).length) d.months['2026-09'] = raw;
+  d.overrides['m:2026-09'] = 'Mañas';
+  trakeMigrated = true;
+  return d;
+}
+let trakeMigrated = false;
 
 function trakeLoadLocal() {
   try {
-    const raw = fs.readFileSync(TRAKE_FILE, 'utf8');
-    trakeData = JSON.parse(raw) || {};
+    trakeData = trakeNormalize(JSON.parse(fs.readFileSync(TRAKE_FILE, 'utf8')));
   } catch {
-    trakeData = {};
+    trakeData = trakeNormalize({});
   }
 }
 
@@ -895,41 +939,177 @@ function trakeSave() {
 // Intenta cargar el respaldo desde Cloudinary; si no hay o falla, usa el
 // fichero local como plan B.
 async function trakeLoad() {
+  let loaded = false;
   if (CLOUDINARY_OK) {
     try {
       const info = await cloudinary.api.resource(TRAKE_CLOUD_ID, { resource_type: 'raw' });
       const resp = await fetch(info.secure_url, { cache: 'no-store' });
       if (resp.ok) {
-        trakeData = await resp.json();
+        trakeData = trakeNormalize(await resp.json());
         console.log('Traketímetro: datos cargados desde Cloudinary.');
-        return;
+        loaded = true;
       }
     } catch (e) {
       console.warn('Traketímetro: no se pudo cargar el respaldo de Cloudinary (usando plan B):', e.message || e);
     }
   }
-  trakeLoadLocal();
+  if (!loaded) trakeLoadLocal();
+  if (trakeMigrated) {
+    console.log('Traketímetro: datos antiguos pasados al mes 2026-09.');
+    trakeSave();
+  }
 }
 
 trakeLoad();
 
-function trakeList() {
-  return Object.values(trakeData)
+// ---------- Fechas (hora de Madrid) ----------
+function trakeHoy() {
+  // 'en-CA' da el formato YYYY-MM-DD
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+function trakeMesActual() {
+  return trakeHoy().slice(0, 7);
+}
+
+function trakeMesLabel(id) {
+  const [y, m] = id.split('-');
+  return `${MESES_ES[Number(m) - 1] || id} ${y}`;
+}
+
+function trakeEventoActivo(ev, hoy) {
+  return ev.start <= hoy && hoy <= (ev.end || ev.start);
+}
+
+function trakeEstadoEvento(ev, hoy) {
+  if (hoy < ev.start) return 'proximo';
+  if (hoy > (ev.end || ev.start)) return 'pasado';
+  return 'en_curso';
+}
+
+// ---------- Puntos y ranking ----------
+function trakePuntos(p) {
+  return TRAKE_TIPOS.reduce((s, t) => s + (p[t] || 0) * TRAKE_PUNTOS[t], 0);
+}
+
+function trakeTotal(p) {
+  return TRAKE_TIPOS.reduce((s, t) => s + (p[t] || 0), 0);
+}
+
+// Ranking de un periodo ('m:YYYY-MM' o 'e:<id>'), ordenado por puntos.
+function trakeBucket(periodo) {
+  if (periodo.startsWith('e:')) return trakeData.eventData[periodo.slice(2)] || {};
+  return trakeData.months[periodo.slice(2)] || {};
+}
+
+function trakeListOf(bucket) {
+  return Object.values(bucket)
     .map((p) => ({
       name: p.name,
       cervezas: p.cervezas || 0,
       cubatas: p.cubatas || 0,
       chupitos: p.chupitos || 0,
       porros: p.porros || 0,
-      total: (p.cervezas || 0) + (p.cubatas || 0) + (p.chupitos || 0) + (p.porros || 0)
+      total: trakeTotal(p),
+      puntos: trakePuntos(p)
     }))
-    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'es'));
+    .sort((a, b) => b.puntos - a.puntos || b.total - a.total || a.name.localeCompare(b.name, 'es'));
 }
 
+// Nombre(s) del ganador: el que haya puesto el admin a mano o, si no, quien
+// tenga más puntos (si hay empate a puntos, ganan todos los empatados).
+function trakeGanador(periodo) {
+  const manual = trakeData.overrides[periodo];
+  if (manual) return { names: [manual], manual: true };
+  const lista = trakeListOf(trakeBucket(periodo));
+  if (!lista.length || lista[0].puntos <= 0) return { names: [], manual: false };
+  const top = lista[0].puntos;
+  return { names: lista.filter((p) => p.puntos === top).map((p) => p.name), manual: false };
+}
+
+function trakePeriodoValido(periodo) {
+  if (/^m:\d{4}-(0[1-9]|1[0-2])$/.test(periodo)) return true;
+  if (periodo.startsWith('e:')) return trakeData.events.some((e) => e.id === periodo.slice(2));
+  return false;
+}
+
+// Periodos que se pueden consultar en el ranking (mes actual primero)
+function trakePeriodos() {
+  const hoy = trakeHoy();
+  const actual = hoy.slice(0, 7);
+  const meses = new Set([actual, ...Object.keys(trakeData.months)]);
+  const out = [...meses].sort().reverse().map((id) => ({
+    id: 'm:' + id,
+    tipo: 'mes',
+    label: trakeMesLabel(id),
+    actual: id === actual
+  }));
+  const eventos = [...trakeData.events]
+    .sort((a, b) => b.start.localeCompare(a.start))
+    .map((e) => ({
+      id: 'e:' + e.id,
+      tipo: 'fecha',
+      label: e.name,
+      start: e.start,
+      end: e.end || e.start,
+      estado: trakeEstadoEvento(e, hoy)
+    }));
+  return [...out, ...eventos];
+}
+
+// Salón del Cubata de Oro: ganadores de los meses cerrados y de las fechas
+// ya terminadas, más el mes en juego.
+function trakeSalon() {
+  const hoy = trakeHoy();
+  const actual = hoy.slice(0, 7);
+
+  const idsMeses = new Set([
+    ...Object.keys(trakeData.months),
+    ...Object.keys(trakeData.overrides).filter((k) => k.startsWith('m:')).map((k) => k.slice(2))
+  ]);
+  const meses = [...idsMeses]
+    .filter((id) => id < actual)
+    .sort()
+    .map((id) => ({ id, label: trakeMesLabel(id), ...trakeGanador('m:' + id) }))
+    .filter((m) => m.names.length);
+
+  const fechas = trakeData.events
+    .filter((e) => trakeEstadoEvento(e, hoy) === 'pasado')
+    .sort((a, b) => a.start.localeCompare(b.start))
+    .map((e) => ({ id: e.id, label: e.name, start: e.start, end: e.end || e.start, ...trakeGanador('e:' + e.id) }))
+    .filter((e) => e.names.length);
+
+  const enJuego = trakeGanador('m:' + actual);
+  return {
+    meses,
+    fechas,
+    actual: { id: actual, label: trakeMesLabel(actual), lider: enJuego.manual ? [] : enJuego.names }
+  };
+}
+
+function trakeRespuesta(periodo) {
+  const p = trakePeriodoValido(periodo) ? periodo : 'm:' + trakeMesActual();
+  return {
+    ok: true,
+    periodo: p,
+    people: trakeListOf(trakeBucket(p)),
+    periodos: trakePeriodos(),
+    salon: trakeSalon(),
+    events: trakeData.events
+  };
+}
+
+function periodoDe(req) {
+  return String(req.query?.periodo || req.body?.periodo || '');
+}
+
+// ---------- Directo (SSE) ----------
 const sseTrakeClients = new Set();
 
 function broadcastTrakeChanged() {
-  const msg = `data: ${JSON.stringify({ type: 'trake-changed', people: trakeList() })}\n\n`;
+  const msg = `data: ${JSON.stringify({ type: 'trake-changed' })}\n\n`;
   for (const res of sseTrakeClients) {
     try { res.write(msg); } catch { /* cliente ya desconectado */ }
   }
@@ -954,10 +1134,28 @@ setInterval(() => {
   }
 }, 25_000).unref();
 
-// Lista de gente + ranking
+// Cambio de mes (o de fecha especial): avisamos a todos para que se refresquen
+// solos en cuanto pase la medianoche de Madrid.
+let trakeUltimoDia = trakeHoy();
+setInterval(() => {
+  const hoy = trakeHoy();
+  if (hoy !== trakeUltimoDia) {
+    trakeUltimoDia = hoy;
+    broadcastTrakeChanged();
+  }
+}, 30_000).unref();
+
+// ---------- API pública ----------
+// Ranking de un periodo (por defecto el mes actual) + salón + fechas
 app.get('/api/traketimetro', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ people: trakeList() });
+  res.json(trakeRespuesta(periodoDe(req)));
+});
+
+// Solo el salón (lo usa la pantalla principal)
+app.get('/api/traketimetro/salon', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ salon: trakeSalon(), events: trakeData.events, hoy: trakeHoy() });
 });
 
 function trakeValidate(req, res) {
@@ -977,19 +1175,35 @@ function trakeValidate(req, res) {
   return { name, tipo, cantidad };
 }
 
+// Buckets donde cuenta lo que se apunta ahora: el mes actual y las fechas
+// especiales que estén en curso hoy.
+function trakeBucketsActivos(crear) {
+  const hoy = trakeHoy();
+  const mes = hoy.slice(0, 7);
+  const out = [];
+  if (crear && !trakeData.months[mes]) trakeData.months[mes] = {};
+  if (trakeData.months[mes]) out.push(trakeData.months[mes]);
+  for (const ev of trakeData.events) {
+    if (!trakeEventoActivo(ev, hoy)) continue;
+    if (crear && !trakeData.eventData[ev.id]) trakeData.eventData[ev.id] = {};
+    if (trakeData.eventData[ev.id]) out.push(trakeData.eventData[ev.id]);
+  }
+  return out;
+}
+
 // Sumar una o varias consumiciones de golpe
 app.post('/api/traketimetro/add', (req, res) => {
   const v = trakeValidate(req, res);
   if (!v) return;
 
   const key = v.name.toLowerCase();
-  if (!trakeData[key]) {
-    trakeData[key] = { name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
+  for (const bucket of trakeBucketsActivos(true)) {
+    if (!bucket[key]) bucket[key] = { name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
+    bucket[key][v.tipo] = (bucket[key][v.tipo] || 0) + v.cantidad;
   }
-  trakeData[key][v.tipo] = (trakeData[key][v.tipo] || 0) + v.cantidad;
   trakeSave();
   broadcastTrakeChanged();
-  res.json({ ok: true, people: trakeList() });
+  res.json(trakeRespuesta(periodoDe(req)));
 });
 
 // Deshacer la última pulsación (por si te equivocas de nombre o de cuadro)
@@ -998,32 +1212,39 @@ app.post('/api/traketimetro/undo', (req, res) => {
   if (!v) return;
 
   const key = v.name.toLowerCase();
-  if (trakeData[key]) {
-    trakeData[key][v.tipo] = Math.max(0, (trakeData[key][v.tipo] || 0) - v.cantidad);
+  let cambio = false;
+  for (const bucket of trakeBucketsActivos(false)) {
+    if (bucket[key]) {
+      bucket[key][v.tipo] = Math.max(0, (bucket[key][v.tipo] || 0) - v.cantidad);
+      cambio = true;
+    }
+  }
+  if (cambio) {
     trakeSave();
     broadcastTrakeChanged();
   }
-  res.json({ ok: true, people: trakeList() });
+  res.json(trakeRespuesta(periodoDe(req)));
 });
 
 // Corregir las cantidades de una persona a mano: SOLO el admin (usuario y
-// clave). El navegador pedirá el login automáticamente si hace falta, igual
-// que ya hace con el borrado.
+// clave). Corrige el ranking que se esté viendo (mes o fecha).
 app.post('/api/traketimetro/set', adminAuth, (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 30);
   if (!name) return res.status(400).json({ error: 'Falta el nombre.' });
 
+  const periodo = trakePeriodoValido(periodoDe(req)) ? periodoDe(req) : 'm:' + trakeMesActual();
+  const bucket = trakeBucket(periodo);
   const key = name.toLowerCase();
-  if (!trakeData[key]) return res.status(404).json({ error: 'Esa persona no existe todavía.' });
+  if (!bucket[key]) return res.status(404).json({ error: 'Esa persona no existe todavía.' });
 
   const clamp = (v) => {
     const n = Math.round(Number(v));
     return Number.isFinite(n) && n >= 0 ? Math.min(n, 999) : 0;
   };
 
-  trakeData[key] = {
-    ...trakeData[key],
-    name: trakeData[key].name || name,
+  bucket[key] = {
+    ...bucket[key],
+    name: bucket[key].name || name,
     cervezas: clamp(req.body?.cervezas),
     cubatas: clamp(req.body?.cubatas),
     chupitos: clamp(req.body?.chupitos),
@@ -1031,24 +1252,74 @@ app.post('/api/traketimetro/set', adminAuth, (req, res) => {
   };
   trakeSave();
   broadcastTrakeChanged();
-  res.json({ ok: true, people: trakeList() });
+  res.json(trakeRespuesta(periodo));
 });
 
-// Borrar a alguien del ranking por completo (solo admin, desde
+// Borrar a alguien del ranking que se esté viendo (solo admin, desde
 // traketimetro.html?admin=1)
 app.delete('/api/admin/traketimetro/:name', adminAuth, (req, res) => {
   const name = String(req.params.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Falta el nombre.' });
 
+  const periodo = trakePeriodoValido(periodoDe(req)) ? periodoDe(req) : 'm:' + trakeMesActual();
+  const bucket = trakeBucket(periodo);
   const key = name.toLowerCase();
-  if (!trakeData[key]) {
+  if (!bucket[key]) {
     return res.status(404).json({ error: 'No existe esa persona en el ranking.' });
   }
 
-  delete trakeData[key];
+  delete bucket[key];
   trakeSave();
   broadcastTrakeChanged();
-  res.json({ ok: true, people: trakeList() });
+  res.json(trakeRespuesta(periodo));
+});
+
+// ---------- Admin: fechas especiales (San Miguel, San Roque...) ----------
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+app.post('/api/admin/traketimetro/fechas', adminAuth, (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0, 40);
+  const start = String(req.body?.start || '').trim();
+  const end = String(req.body?.end || '').trim() || start;
+
+  if (!name) return res.status(400).json({ error: 'Ponle un nombre a la fecha.' });
+  if (!FECHA_RE.test(start) || !FECHA_RE.test(end)) {
+    return res.status(400).json({ error: 'Fecha no válida.' });
+  }
+  if (end < start) return res.status(400).json({ error: 'El final no puede ser antes del inicio.' });
+  if (trakeData.events.length >= 100) return res.status(400).json({ error: 'Demasiadas fechas.' });
+
+  trakeData.events.push({ id: crypto.randomBytes(5).toString('hex'), name, start, end });
+  trakeSave();
+  broadcastTrakeChanged();
+  res.json(trakeRespuesta(periodoDe(req)));
+});
+
+app.delete('/api/admin/traketimetro/fechas/:id', adminAuth, (req, res) => {
+  const id = String(req.params.id || '');
+  const antes = trakeData.events.length;
+  trakeData.events = trakeData.events.filter((e) => e.id !== id);
+  if (trakeData.events.length === antes) return res.status(404).json({ error: 'No existe esa fecha.' });
+
+  delete trakeData.eventData[id];
+  delete trakeData.overrides['e:' + id];
+  trakeSave();
+  broadcastTrakeChanged();
+  res.json(trakeRespuesta(periodoDe(req)));
+});
+
+// Poner (o quitar, dejando el nombre vacío) a mano el Cubata de Oro de un mes
+// o de una fecha: body { periodo: 'm:2026-09' | 'e:<id>', name }
+app.post('/api/admin/traketimetro/ganador', adminAuth, (req, res) => {
+  const periodo = String(req.body?.target || '');
+  if (!trakePeriodoValido(periodo)) return res.status(400).json({ error: 'Periodo no válido.' });
+
+  const name = String(req.body?.name || '').trim().slice(0, 30);
+  if (name) trakeData.overrides[periodo] = name;
+  else delete trakeData.overrides[periodo];
+  trakeSave();
+  broadcastTrakeChanged();
+  res.json(trakeRespuesta(periodoDe(req)));
 });
 
 // =========================

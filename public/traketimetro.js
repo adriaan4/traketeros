@@ -1,5 +1,7 @@
 // Traketímetro.
-//   GET    /api/traketimetro              → lista de gente + ranking
+//   GET    /api/traketimetro?periodo=     → ranking del mes actual (o de otro mes / fecha) + salón
+//   POST   /api/admin/traketimetro/fechas → (admin) crear fechas especiales
+//   POST   /api/admin/traketimetro/ganador→ (admin) poner el Cubata de Oro a mano
 //   POST   /api/traketimetro/add          → { name, tipo, cantidad? }
 //   POST   /api/traketimetro/undo         → { name, tipo, cantidad? }
 //   POST   /api/traketimetro/set          → { name, cervezas, cubatas, chupitos, porros } (corregir a mano)
@@ -24,6 +26,50 @@ const store = {
 
 let lastAction = null; // { name, tipo } — para poder deshacer
 let people = [];
+let periodo = '';      // '' = mes actual (siempre el que toque); 'm:2026-09' / 'e:<id>' = otro
+let periodos = [];
+let fechas = [];
+
+// Aplica la respuesta del servidor (ranking + lista de periodos + fechas)
+function aplicar(data) {
+  if (!data) return;
+  people = data.people || people;
+  if (data.periodos) periodos = data.periodos;
+  if (data.events) fechas = data.events;
+  actualizarDatalist();
+  pintarSelector();
+  pintarRanking();
+  pintarAdmin();
+}
+
+function pintarSelector() {
+  const sel = $('periodo');
+  if (!sel) return;
+  const meses = periodos.filter((p) => p.tipo === 'mes');
+  const evs = periodos.filter((p) => p.tipo === 'fecha');
+  const opt = (p) => {
+    const valor = p.actual ? '' : p.id;
+    const extra = p.actual ? ' (este mes)' : (p.estado === 'en_curso' ? ' (hoy)' : '');
+    return `<option value="${escapeHtml(valor)}">${escapeHtml(p.label + extra)}</option>`;
+  };
+  sel.innerHTML =
+    `<optgroup label="Meses">${meses.map(opt).join('')}</optgroup>` +
+    (evs.length ? `<optgroup label="Fechas">${evs.map(opt).join('')}</optgroup>` : '');
+  sel.value = periodo;
+  if (sel.value !== periodo) { periodo = ''; sel.value = ''; }
+
+  const actual = periodos.find((p) => (p.actual ? '' : p.id) === periodo);
+  const info = $('periodoInfo');
+  if (!actual) { info.textContent = ''; return; }
+  if (actual.tipo === 'mes') {
+    info.textContent = actual.actual
+      ? 'El ranking arranca de cero cada mes. 🔄'
+      : 'Mes cerrado.';
+  } else {
+    const d = (s) => s.split('-').reverse().join('/');
+    info.textContent = actual.start === actual.end ? d(actual.start) : `${d(actual.start)} → ${d(actual.end)}`;
+  }
+}
 
 function nombreActual() {
   return $('name').value.trim();
@@ -84,11 +130,9 @@ function pintarRanking() {
 
 async function cargar() {
   try {
-    const res = await fetch('/api/traketimetro', { cache: 'no-store' });
+    const res = await fetch('/api/traketimetro?periodo=' + encodeURIComponent(periodo), { cache: 'no-store' });
     const data = await res.json();
-    people = data.people || [];
-    actualizarDatalist();
-    pintarRanking();
+    aplicar(data);
   } catch {
     decirEstado('No se ha podido cargar el ranking. Prueba a recargar la página.', 'err');
   }
@@ -113,14 +157,12 @@ async function registrar(tipo) {
     const res = await fetch('/api/traketimetro/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, tipo, cantidad })
+      body: JSON.stringify({ name, tipo, cantidad, periodo })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'No se ha podido apuntar.');
 
-    people = data.people || people;
-    actualizarDatalist();
-    pintarRanking();
+    aplicar(data);
 
     lastAction = { name, tipo, cantidad };
     $('undo').hidden = false;
@@ -140,14 +182,12 @@ async function deshacer() {
     const res = await fetch('/api/traketimetro/undo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, tipo, cantidad })
+      body: JSON.stringify({ name, tipo, cantidad, periodo })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'No se ha podido deshacer.');
 
-    people = data.people || people;
-    actualizarDatalist();
-    pintarRanking();
+    aplicar(data);
     decirEstado(`Deshecho: -${cantidad || 1} ${TIPOS[tipo].etiqueta.toLowerCase()}${(cantidad || 1) > 1 ? 's' : ''} de ${name}`, 'ok');
   } catch (e) {
     decirEstado(e.message || 'Ha habido un error.', 'err');
@@ -193,14 +233,12 @@ async function borrarPersona(name) {
   if (!confirm(`¿Borrar a ${name} del ranking? Se perderán todas sus cantidades.`)) return;
 
   try {
-    const res = await fetch('/api/admin/traketimetro/' + encodeURIComponent(name), { method: 'DELETE' });
+    const res = await fetch('/api/admin/traketimetro/' + encodeURIComponent(name) + '?periodo=' + encodeURIComponent(periodo), { method: 'DELETE' });
     if (!res.ok) {
       throw new Error(res.status === 401 ? 'Necesitas entrar como administrador.' : 'No se ha podido borrar.');
     }
     const data = await res.json().catch(() => ({}));
-    people = data.people || people.filter((p) => p.name !== name);
-    actualizarDatalist();
-    pintarRanking();
+    aplicar(data);
     decirEstado(`${name} borrado del ranking 🗑️`, 'ok');
   } catch (e) {
     decirEstado(e.message || 'Ha habido un error.', 'err');
@@ -216,6 +254,7 @@ $('editSave').addEventListener('click', async () => {
 
   const body = {
     name: editando,
+    periodo,
     cervezas: numeroEditor('editCervezas'),
     cubatas: numeroEditor('editCubatas'),
     chupitos: numeroEditor('editChupitos'),
@@ -233,9 +272,7 @@ $('editSave').addEventListener('click', async () => {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'No se ha podido guardar.');
 
-    people = data.people || people;
-    actualizarDatalist();
-    pintarRanking();
+    aplicar(data);
     editDialog.close();
     decirEstado(`Cantidades de ${editando} corregidas ✏️`, 'ok');
   } catch (e) {
@@ -253,18 +290,104 @@ function conectarDirecto() {
     es.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data);
-        if (data.type === 'trake-changed') {
-          people = data.people || [];
-          actualizarDatalist();
-          pintarRanking();
-        }
+        if (data.type === 'trake-changed') cargar();
       } catch { /* mensaje raro, se ignora */ }
     };
     es.onerror = () => { /* el navegador reintenta solo */ };
   } catch { /* sin SSE no pasa nada, se ve igual al recargar */ }
 }
 
+// ---------- Admin: fechas y Cubata de Oro a mano ----------
+function formatoFecha(s) { return String(s).split('-').reverse().join('/'); }
+
+function pintarAdmin() {
+  if (!IS_ADMIN) return;
+  $('adminFechas').hidden = false;
+
+  $('fechasList').innerHTML = fechas.length
+    ? fechas.map((e) => `
+      <li>
+        <span><b>${escapeHtml(e.name)}</b> · ${formatoFecha(e.start)}${e.end && e.end !== e.start ? ' → ' + formatoFecha(e.end) : ''}</span>
+        <button class="rk-edit-btn" type="button" data-fecha-borrar="${escapeHtml(e.id)}" aria-label="Borrar ${escapeHtml(e.name)}">🗑️</button>
+      </li>`).join('')
+    : '<li class="fechas-vacio">Todavía no hay fechas.</li>';
+
+  const sel = $('ganadorPeriodo');
+  const previo = sel.value;
+  sel.innerHTML = periodos
+    .filter((p) => !p.actual)
+    .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.label)}</option>`).join('');
+  if (previo) sel.value = previo;
+}
+
+function msgAdmin(id, text, kind) {
+  const el = $(id);
+  el.textContent = text || '';
+  el.className = 'msg' + (kind ? ' ' + kind : '');
+}
+
+async function llamarAdmin(url, method, body) {
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify({ ...body, periodo }) : undefined
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(res.status === 401 ? 'Necesitas entrar como administrador.' : (data.error || 'No se ha podido.'));
+  return data;
+}
+
+if (IS_ADMIN) {
+  $('fechaAdd').addEventListener('click', async () => {
+    try {
+      const data = await llamarAdmin('/api/admin/traketimetro/fechas', 'POST', {
+        name: $('fechaNombre').value,
+        start: $('fechaInicio').value,
+        end: $('fechaFin').value
+      });
+      aplicar(data);
+      $('fechaNombre').value = '';
+      $('fechaInicio').value = '';
+      $('fechaFin').value = '';
+      msgAdmin('fechaMsg', 'Fecha añadida ✅', 'ok');
+    } catch (e) {
+      msgAdmin('fechaMsg', e.message, 'err');
+    }
+  });
+
+  $('fechasList').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-fecha-borrar]');
+    if (!b) return;
+    if (!confirm('¿Borrar esta fecha? Se pierde también su ranking.')) return;
+    try {
+      aplicar(await llamarAdmin('/api/admin/traketimetro/fechas/' + encodeURIComponent(b.dataset.fechaBorrar) + '?periodo=' + encodeURIComponent(periodo), 'DELETE'));
+      msgAdmin('fechaMsg', 'Fecha borrada 🗑️', 'ok');
+    } catch (err) {
+      msgAdmin('fechaMsg', err.message, 'err');
+    }
+  });
+
+  $('ganadorSave').addEventListener('click', async () => {
+    try {
+      const data = await llamarAdmin('/api/admin/traketimetro/ganador', 'POST', {
+        target: $('ganadorPeriodo').value,
+        name: $('ganadorNombre').value
+      });
+      aplicar(data);
+      $('ganadorNombre').value = '';
+      msgAdmin('ganadorMsg', 'Guardado 🏆', 'ok');
+    } catch (err) {
+      msgAdmin('ganadorMsg', err.message, 'err');
+    }
+  });
+}
+
 // ---------- Arranque ----------
+$('periodo').addEventListener('change', () => {
+  periodo = $('periodo').value;
+  cargar();
+});
+
 Object.keys(TIPOS).forEach((tipo) => {
   $('tile-' + tipo)?.addEventListener('click', () => registrar(tipo));
 });
@@ -276,3 +399,7 @@ if (nombreGuardado) $('name').value = nombreGuardado;
 
 cargar();
 conectarDirecto();
+
+// Por si el móvil estaba dormido al cambiar de mes: al volver, se refresca solo
+document.addEventListener('visibilitychange', () => { if (!document.hidden) cargar(); });
+setInterval(cargar, 5 * 60 * 1000);
