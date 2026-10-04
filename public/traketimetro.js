@@ -19,6 +19,9 @@ const TIPOS = {
   porros: { emoji: '🚬', etiqueta: 'Porro' }
 };
 
+// Puntos que vale cada cosa
+const PUNTOS = { cervezas: 1, chupitos: 2, cubatas: 3, porros: 3 };
+
 const store = {
   get(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento: no pasa nada */ } }
@@ -115,11 +118,11 @@ function pintarRanking() {
     <tr>
       <td class="rk-pos">${medallas[i] || (i + 1)}</td>
       <td class="rk-name">${escapeHtml(p.name)}</td>
-      <td>${p.cervezas}</td>
-      <td>${p.cubatas}</td>
-      <td>${p.chupitos}</td>
-      <td>${p.porros}</td>
-      <td class="rk-total">${p.total}</td>
+      <td>${p.cervezas * PUNTOS.cervezas}</td>
+      <td>${p.cubatas * PUNTOS.cubatas}</td>
+      <td>${p.chupitos * PUNTOS.chupitos}</td>
+      <td>${p.porros * PUNTOS.porros}</td>
+      <td class="rk-total">${p.puntos}</td>
       <td class="rk-edit">
         <button class="rk-edit-btn" type="button" data-editar="${escapeHtml(p.name)}" aria-label="Editar cantidades de ${escapeHtml(p.name)}">✏️</button>
         ${IS_ADMIN ? `<button class="rk-edit-btn" type="button" data-borrar="${escapeHtml(p.name)}" aria-label="Borrar a ${escapeHtml(p.name)} del ranking">🗑️</button>` : ''}
