@@ -26,6 +26,7 @@ const store = {
 
 let lastAction = null; // { name, tipo } — para poder deshacer
 let people = [];
+let totales = [];
 let periodo = '';      // '' = mes actual (siempre el que toque); 'm:2026-09' / 'e:<id>' = otro
 let periodos = [];
 let fechas = [];
@@ -34,11 +35,13 @@ let fechas = [];
 function aplicar(data) {
   if (!data) return;
   people = data.people || people;
+  totales = data.totales || totales;
   if (data.periodos) periodos = data.periodos;
   if (data.events) fechas = data.events;
   actualizarDatalist();
   pintarSelector();
   pintarRanking();
+  pintarTotales();
   pintarAdmin();
 }
 
@@ -126,6 +129,39 @@ function pintarRanking() {
       </td>
     </tr>
   `).join('');
+}
+
+function pintarTotales() {
+  const tbody = $('totalesBody');
+  const vacio = $('totalesVacio');
+  if (!tbody) return;
+
+  if (!totales.length) {
+    tbody.innerHTML = '';
+    vacio.hidden = false;
+    return;
+  }
+  vacio.hidden = true;
+
+  const suma = (k) => totales.reduce((s, p) => s + (p[k] || 0), 0);
+  tbody.innerHTML = totales.map((p) => `
+    <tr>
+      <td class="rk-name">${escapeHtml(p.name)}</td>
+      <td>${p.cervezas}</td>
+      <td>${p.cubatas}</td>
+      <td>${p.chupitos}</td>
+      <td>${p.porros}</td>
+      <td class="rk-total">${p.total}</td>
+    </tr>
+  `).join('') + `
+    <tr>
+      <td class="rk-name"><b>TODOS</b></td>
+      <td><b>${suma('cervezas')}</b></td>
+      <td><b>${suma('cubatas')}</b></td>
+      <td><b>${suma('chupitos')}</b></td>
+      <td><b>${suma('porros')}</b></td>
+      <td class="rk-total"><b>${suma('total')}</b></td>
+    </tr>`;
 }
 
 async function cargar() {
