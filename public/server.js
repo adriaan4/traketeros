@@ -172,6 +172,12 @@ app.post(
 // JSON
 app.use(express.json());
 
+// Endpoint ligero para keep-alive / monitorización
+app.get('/health', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true, uptime: Math.round(process.uptime()) });
+});
+
 // Archivos de la web
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -1621,4 +1627,31 @@ app.listen(PORT, () => {
   console.log(
     `TRAKETEROS funcionando en el puerto ${PORT}`
   );
+  startKeepAlive();
 });
+
+// =========================
+// KEEP-ALIVE (evita que Render free se duerma)
+// =========================
+// Render free duerme el servicio tras ~15 min sin peticiones HTTP entrantes.
+// Hacemos un ping a nuestra propia URL pública cada 10 min para que cuente
+// como tráfico entrante. Render rellena RENDER_EXTERNAL_URL automáticamente;
+// también se puede forzar con KEEP_ALIVE_URL. En local no hace nada.
+function startKeepAlive() {
+  const base = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;
+  if (!base) return;
+  const url = base.replace(/\/+$/, '') + '/health';
+  const everyMs = 10 * 60 * 1000;
+
+  const ping = async () => {
+    try {
+      const r = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+      console.log(`[keep-alive] ${url} -> ${r.status}`);
+    } catch (e) {
+      console.warn('[keep-alive] fallo:', e.message || e);
+    }
+  };
+
+  setInterval(ping, everyMs).unref();
+  console.log(`[keep-alive] activo, ping cada 10 min a ${url}`);
+}
