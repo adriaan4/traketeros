@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=11">
+  <link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
 
@@ -36,6 +36,14 @@
 </header>
 
 <main>
+  <section class="multa" aria-label="Aviso de Hacienda">
+    <img class="multa-logo" src="assets/hacienda.png" width="900" height="451" alt="Agencia Tributaria y Traketeros">
+    <h2 class="multa-title">HACIENDA VA A POR TI</h2>
+    <p class="multa-label">La multa asciende a:</p>
+    <div class="multa-importe" id="multaImporte" aria-live="off">8 €</div>
+    <small class="multa-note">Sube 1 € cada día que pasa.</small>
+  </section>
+
   <section class="hero">
     <div class="hero-text">
       <div class="eyebrow">⚽ CUOTA DE LA PEÑA</div>
@@ -115,6 +123,7 @@
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
+<script src="multa.js?v=1"></script>
 <script src="cuota.js?v=3"></script>
 <script src="salon.js?v=1"></script>
 </body>
