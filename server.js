@@ -1095,32 +1095,12 @@ function trakeSalon() {
   };
 }
 
-// Totales de siempre por persona: suma de todos los meses (las fechas
-// especiales no se suman porque ya cuentan dentro del mes).
-function trakeTotalesHistoricos() {
-  const acc = new Map();
-  for (const bucket of Object.values(trakeData.months)) {
-    for (const p of Object.values(bucket || {})) {
-      const key = String(p.name || '').trim().toLowerCase();
-      if (!key) continue;
-      const cur = acc.get(key) || { name: p.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
-      for (const t of TRAKE_TIPOS) cur[t] += p[t] || 0;
-      acc.set(key, cur);
-    }
-  }
-  return [...acc.values()]
-    .map((p) => ({ ...p, total: trakeTotal(p) }))
-    .filter((p) => p.total > 0)
-    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'es'));
-}
-
 function trakeRespuesta(periodo) {
   const p = trakePeriodoValido(periodo) ? periodo : 'm:' + trakeMesActual();
   return {
     ok: true,
     periodo: p,
     people: trakeListOf(trakeBucket(p)),
-    totales: trakeTotalesHistoricos(),
     periodos: trakePeriodos(),
     salon: trakeSalon(),
     events: trakeData.events

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ff2596">
+  <title>Traketeros · Admin cuota</title>
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=10">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
+  </a>
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>ADMIN · CUOTA</small>
+  </div>
+  <a class="header-link" href="admin-estatutos.html">Estatutos</a>
+  <a class="header-link" href="/">Ver la web</a>
+</header>
+
+<main>
+  <div class="admin-head">
+    <div>
+      <div class="eyebrow">PANEL DE CONTROL</div>
+      <h1>Cuota</h1>
+    </div>
+    <div>
+      <button class="mini" id="refresh" type="button">Actualizar</button>
+      <button class="mini danger" id="resetAll" type="button">Reiniciar todos</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><small>HAN PAGADO</small><b id="stat-paid">—</b></div>
+    <div class="stat"><small>CON JUSTIFICANTE</small><b id="stat-receipt">—</b></div>
+    <div class="stat"><small>FALTAN</small><b id="stat-missing">—</b></div>
+  </div>
+
+  <section class="panel">
+    <h2>Peña</h2>
+    <div class="add-row">
+      <input class="search" id="newName" type="text" maxlength="30" placeholder="Añadir persona…">
+      <button class="mini" id="addBtn" type="button">Añadir</button>
+    </div>
+    <div class="cuota-filters">
+      <button class="mini" type="button" data-filter="all">Todos</button>
+      <button class="mini" type="button" data-filter="paid">Han pagado</button>
+      <button class="mini" type="button" data-filter="unpaid">Faltan</button>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Nombre</th><th>Estado</th><th>Justificante</th><th></th></tr></thead>
+        <tbody id="people"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="admin-cuota.js?v=3"></script>
+</body>
+</html>

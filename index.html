@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Cuota mensual de la peña Traketeros.">
+  <meta name="theme-color" content="#ff2596">
+  <title>Traketeros · La peña de los colegas</title>
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=14">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="heart" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></symbol>
+</svg>
+
+<header class="site-header">
+  <a class="brand" href="estatutos.html" aria-label="Estatutos de Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
+  </a>
+
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>LA PEÑA DE LOS TRAKETOS 🍻</small>
+  </div>
+
+  <nav class="nav-links">
+    <a class="header-link" href="fotos.html">📸 Fotos</a>
+    <a class="header-link" href="juegos.html">🎮 Juegos</a>
+    <a class="header-link" href="traketimetro.html">🍻 Traketímetro</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-text">
+      <div class="eyebrow">⚽ CUOTA DE LA PEÑA</div>
+      <h1>Esto no es una<br><span>empresa.</span><br>Es nuestra peña.</h1>
+      <p class="intro">
+        Aquí no hay reuniones de 3 horas ni presentaciones de PowerPoint.
+        Pagas la cuota, eres uno de los nuestros y a disfrutar. ❤️
+        David paga tu cupo
+      </p>
+
+      <div class="mini-list">
+        <div>🍻 Para echar el rato juntos</div>
+        <div>😂 Para las risas que nos vamos a pegar</div>
+      </div>
+    </div>
+
+    <div class="hero-photo">
+      <img src="assets/traketeros_esp.jpeg" width="1080" height="847" alt="Los Traketeros juntos de fiesta">
+      <div class="photo-sticker">LOS TRAKETEROS<br><span class="hearts" aria-hidden="true"><svg class="heart pink" viewBox="0 0 24 24"><use href="#heart"/></svg><svg class="heart blue" viewBox="0 0 24 24"><use href="#heart"/></svg><svg class="heart pink" viewBox="0 0 24 24"><use href="#heart"/></svg></span></div>
+    </div>
+  </section>
+
+  <section class="multa" aria-label="Aviso de Hacienda">
+    <img class="multa-logo" src="assets/hacienda.png" width="900" height="451" alt="Agencia Tributaria y Traketeros">
+    <h2 class="multa-title">HACIENDA VA A POR TI</h2>
+    <p class="multa-label">La multa asciende a:</p>
+    <div class="multa-importe" id="multaImporte" aria-live="off">8 €</div>
+    <small class="multa-note">Sube 1 € cada día que pasa.</small>
+  </section>
+
+  <section class="countdown" aria-label="Cuenta atrás para San Roque">
+    <div class="eyebrow">⏳ CUENTA ATRÁS</div>
+    <h2 class="countdown-title">San <span>Roque</span> 2027</h2>
+    <div class="countdown-grid" id="countdown" role="timer" aria-live="off">
+      <div class="cd-box"><b id="cd-d">--</b><small>días</small></div>
+      <div class="cd-box"><b id="cd-h">--</b><small>horas</small></div>
+      <div class="cd-box"><b id="cd-m">--</b><small>min</small></div>
+      <div class="cd-box"><b id="cd-s">--</b><small>seg</small></div>
+    </div>
+    <p class="countdown-note" id="cdNote">13 de agosto de 2027</p>
+  </section>
+
+  <section class="salon" aria-label="Salón del Cubata de Oro">
+    <div class="eyebrow">🏆 SALÓN DEL CUBATA</div>
+    <h2 class="salon-title">Cubatas <span>de Oro</span></h2>
+    <p class="hint">Los ganadores del Traketímetro de cada mes y de cada fecha grande.</p>
+    <div class="salon-grid" id="salonGrid"><p class="salon-vacio">Cargando…</p></div>
+  </section>
+
+  <section id="membership" class="membership">
+    <div class="card">
+      <div class="scribble">PARA LOS NUESTROS 👇</div>
+      <small>CUOTA MENSUAL</small>
+      <h2>Ser Traketero</h2>
+
+      <div class="price">8€ <i>/ mes</i></div>
+
+      <p>
+        Son 8 pavos al mes y listo. Se cobra automáticamente para que
+        nadie tenga que estar detrás de nadie asi que ale a tener todos perras en la cuenta y a prenderla en 2027.
+      </p>
+
+      <div class="cuota-box">
+        <h3>¿Quién ha pagado?</h3>
+        <p class="cuota-hint">Pulsa <b>He pagado</b> en tu nombre, adjunta el justificante y pulsa <b>Enviar</b>.</p>
+        <ul id="cuotaList" class="cuota-list"><li class="cuota-loading">Cargando…</li></ul>
+        <p id="cuotaMsg" class="cuota-msg" role="status"></p>
+      </div>
+    </div>
+
+    <aside class="side-note">
+      <div class="tape">AVISO IMPORTANTE</div>
+      <h3>Una cosa está clara:</h3>
+      <p>
+        Si vas a ser Traketero, vienes a pasarlo bien.
+        Lo demás ya lo hablamos con unas cervezas.
+      </p>
+      <div class="signature">— La directiva (más o menos) 😂</div>
+    </aside>
+  </section>
+
+</main>
+
+<footer>
+  TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
+</footer>
+
+<script src="multa.js?v=1"></script>
+<script src="cuota.js?v=3"></script>
+<script src="salon.js?v=1"></script>
+</body>
+</html>

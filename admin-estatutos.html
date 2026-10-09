@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ff2596">
+  <title>Traketeros · Admin · Estatutos</title>
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=14">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
+  </a>
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>ADMIN · ESTATUTOS</small>
+  </div>
+  <a class="header-link" href="admin.html">Suscripciones</a>
+  <a class="header-link" href="admin-cuota.html">Cuota</a>
+  <a class="header-link" href="/">Ver la web</a>
+</header>
+
+<main>
+  <div class="admin-head">
+    <div>
+      <div class="eyebrow">PANEL DE CONTROL</div>
+      <h1>Estatutos</h1>
+    </div>
+    <div>
+      <button class="mini" id="refresh" type="button">Actualizar</button>
+      <a class="mini" href="/api/admin/estatutos/export">⬇️ Descargar JSON</a>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><small>SUGERENCIAS</small><b id="stat-total">—</b></div>
+    <div class="stat"><small>ÚLTIMA</small><b id="stat-last" style="font-size:18px">—</b></div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Sugerencias</h2>
+      <input class="search" id="q" type="search" placeholder="Buscar…">
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Fecha</th><th>Nombre</th><th>Sugerencia</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Importar JSON</h2>
+    <p class="hint">Después de un deploy, sube aquí el JSON que descargaste para recuperar las sugerencias.</p>
+    <div class="add-row">
+      <input id="file" type="file" accept="application/json,.json">
+    </div>
+    <div class="add-row">
+      <label><input type="radio" name="mode" value="merge" checked> Añadir las que falten (recomendado)</label>
+      <label><input type="radio" name="mode" value="replace"> Reemplazar todo</label>
+    </div>
+    <div class="add-row">
+      <button class="mini" id="importBtn" type="button">Importar</button>
+      <span class="msg" id="importMsg" role="status" aria-live="polite"></span>
+    </div>
+  </section>
+</main>
+
+<script src="admin-estatutos.js?v=1"></script>
+</body>
+</html>
