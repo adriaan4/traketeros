@@ -170,7 +170,7 @@ app.post(
 );
 
 // JSON
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Endpoint ligero para keep-alive / monitorización
 app.get('/health', (req, res) => {
@@ -1095,12 +1095,32 @@ function trakeSalon() {
   };
 }
 
+// Totales de siempre por persona: suma de todos los meses (las fechas
+// especiales no se suman porque ya cuentan dentro del mes).
+function trakeTotalesHistoricos() {
+  const acc = new Map();
+  for (const bucket of Object.values(trakeData.months)) {
+    for (const p of Object.values(bucket || {})) {
+      const key = String(p.name || '').trim().toLowerCase();
+      if (!key) continue;
+      const cur = acc.get(key) || { name: p.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
+      for (const t of TRAKE_TIPOS) cur[t] += p[t] || 0;
+      acc.set(key, cur);
+    }
+  }
+  return [...acc.values()]
+    .map((p) => ({ ...p, total: trakeTotal(p) }))
+    .filter((p) => p.total > 0)
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'es'));
+}
+
 function trakeRespuesta(periodo) {
   const p = trakePeriodoValido(periodo) ? periodo : 'm:' + trakeMesActual();
   return {
     ok: true,
     periodo: p,
     people: trakeListOf(trakeBucket(p)),
+    totales: trakeTotalesHistoricos(),
     periodos: trakePeriodos(),
     salon: trakeSalon(),
     events: trakeData.events
@@ -1615,6 +1635,237 @@ app.post('/api/admin/cuota/add', adminAuth, (req, res) => {
   cuotaPeople.push(name);
   cuotaSave();
   res.json({ ok: true, people: cuotaList() });
+});
+
+
+// =========================
+// ESTATUTOS (privado con contraseña) + SUGERENCIAS
+// =========================
+//
+// El PDF vive en /private (fuera de public/), así que solo se sirve si hay una
+// cookie de sesión válida, que se consigue con la contraseña. Las sugerencias
+// se guardan igual que el resto: memoria + fichero local + respaldo en
+// Cloudinary. Desde /admin-estatutos.html puedes descargar todo en un JSON y
+// volver a importarlo después de un deploy.
+//
+// Variables de entorno (opcionales):
+//   ESTATUTOS_PASSWORD  contraseña (por defecto Estraketeros26)
+//   ESTATUTOS_SECRET    clave para firmar la sesión (por defecto sale de ADMIN_PASSWORD)
+
+const ESTATUTOS_PDF = path.join(__dirname, 'private', 'estatutos.pdf');
+const ESTATUTOS_FILE = path.join(TRAKE_DATA_DIR, 'estatutos_sugerencias.json');
+const ESTATUTOS_CLOUD_ID = 'traketeros_data/estatutos_sugerencias';
+const ESTATUTOS_COOKIE = 'trk_estatutos';
+const ESTATUTOS_SESION_MS = 7 * 24 * 60 * 60 * 1000;
+const ESTATUTOS_MAX_SUG = 1000;
+const ESTATUTOS_MAX_TEXTO = 1500;
+
+// Se aceptan las dos variantes por si la "?" no era parte de la contraseña
+const ESTATUTOS_PASSWORDS = process.env.ESTATUTOS_PASSWORD
+  ? [process.env.ESTATUTOS_PASSWORD]
+  : ['Estraketeros26', 'Estraketeros26?'];
+
+const sha = (v) => crypto.createHash('sha256').update(String(v)).digest();
+function estatutosPasswordOk(pw) {
+  const h = sha(pw);
+  let ok = false;
+  for (const good of ESTATUTOS_PASSWORDS) {
+    if (crypto.timingSafeEqual(h, sha(good))) ok = true;
+  }
+  return ok;
+}
+
+const ESTATUTOS_SECRET = process.env.ESTATUTOS_SECRET || ('estatutos|' + (process.env.ADMIN_PASSWORD || 'traketeros'));
+const estatutosFirma = (exp) => crypto.createHmac('sha256', ESTATUTOS_SECRET).update(String(exp)).digest('hex');
+
+function estatutosToken() {
+  const exp = Date.now() + ESTATUTOS_SESION_MS;
+  return exp + '.' + estatutosFirma(exp);
+}
+
+function estatutosCookie(req) {
+  const m = (req.headers.cookie || '').split(';').map((c) => c.trim()).find((c) => c.startsWith(ESTATUTOS_COOKIE + '='));
+  return m ? decodeURIComponent(m.slice(ESTATUTOS_COOKIE.length + 1)) : '';
+}
+
+function estatutosAuth(req, res, next) {
+  const [exp, sig] = estatutosCookie(req).split('.');
+  const good = exp && sig && Number(exp) > Date.now() && sig.length === 64 &&
+    crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(estatutosFirma(exp)));
+  if (!good) return res.status(401).json({ error: 'Hace falta la contraseña.' });
+  next();
+}
+
+// ---------- Almacenamiento de sugerencias ----------
+let estatutosSug = []; // [{ id, name, text, date (ISO) }]
+
+function estatutosLimpiar(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((x) => x && typeof x.text === 'string' && x.text.trim())
+    .map((x) => ({
+      id: String(x.id || crypto.randomUUID()).slice(0, 64),
+      name: String(x.name || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40),
+      text: String(x.text).replace(/\r/g, '').trim().slice(0, ESTATUTOS_MAX_TEXTO),
+      date: isNaN(Date.parse(x.date)) ? new Date().toISOString() : new Date(x.date).toISOString()
+    }));
+}
+
+function estatutosSnapshot() {
+  return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), suggestions: estatutosSug });
+}
+
+function estatutosSaveLocal() {
+  try {
+    fs.mkdirSync(TRAKE_DATA_DIR, { recursive: true });
+    fs.writeFileSync(ESTATUTOS_FILE, estatutosSnapshot(), 'utf8');
+  } catch (e) {
+    console.error('No se pudieron guardar las sugerencias localmente:', e.message || e);
+  }
+}
+
+async function estatutosSaveCloud() {
+  if (!CLOUDINARY_OK) return;
+  try {
+    const b64 = Buffer.from(estatutosSnapshot()).toString('base64');
+    await cloudinary.uploader.upload(`data:application/json;base64,${b64}`, {
+      resource_type: 'raw',
+      public_id: ESTATUTOS_CLOUD_ID,
+      overwrite: true,
+      invalidate: true
+    });
+  } catch (e) {
+    console.error('No se pudieron respaldar las sugerencias en Cloudinary:', e.message || e);
+  }
+}
+
+function estatutosSave() {
+  estatutosSaveLocal();
+  estatutosSaveCloud();
+}
+
+async function estatutosLoad() {
+  if (CLOUDINARY_OK) {
+    try {
+      const info = await cloudinary.api.resource(ESTATUTOS_CLOUD_ID, { resource_type: 'raw' });
+      const resp = await fetch(info.secure_url, { cache: 'no-store' });
+      if (resp.ok) {
+        const j = await resp.json();
+        estatutosSug = estatutosLimpiar(j.suggestions);
+        console.log('Estatutos: sugerencias cargadas desde Cloudinary.');
+        return;
+      }
+    } catch (e) {
+      console.warn('Estatutos: no se pudo cargar el respaldo de Cloudinary (usando plan B):', e.message || e);
+    }
+  }
+  try {
+    estatutosSug = estatutosLimpiar(JSON.parse(fs.readFileSync(ESTATUTOS_FILE, 'utf8')).suggestions);
+  } catch {
+    estatutosSug = [];
+  }
+}
+
+estatutosLoad();
+
+// ---------- Límite de intentos (en memoria, por IP) ----------
+function estatutosLimiter(max, windowMs, msg) {
+  const hits = new Map();
+  return (req, res, next) => {
+    const now = Date.now();
+    const arr = (hits.get(req.ip) || []).filter((t) => now - t < windowMs);
+    if (arr.length >= max) return res.status(429).json({ error: msg });
+    arr.push(now);
+    hits.set(req.ip, arr);
+    if (hits.size > 2000) for (const [k, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(k);
+    next();
+  };
+}
+const estatutosLoginLimit = estatutosLimiter(8, 10 * 60 * 1000, 'Demasiados intentos. Prueba dentro de un rato.');
+const estatutosSendLimit = estatutosLimiter(10, 10 * 60 * 1000, 'Has mandado muchas sugerencias seguidas. Prueba dentro de un rato.');
+
+// ---------- Rutas públicas (con contraseña) ----------
+app.post('/api/estatutos/login', estatutosLoginLimit, (req, res) => {
+  const pw = String(req.body?.password ?? '').slice(0, 200);
+  if (!estatutosPasswordOk(pw)) return res.status(401).json({ error: 'Contraseña incorrecta.' });
+  const secure = req.secure ? '; Secure' : '';
+  res.set('Set-Cookie',
+    `${ESTATUTOS_COOKIE}=${encodeURIComponent(estatutosToken())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ESTATUTOS_SESION_MS / 1000}${secure}`);
+  res.json({ ok: true });
+});
+
+app.post('/api/estatutos/logout', (req, res) => {
+  res.set('Set-Cookie', `${ESTATUTOS_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  res.json({ ok: true });
+});
+
+app.get('/api/estatutos/session', estatutosAuth, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true });
+});
+
+app.get('/api/estatutos/pdf', estatutosAuth, (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  res.set('Content-Type', 'application/pdf');
+  res.set('Content-Disposition', (req.query.download ? 'attachment' : 'inline') + '; filename="Estatutos-Traketeros.pdf"');
+  res.sendFile(ESTATUTOS_PDF, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'No se encuentra el documento.' });
+  });
+});
+
+app.get('/api/estatutos/sugerencias', estatutosAuth, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ suggestions: [...estatutosSug].sort((a, b) => b.date.localeCompare(a.date)) });
+});
+
+app.post('/api/estatutos/sugerencias', estatutosAuth, estatutosSendLimit, (req, res) => {
+  const text = String(req.body?.text ?? '').replace(/\r/g, '').trim();
+  if (!text) return res.status(400).json({ error: 'Escribe tu sugerencia.' });
+  if (text.length > ESTATUTOS_MAX_TEXTO) return res.status(400).json({ error: `Máximo ${ESTATUTOS_MAX_TEXTO} caracteres.` });
+  if (estatutosSug.length >= ESTATUTOS_MAX_SUG) return res.status(409).json({ error: 'Ya hay demasiadas sugerencias.' });
+  const [nueva] = estatutosLimpiar([{ id: crypto.randomUUID(), name: req.body?.name, text, date: new Date().toISOString() }]);
+  estatutosSug.push(nueva);
+  estatutosSave();
+  res.json({ ok: true, suggestion: nueva });
+});
+
+// ---------- Admin ----------
+app.get('/api/admin/estatutos', adminAuth, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ suggestions: [...estatutosSug].sort((a, b) => b.date.localeCompare(a.date)) });
+});
+
+// Descarga todo en un JSON
+app.get('/api/admin/estatutos/export', adminAuth, (req, res) => {
+  const dia = new Date().toISOString().slice(0, 10);
+  res.set('Cache-Control', 'no-store');
+  res.set('Content-Type', 'application/json; charset=utf-8');
+  res.set('Content-Disposition', `attachment; filename="sugerencias-estatutos-${dia}.json"`);
+  res.send(JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), suggestions: estatutosSug }, null, 2));
+});
+
+// Importa un JSON exportado antes. mode "merge" (por defecto) añade las que no
+// existan ya; mode "replace" sustituye todo por lo importado.
+app.post('/api/admin/estatutos/import', adminAuth, (req, res) => {
+  const body = req.body || {};
+  const incoming = estatutosLimpiar(Array.isArray(body) ? body : (body.data?.suggestions ?? body.data ?? body.suggestions));
+  if (!incoming.length) return res.status(400).json({ error: 'El JSON no tiene ninguna sugerencia válida.' });
+  if (body.mode === 'replace') {
+    estatutosSug = incoming.slice(0, ESTATUTOS_MAX_SUG);
+  } else {
+    const ids = new Set(estatutosSug.map((x) => x.id));
+    for (const x of incoming) if (!ids.has(x.id) && estatutosSug.length < ESTATUTOS_MAX_SUG) estatutosSug.push(x);
+  }
+  estatutosSave();
+  res.json({ ok: true, total: estatutosSug.length, imported: incoming.length });
+});
+
+app.delete('/api/admin/estatutos/:id', adminAuth, (req, res) => {
+  const antes = estatutosSug.length;
+  estatutosSug = estatutosSug.filter((x) => x.id !== req.params.id);
+  if (estatutosSug.length === antes) return res.status(404).json({ error: 'No existe esa sugerencia.' });
+  estatutosSave();
+  res.json({ ok: true, total: estatutosSug.length });
 });
 
 // =========================
