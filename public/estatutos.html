@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ff2596">
+  <title>Traketeros · Estatutos</title>
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=14">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
+  </a>
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>ESTATUTOS DE LA PEÑA 📜</small>
+  </div>
+  <nav class="nav-links">
+    <a class="header-link" href="/">Inicio</a>
+    <button class="header-link" id="logout" type="button" hidden>Salir</button>
+  </nav>
+</header>
+
+<main>
+  <!-- Paso 1: contraseña -->
+  <section class="est-gate" id="gate" hidden>
+    <div class="est-lock" aria-hidden="true">🔒</div>
+    <div class="eyebrow">SOLO PARA TRAKETEROS</div>
+    <h1 class="photos-title">Los <span>estatutos.</span></h1>
+    <p class="hint">Mete la contraseña que os ha pasado la directiva.</p>
+    <form id="loginForm" novalidate>
+      <label class="field">
+        <span>Contraseña</span>
+        <input id="pw" type="password" autocomplete="current-password" placeholder="Contraseña" required>
+      </label>
+      <button class="btn submit" id="loginBtn" type="submit">Entrar</button>
+      <p class="msg" id="loginMsg" role="status" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <!-- Paso 2: documento + sugerencias -->
+  <div id="content" hidden>
+    <div class="eyebrow">📜 BORRADOR</div>
+    <h1 class="photos-title">Estatutos <span>Traketeros.</span></h1>
+
+    <section class="est-doc" aria-label="Documento de los estatutos">
+      <div class="est-actions">
+        <a class="btn" id="openPdf" href="/api/estatutos/pdf" target="_blank" rel="noopener">📖 Abrir el documento</a>
+        <a class="btn ghost" href="/api/estatutos/pdf?download=1">⬇️ Descargar</a>
+      </div>
+      <iframe class="est-frame" id="pdfFrame" title="Estatutos de la peña" hidden></iframe>
+    </section>
+
+    <section class="uploader" aria-labelledby="sug-title">
+      <div class="scribble">¿CAMBIARÍAIS ALGO? 👇</div>
+      <h2 id="sug-title">Sugerencias</h2>
+      <p class="hint">Escribe lo que añadirías, quitarías o cambiarías de los estatutos. Se queda guardado aquí abajo para toda la peña.</p>
+
+      <form id="sugForm" novalidate>
+        <label class="field">
+          <span>Tu nombre (opcional)</span>
+          <input id="sugName" type="text" maxlength="40" autocomplete="given-name" placeholder="Tu nombre o tu mote">
+        </label>
+        <label class="field">
+          <span>Tu sugerencia</span>
+          <textarea id="sugText" maxlength="1500" rows="5" placeholder="Ej: Artículo 4: yo pondría el plazo hasta el día 10…" required></textarea>
+        </label>
+        <button class="btn submit" id="sugBtn" type="submit">Enviar sugerencia</button>
+        <p class="msg" id="sugMsg" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section aria-labelledby="list-title">
+      <div class="gallery-head">
+        <h2 id="list-title">Sugerencias enviadas</h2>
+        <span class="count" id="sugCount"></span>
+      </div>
+      <div class="est-list" id="sugList"></div>
+      <p class="empty" id="sugEmpty" hidden>Todavía no hay ninguna sugerencia. Sé el primero 👆</p>
+    </section>
+  </div>
+</main>
+
+<footer>
+  TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
+</footer>
+
+<script src="estatutos.js?v=1"></script>
+</body>
+</html>
