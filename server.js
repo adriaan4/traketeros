@@ -1649,7 +1649,7 @@ app.post('/api/admin/cuota/add', adminAuth, (req, res) => {
 // volver a importarlo después de un deploy.
 //
 // Variables de entorno (opcionales):
-//   ESTATUTOS_PASSWORD  contraseña (por defecto Estraketeros26)
+//   (la contraseña de los estatutos está fija en el código: Estraketeros26)
 //   ESTATUTOS_SECRET    clave para firmar la sesión (por defecto sale de ADMIN_PASSWORD)
 
 const ESTATUTOS_PDF = path.join(__dirname, 'private', 'estatutos.pdf');
@@ -1660,10 +1660,9 @@ const ESTATUTOS_SESION_MS = 7 * 24 * 60 * 60 * 1000;
 const ESTATUTOS_MAX_SUG = 1000;
 const ESTATUTOS_MAX_TEXTO = 1500;
 
-// Se aceptan las dos variantes por si la "?" no era parte de la contraseña
-const ESTATUTOS_PASSWORDS = process.env.ESTATUTOS_PASSWORD
-  ? [process.env.ESTATUTOS_PASSWORD]
-  : ['Estraketeros26', 'Estraketeros26?'];
+// Contraseña fija (ya no depende de ninguna variable de entorno de Render).
+// Se aceptan las dos variantes por si la "?" no era parte de la contraseña.
+const ESTATUTOS_PASSWORDS = ['Estraketeros26', 'Estraketeros26?'];
 
 const sha = (v) => crypto.createHash('sha256').update(String(v)).digest();
 function estatutosPasswordOk(pw) {
