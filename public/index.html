@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="styles.css?v=15">
 </head>
 <body>
 
@@ -66,6 +66,12 @@
     <small class="multa-note">Sube 1 € cada día que pasa.</small>
   </section>
 
+  <section class="clip-wrap" aria-label="Vídeo de la peña 1">
+    <figure class="clip">
+      <video src="assets/videos/v1.mp4" poster="assets/videos/v1.jpg" muted loop playsinline autoplay preload="metadata" disablepictureinpicture></video>
+    </figure>
+  </section>
+
   <section class="countdown" aria-label="Cuenta atrás para San Roque">
     <div class="eyebrow">⏳ CUENTA ATRÁS</div>
     <h2 class="countdown-title">San <span>Roque</span> 2027</h2>
@@ -78,11 +84,23 @@
     <p class="countdown-note" id="cdNote">13 de agosto de 2027</p>
   </section>
 
+  <section class="clip-wrap" aria-label="Vídeo de la peña 2">
+    <figure class="clip">
+      <video src="assets/videos/v2.mp4" poster="assets/videos/v2.jpg" muted loop playsinline autoplay preload="metadata" disablepictureinpicture></video>
+    </figure>
+  </section>
+
   <section class="salon" aria-label="Salón del Cubata de Oro">
     <div class="eyebrow">🏆 SALÓN DEL CUBATA</div>
     <h2 class="salon-title">Cubatas <span>de Oro</span></h2>
     <p class="hint">Los ganadores del Traketímetro de cada mes y de cada fecha grande.</p>
     <div class="salon-grid" id="salonGrid"><p class="salon-vacio">Cargando…</p></div>
+  </section>
+
+  <section class="clip-wrap" aria-label="Vídeo de la peña 3">
+    <figure class="clip">
+      <video src="assets/videos/v3.mp4" poster="assets/videos/v3.jpg" muted loop playsinline autoplay preload="metadata" disablepictureinpicture></video>
+    </figure>
   </section>
 
   <section id="membership" class="membership">
@@ -115,6 +133,7 @@
 </footer>
 
 <script src="multa.js?v=1"></script>
+<script src="clips.js?v=1"></script>
 <script src="salon.js?v=1"></script>
 </body>
 </html>
