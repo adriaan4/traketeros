@@ -1610,3 +1610,48 @@ a.mini {
 button.header-link { font-family: inherit; cursor: pointer; }
 button.header-link[hidden] { display: none; }
 a.mini { display: inline-block; text-decoration: none; }
+
+
+/* ---------- Enlaces con imagen ---------- */
+.enlaces {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.enlace {
+  display: block;
+  background: white;
+  border: 4px solid var(--black);
+  box-shadow: 7px 7px 0 var(--black);
+  text-decoration: none;
+  color: var(--black);
+  overflow: hidden;
+  transition: transform .15s;
+}
+
+.enlace:nth-child(odd) { transform: rotate(-1deg); }
+.enlace:nth-child(even) { transform: rotate(1deg); }
+.enlace:hover, .enlace:focus-visible { transform: rotate(0) scale(1.03); }
+
+.enlace img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.enlace span {
+  display: block;
+  padding: 10px;
+  text-align: center;
+  font-family: Bangers, Impact, sans-serif;
+  font-size: 26px;
+  letter-spacing: 1px;
+  background: var(--yellow);
+  border-top: 4px solid var(--black);
+}
+
+@media (max-width: 500px) {
+  .enlaces { grid-template-columns: 1fr; }
+}
