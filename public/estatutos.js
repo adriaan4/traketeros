@@ -21,7 +21,7 @@ function fechaHora(iso) {
 }
 
 function renderList(list) {
-  $('sugCount').textContent = list.length ? list.length + (list.length === 1 ? ' sugerencia' : ' sugerencias') : '';
+  $('sugCount').textContent = list.length ? list.length + (list.length === 1 ? ' mensaje' : ' mensajes') : '';
   $('sugEmpty').hidden = list.length > 0;
   $('sugList').innerHTML = list
     .map((s) =>
@@ -37,7 +37,7 @@ async function loadList() {
     renderList((await res.json()).suggestions || []);
   } catch (_) {
     $('sugEmpty').hidden = false;
-    $('sugEmpty').textContent = 'No se han podido cargar las sugerencias.';
+    $('sugEmpty').textContent = 'No se han podido cargar las sugerencias y quejas.';
   }
 }
 
@@ -87,7 +87,7 @@ $('sugForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = $('sugMsg');
   const text = $('sugText').value.trim();
-  if (!text) { msg.className = 'msg err'; msg.textContent = 'Escribe tu sugerencia.'; return; }
+  if (!text) { msg.className = 'msg err'; msg.textContent = 'Escribe tu sugerencia o queja.'; return; }
   $('sugBtn').disabled = true;
   msg.className = 'msg'; msg.textContent = 'Enviando…';
   try {
