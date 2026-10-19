@@ -2,7 +2,7 @@
 //   GET    /api/traketimetro?periodo=     → ranking del mes actual (o de otro mes / fecha) + salón
 //   POST   /api/admin/traketimetro/fechas → (admin) crear fechas especiales
 //   POST   /api/admin/traketimetro/ganador→ (admin) poner el Cubata de Oro a mano
-//   POST   /api/traketimetro/add          → { name, tipo, cantidad? }
+//   POST   /api/traketimetro/add          → { name, tipo, cantidad? } (o multipart con foto opcional "foto")
 //   POST   /api/traketimetro/undo         → { name, tipo, cantidad? }
 //   POST   /api/traketimetro/set          → { name, cervezas, cubatas, chupitos, porros } (corregir a mano)
 //   DELETE /api/admin/traketimetro/:name  → borrar a alguien del ranking (solo admin: abre traketimetro.html?admin=1)
@@ -30,6 +30,8 @@ let totales = [];
 let periodo = '';      // '' = mes actual (siempre el que toque); 'm:2026-09' / 'e:<id>' = otro
 let periodos = [];
 let fechas = [];
+let historial = [];
+let fotoElegida = null; // foto opcional (ya reducida) para el próximo apunte
 
 // Aplica la respuesta del servidor (ranking + lista de periodos + fechas)
 function aplicar(data) {
@@ -38,10 +40,12 @@ function aplicar(data) {
   totales = data.totales || totales;
   if (data.periodos) periodos = data.periodos;
   if (data.events) fechas = data.events;
+  if (data.historial) historial = data.historial;
   actualizarDatalist();
   pintarSelector();
   pintarRanking();
   pintarTotales();
+  pintarHistorial();
   pintarAdmin();
 }
 
@@ -190,19 +194,37 @@ async function registrar(tipo) {
   setTimeout(() => btn?.classList.remove('pulse'), 220);
 
   try {
-    const res = await fetch('/api/traketimetro/add', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, tipo, cantidad, periodo })
-    });
+    let opts;
+    if (fotoElegida) {
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('tipo', tipo);
+      fd.append('cantidad', String(cantidad));
+      fd.append('periodo', periodo);
+      fd.append('foto', fotoElegida, 'foto.jpg');
+      opts = { method: 'POST', body: fd };
+      decirEstado('Subiendo foto…');
+    } else {
+      opts = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, tipo, cantidad, periodo })
+      };
+    }
+    const res = await fetch('/api/traketimetro/add', opts);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'No se ha podido apuntar.');
 
     aplicar(data);
 
+    const conFoto = Boolean(fotoElegida);
+    quitarFoto();
+
     lastAction = { name, tipo, cantidad };
     $('undo').hidden = false;
-    decirEstado(`${t.emoji} +${cantidad} ${t.etiqueta.toLowerCase()}${cantidad > 1 ? 's' : ''} para ${name}`, 'ok');
+    const base = `${t.emoji} +${cantidad} ${t.etiqueta.toLowerCase()}${cantidad > 1 ? 's' : ''} para ${name}`;
+    if (data.fotoFallo) decirEstado(`${base} (pero la foto no se ha podido guardar 😕)`, 'err');
+    else decirEstado(conFoto ? `${base} 📷` : base, 'ok');
   } catch (e) {
     decirEstado(e.message || 'Ha habido un error.', 'err');
   }
@@ -229,6 +251,117 @@ async function deshacer() {
     decirEstado(e.message || 'Ha habido un error.', 'err');
   }
 }
+
+// ---------- Foto opcional ----------
+// Se reduce en el móvil antes de subirla (más rápido con datos). El servidor
+// además le quita la ubicación GPS y la guarda en la web y en Cloudinary.
+async function reducirFoto(file) {
+  try {
+    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const max = 1600;
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bmp.width * k);
+    canvas.height = Math.round(bmp.height * k);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', 0.85));
+    return blob || file;
+  } catch {
+    return file; // si el navegador no puede reducirla, se manda tal cual
+  }
+}
+
+function quitarFoto() {
+  fotoElegida = null;
+  $('foto').value = '';
+  const prev = $('fotoPreview');
+  if (prev.src.startsWith('blob:')) URL.revokeObjectURL(prev.src);
+  prev.removeAttribute('src');
+  prev.hidden = true;
+  $('fotoQuitar').hidden = true;
+  $('fotoBtn').textContent = '📷 Añadir foto';
+}
+
+$('fotoBtn').addEventListener('click', () => $('foto').click());
+$('fotoQuitar').addEventListener('click', quitarFoto);
+$('foto').addEventListener('change', async () => {
+  const f = $('foto').files[0];
+  if (!f) return;
+  const reducida = await reducirFoto(f);
+  if (reducida.size > 12 * 1024 * 1024) {
+    quitarFoto();
+    decirEstado('La foto pesa demasiado (máximo 12 MB).', 'err');
+    return;
+  }
+  fotoElegida = reducida;
+  const prev = $('fotoPreview');
+  if (prev.src.startsWith('blob:')) URL.revokeObjectURL(prev.src);
+  prev.src = URL.createObjectURL(reducida);
+  prev.hidden = false;
+  $('fotoQuitar').hidden = false;
+  $('fotoBtn').textContent = '📷 Cambiar foto';
+  decirEstado('');
+});
+
+// ---------- Historial (día y hora de Madrid) ----------
+const fmtDia = new Intl.DateTimeFormat('es-ES', {
+  timeZone: 'Europe/Madrid', weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric'
+});
+const fmtHora = new Intl.DateTimeFormat('es-ES', {
+  timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hour12: false
+});
+
+function textoFecha(ts) {
+  const d = new Date(ts);
+  const dia = fmtDia.format(d).replace(',', '');
+  return { dia: dia.charAt(0).toUpperCase() + dia.slice(1), hora: fmtHora.format(d) };
+}
+
+function pintarHistorial() {
+  const ul = $('historialList');
+  const vacio = $('historialVacio');
+  if (!ul) return;
+
+  if (!historial.length) {
+    ul.innerHTML = '';
+    vacio.hidden = false;
+    return;
+  }
+  vacio.hidden = true;
+
+  ul.innerHTML = historial.map((h) => {
+    const t = TIPOS[h.tipo] || { emoji: '🍻', etiqueta: h.tipo };
+    const f = textoFecha(h.ts);
+    const plural = h.cantidad > 1 ? 's' : '';
+    const foto = h.foto
+      ? `<button class="hist-foto" type="button" data-foto="${escapeHtml(h.foto.url)}" data-cap="${escapeHtml(h.name + ' · ' + f.dia + ' ' + f.hora)}" aria-label="Ver foto de ${escapeHtml(h.name)}"><img src="${escapeHtml(h.foto.thumb)}" alt="" loading="lazy"></button>`
+      : '';
+    return `
+      <li class="hist-item">
+        <span class="hist-emoji">${t.emoji}</span>
+        <div class="hist-info">
+          <b>${escapeHtml(h.name)}</b> · +${h.cantidad} ${escapeHtml(t.etiqueta.toLowerCase())}${plural}
+          <small>🕒 ${escapeHtml(f.dia)} · ${escapeHtml(f.hora)}</small>
+        </div>
+        ${foto}
+      </li>`;
+  }).join('');
+}
+
+const fotoDialog = $('fotoDialog');
+$('historialList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-foto]');
+  if (!b) return;
+  $('fotoGrande').src = b.dataset.foto;
+  $('fotoCap').textContent = b.dataset.cap || '';
+  if (!fotoDialog.open) fotoDialog.showModal();
+});
+$('fotoCerrar').addEventListener('click', () => fotoDialog.close());
+fotoDialog.addEventListener('click', (e) => { if (e.target === fotoDialog) fotoDialog.close(); });
+fotoDialog.addEventListener('close', () => { $('fotoGrande').removeAttribute('src'); });
 
 // ---------- Corregir cantidades a mano ----------
 const editDialog = $('editDialog');

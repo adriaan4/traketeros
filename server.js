@@ -872,12 +872,13 @@ const MESES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio'
 //   months:    { 'YYYY-MM': { <nombre en minúsculas>: { name, cervezas, cubatas, chupitos, porros } } },
 //   events:    [ { id, name, start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' } ],
 //   eventData: { <id>: { <nombre en minúsculas>: {...} } },
-//   overrides: { 'm:YYYY-MM' | 'e:<id>': 'Nombre del ganador a mano' }
+//   overrides: { 'm:YYYY-MM' | 'e:<id>': 'Nombre del ganador a mano' },
+//   log:       [ { id, name, tipo, cantidad, ts, foto?: { id, publicId?, url? } } ]   (historial con fecha/hora y foto opcional)
 // }
 let trakeData = trakeEmpty();
 
 function trakeEmpty() {
-  return { version: 2, months: {}, events: [], eventData: {}, overrides: {} };
+  return { version: 2, months: {}, events: [], eventData: {}, overrides: {}, log: [] };
 }
 
 // Los datos antiguos eran un único ranking sin fechas. Eran los de septiembre
@@ -890,7 +891,9 @@ function trakeNormalize(raw) {
       months: raw.months,
       events: Array.isArray(raw.events) ? raw.events : [],
       eventData: raw.eventData || {},
-      overrides: raw.overrides || {}
+      overrides: raw.overrides || {},
+      // Datos anteriores no tienen historial: se queda vacío, sin tocar nada más
+      log: Array.isArray(raw.log) ? raw.log : []
     };
   }
   const d = trakeEmpty();
@@ -1123,12 +1126,64 @@ function trakeRespuesta(periodo) {
     totales: trakeTotalesHistoricos(),
     periodos: trakePeriodos(),
     salon: trakeSalon(),
-    events: trakeData.events
+    events: trakeData.events,
+    historial: trakeHistorial(p)
   };
 }
 
 function periodoDe(req) {
   return String(req.query?.periodo || req.body?.periodo || '');
+}
+
+// ---------- Historial (fecha, día y hora de cada apunte + foto opcional) ----------
+const TRAKE_LOG_MAX = 3000;          // máximo de apuntes que se guardan en el historial
+const TRAKE_LOG_VISIBLES = 60;       // cuántos se envían a la web (los más recientes)
+const TRAKE_FOTOS_DIR = path.join(TRAKE_DATA_DIR, 'traketimetro_fotos'); // copia local de las fotos
+const TRAKE_FOTO_TAG = 'traketimetro';          // etiqueta propia: NO salen en el álbum de /fotos.html
+const TRAKE_FOTO_FOLDER = 'traketimetro_fotos'; // carpeta en Cloudinary
+
+const trakeDiaFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit'
+});
+
+function trakeFotoPublica(f) {
+  if (!f || !ID_RE.test(String(f.id || ''))) return null;
+  let thumb = `/api/traketimetro/foto/${f.id}`;
+  if (CLOUDINARY_OK && f.publicId) {
+    try {
+      thumb = cloudinary.url(f.publicId, {
+        secure: true, width: 480, height: 480, crop: 'limit', quality: 'auto', fetch_format: 'auto', version: f.version
+      });
+    } catch { /* se usa la copia local */ }
+  }
+  return { url: `/api/traketimetro/foto/${f.id}`, thumb };
+}
+
+function trakeHistorial(periodo) {
+  const ev = periodo.startsWith('e:') ? trakeData.events.find((e) => e.id === periodo.slice(2)) : null;
+  const mes = periodo.startsWith('m:') ? periodo.slice(2) : '';
+  const out = [];
+  for (let i = trakeData.log.length - 1; i >= 0 && out.length < TRAKE_LOG_VISIBLES; i--) {
+    const l = trakeData.log[i];
+    const dia = trakeDiaFmt.format(new Date(l.ts));
+    if (mes && dia.slice(0, 7) !== mes) continue;
+    if (ev && !(ev.start <= dia && dia <= (ev.end || ev.start))) continue;
+    out.push({
+      id: l.id, name: l.name, tipo: l.tipo, cantidad: l.cantidad, ts: l.ts,
+      foto: trakeFotoPublica(l.foto)
+    });
+  }
+  return out;
+}
+
+// Borra la foto de un apunte (Cloudinary + copia local). No bloquea ni lanza errores.
+function trakeBorrarFoto(foto) {
+  if (!foto || !ID_RE.test(String(foto.id || ''))) return;
+  fs.promises.unlink(path.join(TRAKE_FOTOS_DIR, foto.id + '.jpg')).catch(() => {});
+  if (CLOUDINARY_OK && foto.publicId) {
+    cloudinary.uploader.destroy(foto.publicId, { resource_type: 'image', invalidate: true })
+      .catch((e) => console.error('No se pudo borrar la foto del traketímetro en Cloudinary:', e.message || e));
+  }
 }
 
 // ---------- Directo (SSE) ----------
@@ -1217,19 +1272,131 @@ function trakeBucketsActivos(crear) {
   return out;
 }
 
-// Sumar una o varias consumiciones de golpe
-app.post('/api/traketimetro/add', (req, res) => {
+// Foto opcional al apuntar (multipart, campo "foto"). Si llega JSON normal, todo funciona como antes.
+const trakeUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024, files: 1, fields: 8, fieldSize: 500 },
+  fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp|heic|heif)$/i.test(file.mimetype))
+});
+
+function trakeAddUpload(req, res, next) {
+  if (!req.is('multipart/form-data')) return next();
+  trakeUpload.single('foto')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        error: err.code === 'LIMIT_FILE_SIZE' ? 'La foto pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.'
+      });
+    }
+    next();
+  });
+}
+
+// Procesa la foto (quita GPS, reduce tamaño), la guarda en la web (copia local) y la sube a Cloudinary.
+// Devuelve { id, publicId?, version? } o null si no se ha podido guardar en ningún sitio.
+async function trakeGuardarFoto(buffer) {
+  let jpeg;
+  try {
+    jpeg = await sharp(buffer, { failOn: 'error' })
+      .rotate()
+      .flatten({ background: '#ffffff' })
+      .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toBuffer();
+  } catch (e) {
+    console.error('Traketímetro: foto no válida:', e.message);
+    return null;
+  }
+
+  const id = Date.now().toString(36) + crypto.randomBytes(5).toString('hex');
+  const foto = { id };
+  let guardada = false;
+
+  try {
+    await fs.promises.mkdir(TRAKE_FOTOS_DIR, { recursive: true });
+    await fs.promises.writeFile(path.join(TRAKE_FOTOS_DIR, id + '.jpg'), jpeg);
+    guardada = true;
+  } catch (e) {
+    console.error('Traketímetro: no se pudo guardar la foto en la web:', e.message || e);
+  }
+
+  if (CLOUDINARY_OK) {
+    try {
+      const r = await sendToCloudinary(jpeg, {
+        public_id: `${TRAKE_FOTO_FOLDER}/${id}`,
+        tags: [TRAKE_FOTO_TAG],
+        resource_type: 'image',
+        overwrite: false
+      });
+      foto.publicId = r.public_id;
+      foto.version = r.version;
+      foto.url = r.secure_url;
+      guardada = true;
+    } catch (e) {
+      console.error('Traketímetro: Cloudinary no ha guardado la foto:', e.message || e);
+    }
+  }
+  return guardada ? foto : null;
+}
+
+// Sumar una o varias consumiciones de golpe (con foto opcional)
+app.post('/api/traketimetro/add', trakeAddUpload, async (req, res) => {
+  const ts = Date.now(); // momento exacto del apunte
   const v = trakeValidate(req, res);
   if (!v) return;
+
+  let foto = null;
+  let fotoFallo = false;
+  if (req.file) {
+    // Mismo límite que el álbum: 20 fotos por hora y por IP
+    let limitado = false;
+    uploadLimiter(req, { status: () => ({ json: () => { limitado = true; } }) }, () => {});
+    if (limitado) {
+      fotoFallo = true;
+    } else {
+      foto = await trakeGuardarFoto(req.file.buffer);
+      if (!foto) fotoFallo = true;
+    }
+  }
 
   const key = v.name.toLowerCase();
   for (const bucket of trakeBucketsActivos(true)) {
     if (!bucket[key]) bucket[key] = { name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
     bucket[key][v.tipo] = (bucket[key][v.tipo] || 0) + v.cantidad;
   }
+
+  const entrada = {
+    id: Date.now().toString(36) + crypto.randomBytes(4).toString('hex'),
+    name: v.name,
+    tipo: v.tipo,
+    cantidad: v.cantidad,
+    ts
+  };
+  if (foto) entrada.foto = foto;
+  trakeData.log.push(entrada);
+  if (trakeData.log.length > TRAKE_LOG_MAX) trakeData.log.splice(0, trakeData.log.length - TRAKE_LOG_MAX);
+
   trakeSave();
   broadcastTrakeChanged();
-  res.json(trakeRespuesta(periodoDe(req)));
+  const out = trakeRespuesta(periodoDe(req));
+  if (fotoFallo) out.fotoFallo = true;
+  res.json(out);
+});
+
+// Foto de un apunte: copia local si existe; si no (p. ej. tras un redeploy), la de Cloudinary
+app.get('/api/traketimetro/foto/:id', (req, res) => {
+  const { id } = req.params;
+  if (!ID_RE.test(id)) return res.status(400).end();
+  const file = path.join(TRAKE_FOTOS_DIR, id + '.jpg');
+  if (fs.existsSync(file)) {
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.type('jpg').sendFile(file);
+  }
+  const l = trakeData.log.find((x) => x.foto?.id === id);
+  const url = l?.foto?.url || (l?.foto?.publicId && CLOUDINARY_OK
+    ? cloudinary.url(l.foto.publicId, { secure: true, version: l.foto.version, format: 'jpg' })
+    : '');
+  if (url) return res.redirect(302, url);
+  res.status(404).end();
 });
 
 // Deshacer la última pulsación (por si te equivocas de nombre o de cuadro)
@@ -1246,6 +1413,15 @@ app.post('/api/traketimetro/undo', (req, res) => {
     }
   }
   if (cambio) {
+    // Quita el apunte más reciente igual (mismo nombre, tipo y cantidad) del historial
+    for (let i = trakeData.log.length - 1; i >= 0; i--) {
+      const l = trakeData.log[i];
+      if (String(l.name).toLowerCase() === key && l.tipo === v.tipo && l.cantidad === v.cantidad) {
+        trakeBorrarFoto(l.foto);
+        trakeData.log.splice(i, 1);
+        break;
+      }
+    }
     trakeSave();
     broadcastTrakeChanged();
   }
