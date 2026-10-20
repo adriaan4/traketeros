@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
 
@@ -32,6 +32,7 @@
 <main>
   <div class="eyebrow">📸 EL ÁLBUM DE LA PEÑA</div>
   <h1 class="photos-title">Nuestras <span>fotos.</span></h1>
+  <a class="past-link" href="#pasado">📜 Fotos del pasado (San Miguel, San Roque, Pilares...) ↓</a>
 
   <section class="uploader" aria-labelledby="up-title">
     <div class="scribble">SUBE LAS TUYAS 👇</div>
@@ -77,6 +78,60 @@
     <p class="empty" id="empty" hidden>Todavía no hay ninguna foto. Sube la primera 👆</p>
     <p class="msg err" id="loadError" role="alert"></p>
   </section>
+
+  <section id="pasado" aria-labelledby="past-title">
+    <div class="gallery-head">
+      <h2 id="past-title">📜 Fotos del pasado</h2>
+      <span class="count" id="pastCount"></span>
+    </div>
+    <p class="hint">Recuerdos de San Miguel, San Roque, Pilares... de otros años.</p>
+
+    <form class="uploader past-form" id="pastForm" novalidate hidden>
+      <div class="scribble">SOLO ADMIN 🔒</div>
+      <h2>Añadir fotos del pasado</h2>
+
+      <input class="file-input" id="pastFile" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+      <label class="pick" for="pastFile">
+        <span class="pick-icon" aria-hidden="true">📷</span>
+        <span id="pastPickText">Elegir fotos</span>
+      </label>
+      <div class="previews" id="pastPreviews" aria-hidden="true"></div>
+
+      <label class="field">
+        <span>Fiesta</span>
+        <select id="pastFiesta">
+          <option value="San Miguel">San Miguel</option>
+          <option value="San Roque">San Roque</option>
+          <option value="Pilares">Pilares</option>
+          <option value="__otra">Otra fiesta…</option>
+        </select>
+      </label>
+
+      <label class="field" id="pastOtraField" hidden>
+        <span>Nombre de la fiesta</span>
+        <input id="pastOtra" type="text" maxlength="30" placeholder="Ej: Fiestas de Navidad">
+      </label>
+
+      <label class="field">
+        <span>Año</span>
+        <input id="pastYear" type="number" inputmode="numeric" min="1950" step="1" placeholder="Ej: 2019">
+      </label>
+
+      <label class="field">
+        <span>Descripción (opcional)</span>
+        <textarea id="pastDesc" maxlength="140" rows="2" placeholder="Ej: la cuadrilla en la plaza"></textarea>
+      </label>
+
+      <button class="btn submit" id="pastSend" type="submit" disabled>Subir fotos del pasado</button>
+      <progress class="bar" id="pastBar" max="100" value="0" hidden></progress>
+      <p class="msg" id="pastMsg" role="status" aria-live="polite"></p>
+    </form>
+
+    <div class="past-filters" id="pastFilters" hidden></div>
+    <div id="pastGroups"></div>
+    <p class="empty" id="pastEmpty" hidden>Todavía no hay fotos del pasado.</p>
+    <p class="msg err" id="pastLoadError" role="alert"></p>
+  </section>
 </main>
 
 <dialog class="lb" id="lb" aria-label="Foto ampliada">
@@ -103,6 +158,6 @@
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
-<script src="fotos.js?v=2"></script>
+<script src="fotos.js?v=3"></script>
 </body>
 </html>

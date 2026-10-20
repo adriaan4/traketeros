@@ -119,6 +119,7 @@ app.post(
           (body.resources || []).map((r) => r.public_id)
         );
         photoIndex = photoIndex.filter((p) => !borrados.has(p.publicId));
+        pastIndex = pastIndex.filter((p) => !borrados.has(p.publicId));
         console.log(`Webhook Cloudinary: ${borrados.size} foto(s) quitada(s) al instante`);
         broadcastPhotosChanged();
       }
@@ -831,6 +832,208 @@ app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
     await cloudinary.uploader.destroy(PREFIX + id, { resource_type: 'image', invalidate: true });
     photoIndex = photoIndex.filter((p) => p.id !== id);
     broadcastPhotosChanged();
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'No se pudo borrar la foto.' });
+  }
+});
+
+// =========================
+// FOTOS DEL PASADO (San Miguel, San Roque, Pilares... de años anteriores)
+// =========================
+// Van aparte del álbum normal: etiqueta propia en Cloudinary ('traketeros_pasado')
+// y carpeta propia ('fotos_pasado/'), así que NO se mezclan con las fotos que ya
+// hay ni las tocan. Cualquiera puede verlas; solo el admin puede subirlas o borrarlas.
+// La fiesta, el año y la descripción se guardan en el "context" de cada foto en
+// Cloudinary, que es lo que sobrevive a los redeploys de Render.
+
+const PAST_TAG = 'traketeros_pasado';
+const PAST_FOLDER = 'fotos_pasado';
+const PAST_PREFIX = PAST_FOLDER + '/';
+const PAST_MIN_YEAR = 1950;
+
+let pastIndex = [];            // [{ id, publicId, version, fiesta, year, desc, date }]
+let pastLastRefresh = 0;
+let pastRefreshing = null;
+
+function toPast(r) {
+  if (!r.public_id?.startsWith(PAST_PREFIX)) return null;
+  const id = r.public_id.slice(PAST_PREFIX.length);
+  if (!ID_RE.test(id)) return null;
+  const ctx = r.context?.custom ?? r.context ?? {};
+  const year = Number(ctx.year);
+  return {
+    id,
+    publicId: r.public_id,
+    version: r.version,
+    fiesta: String(ctx.fiesta || 'Otras fiestas'),
+    year: Number.isInteger(year) ? year : 0,
+    desc: String(ctx.desc || ''),
+    date: Date.parse(r.created_at) || Date.now()
+  };
+}
+
+function refreshPast() {
+  if (pastRefreshing) return pastRefreshing;
+  pastRefreshing = (async () => {
+    const items = [];
+    let cursor;
+    do {
+      const opts = { max_results: 500, context: true };
+      if (cursor) opts.next_cursor = cursor;
+      const r = await cloudinary.api.resources_by_tag(PAST_TAG, opts);
+      for (const x of r.resources || []) {
+        const p = toPast(x);
+        if (p) items.push(p);
+      }
+      cursor = r.next_cursor;
+    } while (cursor && items.length < MAX_PHOTOS);
+
+    items.sort((a, b) => a.date - b.date);
+    pastIndex = items;
+    pastLastRefresh = Date.now();
+    console.log(`Fotos del pasado en Cloudinary: ${items.length}`);
+  })().finally(() => { pastRefreshing = null; });
+  return pastRefreshing;
+}
+
+if (CLOUDINARY_OK) {
+  refreshPast().catch((e) => console.error('No se pudieron leer las fotos del pasado:', e.message || e));
+}
+
+function publicPast(p) {
+  const base = { secure: true, version: p.version };
+  return {
+    id: p.id,
+    past: true,
+    fiesta: p.fiesta,
+    year: p.year,
+    desc: p.desc,
+    date: p.date,
+    thumb: cloudinary.url(p.publicId, {
+      ...base,
+      transformation: [
+        { width: 480, height: 480, crop: 'fill', gravity: 'auto' },
+        { quality: 'auto', fetch_format: 'auto' }
+      ]
+    }),
+    url: cloudinary.url(p.publicId, { ...base, format: 'jpg' }),
+    download: cloudinary.url(p.publicId, { ...base, format: 'jpg', flags: 'attachment' })
+  };
+}
+
+// Lista pública de las fotos del pasado
+app.get('/api/photos/past', photosOnly, async (req, res) => {
+  try {
+    if (Date.now() - pastLastRefresh > REFRESH_MS) await refreshPast();
+  } catch (e) {
+    console.error('Error leyendo las fotos del pasado:', e.message || e);
+    if (!pastLastRefresh) {
+      return res.status(502).json({ error: 'No se han podido cargar las fotos del pasado. Inténtalo en un rato.' });
+    }
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json({ photos: pastIndex.map(publicPast) });
+});
+
+// Sirve para que el navegador pida usuario y clave al abrir fotos.html?admin=1
+app.get('/api/admin/ping', adminAuth, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true });
+});
+
+// Subir fotos del pasado (SOLO admin). Campos: fiesta, year, desc + photos
+app.post('/api/admin/photos/past', adminAuth, photosOnly, (req, res) => {
+  upload.array('photos', 10)(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: uploadErrorMessage(err) });
+
+    try {
+      const files = req.files || [];
+      if (!files.length) {
+        return res.status(400).json({ error: 'No he recibido ninguna foto válida (JPG, PNG o WEBP).' });
+      }
+
+      const fiesta = sanitizeText(req.body?.fiesta, 30);
+      const year = Number(req.body?.year);
+      const maxYear = Number(trakeHoy().slice(0, 4));
+      if (!fiesta) return res.status(400).json({ error: 'Elige la fiesta (San Miguel, San Roque, Pilares...).' });
+      if (!Number.isInteger(year) || year < PAST_MIN_YEAR || year > maxYear) {
+        return res.status(400).json({ error: `Pon un año válido (entre ${PAST_MIN_YEAR} y ${maxYear}).` });
+      }
+      if (pastIndex.length + files.length > MAX_PHOTOS) {
+        return res.status(409).json({ error: 'Ya hay demasiadas fotos del pasado.' });
+      }
+
+      const desc = sanitizeText(req.body?.desc, 140);
+      let added = 0;
+      let unreadable = 0;
+      let saveFailed = 0;
+
+      for (const f of files) {
+        let jpeg;
+        try {
+          // Igual que el álbum normal: se aplica la orientación y se borran los datos EXIF (GPS)
+          jpeg = await sharp(f.buffer, { failOn: 'error' })
+            .rotate()
+            .flatten({ background: '#ffffff' })
+            .resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 82 })
+            .toBuffer();
+        } catch (e) {
+          unreadable++;
+          console.error('Foto del pasado no válida:', e.message);
+          continue;
+        }
+
+        try {
+          const id = Date.now().toString(36) + crypto.randomBytes(5).toString('hex');
+          const context = { fiesta, year: String(year) };
+          if (desc) context.desc = desc;
+          const r = await sendToCloudinary(jpeg, {
+            public_id: PAST_PREFIX + id,
+            tags: [PAST_TAG],
+            resource_type: 'image',
+            overwrite: false,
+            context
+          });
+          pastIndex.push({
+            id,
+            publicId: r.public_id,
+            version: r.version,
+            fiesta,
+            year,
+            desc,
+            date: Date.parse(r.created_at) || Date.now()
+          });
+          added++;
+        } catch (e) {
+          saveFailed++;
+          console.error('Cloudinary no ha guardado la foto del pasado:', e.message || e);
+        }
+      }
+
+      if (!added) {
+        return saveFailed
+          ? res.status(502).json({ error: 'No se han podido guardar las fotos. Inténtalo otra vez.' })
+          : res.status(400).json({ error: 'No se ha podido leer ninguna de las fotos. Prueba con JPG o PNG.' });
+      }
+      res.json({ ok: true, added, failed: unreadable + saveFailed });
+    } catch (e) {
+      console.error('Error subiendo fotos del pasado:', e);
+      res.status(500).json({ error: 'Ha habido un error en el servidor. Inténtalo otra vez.' });
+    }
+  });
+});
+
+// Borrar una foto del pasado (SOLO admin)
+app.delete('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res) => {
+  const { id } = req.params;
+  if (!ID_RE.test(id)) return res.status(400).json({ error: 'Id no válido' });
+
+  try {
+    await cloudinary.uploader.destroy(PAST_PREFIX + id, { resource_type: 'image', invalidate: true });
+    pastIndex = pastIndex.filter((p) => p.id !== id);
     res.json({ ok: true });
   } catch (e) {
     console.error(e);

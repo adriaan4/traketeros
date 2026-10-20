@@ -29,6 +29,8 @@ const CHUNK = 6;           // fotos por petición
 const MAX_SIDE = 2000;     // las fotos se reducen en el móvil antes de subirlas
 
 let photos = [];
+let pastPhotos = [];
+let lbList = photos;   // lista que está viendo el visor (álbum o fotos del pasado)
 let current = -1;
 
 // ---------- Utilidades ----------
@@ -107,29 +109,32 @@ function renderGallery() {
 const lb = $('lb');
 
 function showCurrent() {
-  const p = photos[current];
+  const p = lbList[current];
   if (!p) return;
+  // Las fotos del pasado se titulan "San Roque 2019" y no enseñan fecha de subida
+  const title = p.past ? `${p.fiesta} ${p.year}` : (p.name || 'Traketero');
   $('lbImg').src = p.url;
-  $('lbImg').alt = p.name ? `Foto de ${p.name}` : 'Foto de la peña';
-  $('lbName').textContent = p.name || 'Traketero';
+  $('lbImg').alt = p.past ? `Foto de ${title}` : (p.name ? `Foto de ${p.name}` : 'Foto de la peña');
+  $('lbName').textContent = title;
   $('lbDesc').textContent = p.desc || '';
   $('lbDesc').hidden = !p.desc;
-  $('lbDate').textContent = fecha(p.date);
+  $('lbDate').textContent = p.past ? '' : fecha(p.date);
   $('lbDl').href = p.download;
-  $('lbDl').dataset.name = p.name || 'traketeros';
-  $('lbPrev').hidden = $('lbNext').hidden = photos.length < 2;
+  $('lbDl').dataset.name = p.past ? title : (p.name || 'traketeros');
+  $('lbPrev').hidden = $('lbNext').hidden = lbList.length < 2;
   $('lbDel').hidden = !IS_ADMIN;
 }
 
-function openAt(i) {
+function openAt(i, list = photos) {
+  lbList = list;
   current = i;
   showCurrent();
   if (!lb.open) lb.showModal();
 }
 
 function step(delta) {
-  if (!photos.length) return;
-  current = (current + delta + photos.length) % photos.length;
+  if (!lbList.length) return;
+  current = (current + delta + lbList.length) % lbList.length;
   showCurrent();
 }
 
@@ -194,15 +199,16 @@ $('lbDl').addEventListener('click', async (e) => {
 });
 
 $('lbDel').addEventListener('click', async () => {
-  const p = photos[current];
+  const p = lbList[current];
   if (!p || !confirm('¿Borrar esta foto para siempre?')) return;
   try {
-    const res = await fetch('/api/admin/photos/' + encodeURIComponent(p.id), { method: 'DELETE' });
+    const url = (p.past ? '/api/admin/photos/past/' : '/api/admin/photos/') + encodeURIComponent(p.id);
+    const res = await fetch(url, { method: 'DELETE' });
     if (!res.ok) throw new Error(res.status === 401 ? 'Necesitas entrar como administrador.' : 'No se pudo borrar.');
-    photos.splice(current, 1);
-    renderGallery();
-    if (!photos.length) lb.close();
-    else { current = Math.min(current, photos.length - 1); showCurrent(); }
+    lbList.splice(current, 1);
+    if (p.past) { pastPhotos = pastPhotos.filter((x) => x.id !== p.id); renderPast(); } else renderGallery();
+    if (!lbList.length) lb.close();
+    else { current = Math.min(current, lbList.length - 1); showCurrent(); }
   } catch (e) {
     alert(e.message);
   }
@@ -340,3 +346,222 @@ $('form').addEventListener('submit', async (e) => {
 });
 
 loadPhotos();
+
+// =====================================================================
+// FOTOS DEL PASADO (públicas; solo el admin ve el formulario para subir)
+//   GET    /api/photos/past              → lista pública
+//   POST   /api/admin/photos/past        → subir (solo admin)
+//   DELETE /api/admin/photos/past/:id    → borrar (solo admin)
+// =====================================================================
+let pastFilter = ''; // '' = todas las fiestas
+
+async function loadPast() {
+  $('pastLoadError').textContent = '';
+  try {
+    const res = await fetch('/api/photos/past', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'No se han podido cargar las fotos del pasado.');
+    pastPhotos = data.photos || [];
+    renderPast();
+  } catch (e) {
+    $('pastLoadError').textContent = e.message || 'No se han podido cargar las fotos del pasado.';
+  }
+}
+
+function renderPast() {
+  const fiestas = [...new Set(pastPhotos.map((p) => p.fiesta))].sort((a, b) => a.localeCompare(b, 'es'));
+  if (pastFilter && !fiestas.includes(pastFilter)) pastFilter = '';
+
+  $('pastEmpty').hidden = pastPhotos.length > 0;
+  $('pastCount').textContent = pastPhotos.length ? plural(pastPhotos.length, 'foto', 'fotos') : '';
+
+  // Botones para filtrar por fiesta
+  const filters = $('pastFilters');
+  filters.replaceChildren();
+  filters.hidden = fiestas.length < 2;
+  [['', 'Todas'], ...fiestas.map((f) => [f, f])].forEach(([value, label]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'past-chip';
+    b.textContent = label;
+    b.setAttribute('aria-pressed', String(pastFilter === value));
+    b.addEventListener('click', () => { pastFilter = value; renderPast(); });
+    filters.append(b);
+  });
+
+  // Grupos "San Roque · 2019": años más recientes primero
+  const visibles = pastPhotos.filter((p) => !pastFilter || p.fiesta === pastFilter);
+  const groups = new Map();
+  for (const p of visibles) {
+    const key = `${p.year}|${p.fiesta.toLowerCase()}`;
+    if (!groups.has(key)) groups.set(key, { fiesta: p.fiesta, year: p.year, items: [] });
+    groups.get(key).items.push(p);
+  }
+  const ordered = [...groups.values()].sort((a, b) => b.year - a.year || a.fiesta.localeCompare(b.fiesta, 'es'));
+
+  const wrap = $('pastGroups');
+  wrap.replaceChildren();
+  for (const g of ordered) {
+    const sec = document.createElement('div');
+    sec.className = 'past-group';
+
+    const h = document.createElement('h3');
+    h.textContent = g.year ? `${g.fiesta} ${g.year}` : g.fiesta;
+    const small = document.createElement('small');
+    small.textContent = plural(g.items.length, 'foto', 'fotos');
+    h.append(small);
+
+    const grid = document.createElement('div');
+    grid.className = 'gallery';
+    g.items.forEach((p, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ph';
+      btn.setAttribute('aria-label', `Abrir foto de ${g.fiesta} ${g.year || ''}`.trim());
+
+      const img = new Image();
+      img.src = p.thumb;
+      img.alt = '';
+      img.width = 480;
+      img.height = 480;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      btn.append(img);
+
+      if (p.desc) {
+        const d = document.createElement('span');
+        d.className = 'ph-desc';
+        d.textContent = p.desc;
+        btn.append(d);
+      }
+      // El visor navega solo por las fotos de este grupo
+      btn.addEventListener('click', () => openAt(i, g.items));
+      grid.append(btn);
+    });
+
+    sec.append(h, grid);
+    wrap.append(sec);
+  }
+}
+
+// ---------- Admin: subir fotos del pasado ----------
+function sayPast(text, kind) {
+  const el = $('pastMsg');
+  el.textContent = text || '';
+  el.className = 'msg' + (kind ? ' ' + kind : '');
+}
+
+if (IS_ADMIN) {
+  const form = $('pastForm');
+  form.hidden = false;
+  $('pastYear').max = String(new Date().getFullYear());
+
+  // Abre el aviso de usuario y clave del navegador nada más entrar
+  fetch('/api/admin/ping', { cache: 'no-store' })
+    .then((r) => { if (!r.ok) sayPast('Necesitas entrar como administrador para subir fotos.', 'err'); })
+    .catch(() => {});
+
+  const pastInput = $('pastFile');
+  let pastSelected = [];
+
+  const refreshSend = () => {
+    $('pastSend').disabled = pastSelected.length === 0;
+  };
+
+  $('pastFiesta').addEventListener('change', () => {
+    $('pastOtraField').hidden = $('pastFiesta').value !== '__otra';
+  });
+
+  pastInput.addEventListener('change', () => {
+    pastSelected = Array.from(pastInput.files || []).filter((f) => /^image\//.test(f.type)).slice(0, MAX_SELECTED);
+    const tooMany = (pastInput.files || []).length > MAX_SELECTED;
+
+    $('pastPreviews').replaceChildren();
+    pastSelected.slice(0, 12).forEach((f) => {
+      const img = new Image();
+      img.alt = '';
+      img.src = URL.createObjectURL(f);
+      img.onload = () => URL.revokeObjectURL(img.src);
+      $('pastPreviews').append(img);
+    });
+
+    $('pastPickText').textContent = pastSelected.length
+      ? `${plural(pastSelected.length, 'foto elegida', 'fotos elegidas')} · cambiar`
+      : 'Elegir fotos';
+    refreshSend();
+    sayPast(tooMany ? `Solo se pueden subir ${MAX_SELECTED} fotos cada vez. He cogido las primeras.` : '', tooMany ? 'err' : '');
+  });
+
+  function sendPastChunk(files, fiesta, year, desc, onProgress) {
+    return new Promise((resolve, reject) => {
+      const fd = new FormData();
+      files.forEach((f) => fd.append('photos', f, f.name));
+      fd.append('fiesta', fiesta);
+      fd.append('year', year);
+      fd.append('desc', desc);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/admin/photos/past');
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+      xhr.onerror = () => reject(new Error('Sin conexión. Inténtalo otra vez.'));
+      xhr.onload = () => {
+        let data = {};
+        try { data = JSON.parse(xhr.responseText); } catch { /* respuesta no JSON */ }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else if (xhr.status === 401) reject(new Error('Necesitas entrar como administrador.'));
+        else reject(new Error(data.error || 'No se han podido subir las fotos.'));
+      };
+      xhr.send(fd);
+    });
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!pastSelected.length) return;
+
+    const fiesta = $('pastFiesta').value === '__otra' ? $('pastOtra').value.trim() : $('pastFiesta').value;
+    const year = $('pastYear').value.trim();
+    const desc = $('pastDesc').value.trim();
+    if (!fiesta) return sayPast('Escribe el nombre de la fiesta.', 'err');
+    if (!/^\d{4}$/.test(year)) return sayPast('Pon el año con 4 cifras (por ejemplo 2019).', 'err');
+
+    const send = $('pastSend');
+    const bar = $('pastBar');
+    send.disabled = true;
+    bar.hidden = false;
+    bar.value = 0;
+    sayPast('Preparando las fotos…');
+
+    let done = 0;
+    let uploaded = 0;
+    try {
+      for (let i = 0; i < pastSelected.length; i += CHUNK) {
+        const group = await Promise.all(pastSelected.slice(i, i + CHUNK).map(shrink));
+        sayPast(`Subiendo ${Math.min(i + CHUNK, pastSelected.length)} de ${pastSelected.length}…`);
+        const res = await sendPastChunk(group, fiesta, year, desc, (f) => {
+          bar.value = ((done + group.length * f) / pastSelected.length) * 100;
+        });
+        done += group.length;
+        uploaded += res.added || 0;
+      }
+
+      // Se mantienen fiesta y año por si vas a subir más fotos de la misma
+      $('pastDesc').value = '';
+      pastInput.value = '';
+      pastSelected = [];
+      $('pastPreviews').replaceChildren();
+      $('pastPickText').textContent = 'Elegir fotos';
+      sayPast(`¡Listo! ${plural(uploaded, 'foto subida', 'fotos subidas')} a ${fiesta} ${year} 🔥`, 'ok');
+      await loadPast();
+    } catch (err) {
+      const extra = uploaded ? ` (${plural(uploaded, 'foto subida', 'fotos subidas')} antes del fallo)` : '';
+      sayPast((err.message || 'No se han podido subir las fotos.') + extra, 'err');
+      if (uploaded) loadPast();
+    } finally {
+      bar.hidden = true;
+      refreshSend();
+    }
+  });
+}
+
+loadPast();
