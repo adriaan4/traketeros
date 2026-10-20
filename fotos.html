@@ -86,8 +86,8 @@
     </div>
     <p class="hint">Recuerdos de San Miguel, San Roque, Pilares... de otros años.</p>
 
-    <form class="uploader past-form" id="pastForm" novalidate hidden>
-      <div class="scribble">SOLO ADMIN 🔒</div>
+    <form class="uploader past-form" id="pastForm" novalidate>
+      <div class="scribble">AÑADE LAS TUYAS 👇</div>
       <h2>Añadir fotos del pasado</h2>
 
       <input class="file-input" id="pastFile" type="file" accept="image/jpeg,image/png,image/webp" multiple>
@@ -111,6 +111,11 @@
       <label class="field">
         <span>Descripción (opcional)</span>
         <textarea id="pastDesc" maxlength="140" rows="2" placeholder="Ej: la cuadrilla en la plaza"></textarea>
+      </label>
+
+      <label class="field" id="pastCodeField">
+        <span>Contraseña</span>
+        <input id="pastCode" type="password" autocomplete="off" placeholder="Te la pasa la directiva">
       </label>
 
       <button class="btn submit" id="pastSend" type="submit" disabled>Subir fotos del pasado</button>
@@ -138,6 +143,7 @@
         <button class="mini" id="lbPrev" type="button">‹ Anterior</button>
         <button class="mini" id="lbNext" type="button">Siguiente ›</button>
         <a class="mini" id="lbDl" href="#" rel="noopener">Descargar</a>
+        <button class="mini" id="lbMove" type="button" hidden>Mover</button>
         <button class="mini danger" id="lbDel" type="button" hidden>Borrar</button>
         <button class="mini" id="lbClose" type="button">Cerrar</button>
       </div>
@@ -149,6 +155,6 @@
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
-<script src="fotos.js?v=5"></script>
+<script src="fotos.js?v=6"></script>
 </body>
 </html>

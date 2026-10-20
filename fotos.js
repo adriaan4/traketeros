@@ -123,6 +123,7 @@ function showCurrent() {
   $('lbDl').dataset.name = p.past ? title : (p.name || 'traketeros');
   $('lbPrev').hidden = $('lbNext').hidden = lbList.length < 2;
   $('lbDel').hidden = !IS_ADMIN;
+  $('lbMove').hidden = !(IS_ADMIN && p.past);
 }
 
 function openAt(i, list = photos) {
@@ -209,6 +210,30 @@ $('lbDel').addEventListener('click', async () => {
     if (p.past) { pastPhotos = pastPhotos.filter((x) => x.id !== p.id); renderPast(); } else renderGallery();
     if (!lbList.length) lb.close();
     else { current = Math.min(current, lbList.length - 1); showCurrent(); }
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+$('lbMove').addEventListener('click', async () => {
+  const p = lbList[current];
+  if (!p || !p.past) return;
+  const fiesta = prompt('¿A qué fiesta la muevo?', p.fiesta);
+  if (fiesta === null) return;
+  const year = prompt('¿De qué año?', String(p.year || ''));
+  if (year === null) return;
+  try {
+    const res = await fetch('/api/admin/photos/past/' + encodeURIComponent(p.id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fiesta: fiesta.trim(), year: year.trim() })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(res.status === 401 ? 'Necesitas entrar como administrador.' : (data.error || 'No se pudo mover.'));
+    p.fiesta = data.fiesta;
+    p.year = data.year;
+    lb.close();
+    renderPast();
   } catch (e) {
     alert(e.message);
   }
@@ -353,6 +378,8 @@ loadPhotos();
 //   POST   /api/admin/photos/past        → subir (solo admin)
 //   DELETE /api/admin/photos/past/:id    → borrar (solo admin)
 // =====================================================================
+const PAST_MAX_SELECTED = 100; // fotos por tanda en las del pasado
+const PAST_CHUNK = 20;         // fotos por petición (máx. 20, el servidor no admite más)
 let pastFilter = ''; // '' = todas las fiestas
 
 async function loadPast() {
@@ -462,15 +489,18 @@ function sayPast(text, kind) {
   el.className = 'msg' + (kind ? ' ' + kind : '');
 }
 
-if (IS_ADMIN) {
+{
   const form = $('pastForm');
-  form.hidden = false;
   $('pastYear').max = String(new Date().getFullYear());
+  $('pastCode').value = store.get('traketeros_past_code');
 
-  // Abre el aviso de usuario y clave del navegador nada más entrar
-  fetch('/api/admin/ping', { cache: 'no-store' })
-    .then((r) => { if (!r.ok) sayPast('Necesitas entrar como administrador para subir fotos.', 'err'); })
-    .catch(() => {});
+  if (IS_ADMIN) {
+    // El admin no necesita contraseña. Abre el aviso de usuario y clave del navegador nada más entrar.
+    $('pastCodeField').hidden = true;
+    fetch('/api/admin/ping', { cache: 'no-store' })
+      .then((r) => { if (!r.ok) sayPast('Necesitas entrar como administrador para subir fotos.', 'err'); })
+      .catch(() => {});
+  }
 
   const pastInput = $('pastFile');
   let pastSelected = [];
@@ -480,8 +510,8 @@ if (IS_ADMIN) {
   };
 
   pastInput.addEventListener('change', () => {
-    pastSelected = Array.from(pastInput.files || []).filter((f) => /^image\//.test(f.type)).slice(0, MAX_SELECTED);
-    const tooMany = (pastInput.files || []).length > MAX_SELECTED;
+    pastSelected = Array.from(pastInput.files || []).filter((f) => /^image\//.test(f.type)).slice(0, PAST_MAX_SELECTED);
+    const tooMany = (pastInput.files || []).length > PAST_MAX_SELECTED;
 
     $('pastPreviews').replaceChildren();
     pastSelected.slice(0, 12).forEach((f) => {
@@ -496,19 +526,20 @@ if (IS_ADMIN) {
       ? `${plural(pastSelected.length, 'foto elegida', 'fotos elegidas')} · cambiar`
       : 'Elegir fotos';
     refreshSend();
-    sayPast(tooMany ? `Solo se pueden subir ${MAX_SELECTED} fotos cada vez. He cogido las primeras.` : '', tooMany ? 'err' : '');
+    sayPast(tooMany ? `Solo se pueden subir ${PAST_MAX_SELECTED} fotos cada vez. He cogido las primeras.` : '', tooMany ? 'err' : '');
   });
 
-  function sendPastChunk(files, fiesta, year, desc, onProgress) {
+  function sendPastChunk(files, fiesta, year, desc, code, onProgress) {
     return new Promise((resolve, reject) => {
       const fd = new FormData();
       files.forEach((f) => fd.append('photos', f, f.name));
       fd.append('fiesta', fiesta);
       fd.append('year', year);
       fd.append('desc', desc);
+      if (!IS_ADMIN) fd.append('code', code);
 
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/admin/photos/past');
+      xhr.open('POST', IS_ADMIN ? '/api/admin/photos/past' : '/api/photos/past');
       xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
       xhr.onerror = () => reject(new Error('Sin conexión. Inténtalo otra vez.'));
       xhr.onload = () => {
@@ -529,6 +560,8 @@ if (IS_ADMIN) {
     const fiesta = $('pastFiesta').value.trim();
     const year = $('pastYear').value.trim();
     const desc = $('pastDesc').value.trim();
+    const code = $('pastCode').value.trim();
+    if (!IS_ADMIN && !code) return sayPast('Pon la contraseña para añadir fotos.', 'err');
     if (!fiesta) return sayPast('Escribe la fiesta (San Miguel, San Roque, Pilares...).', 'err');
     if (!/^\d{4}$/.test(year)) return sayPast('Pon el año con 4 cifras (por ejemplo 2019).', 'err');
 
@@ -542,10 +575,12 @@ if (IS_ADMIN) {
     let done = 0;
     let uploaded = 0;
     try {
-      for (let i = 0; i < pastSelected.length; i += CHUNK) {
-        const group = await Promise.all(pastSelected.slice(i, i + CHUNK).map(shrink));
-        sayPast(`Subiendo ${Math.min(i + CHUNK, pastSelected.length)} de ${pastSelected.length}…`);
-        const res = await sendPastChunk(group, fiesta, year, desc, (f) => {
+      for (let i = 0; i < pastSelected.length; i += PAST_CHUNK) {
+        // De una en una (no todas a la vez): reducir 20 fotos grandes de golpe puede colgar el móvil
+        const group = [];
+        for (const f of pastSelected.slice(i, i + PAST_CHUNK)) group.push(await shrink(f));
+        sayPast(`Subiendo ${Math.min(i + PAST_CHUNK, pastSelected.length)} de ${pastSelected.length}…`);
+        const res = await sendPastChunk(group, fiesta, year, desc, code, (f) => {
           bar.value = ((done + group.length * f) / pastSelected.length) * 100;
         });
         done += group.length;
@@ -553,6 +588,7 @@ if (IS_ADMIN) {
       }
 
       // Se mantienen fiesta y año por si vas a subir más fotos de la misma
+      store.set('traketeros_past_code', code);
       $('pastDesc').value = '';
       pastInput.value = '';
       pastSelected = [];

@@ -852,6 +852,24 @@ const PAST_TAG = 'traketeros_pasado';
 const PAST_FOLDER = 'fotos_pasado';
 const PAST_PREFIX = PAST_FOLDER + '/';
 const PAST_MIN_YEAR = 1950;
+// Código que tiene que poner la gente para añadir fotos del pasado (el admin no lo necesita).
+// Se puede cambiar con la variable PAST_UPLOAD_CODE en Render.
+const PAST_UPLOAD_CODE = (process.env.PAST_UPLOAD_CODE || 'gorilaso').trim();
+
+// Las fotos del pasado se suben en tandas más grandes que el álbum normal (hasta 20 por petición).
+// Las de más de 10 MB se rechazan para no llenar la memoria del servidor.
+const PAST_MAX_PER_REQUEST = 20;
+const pastUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: PAST_MAX_PER_REQUEST, fields: 5, fieldSize: 200 },
+  fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/i.test(file.mimetype))
+});
+
+function pastUploadErrorMessage(err) {
+  if (err.code === 'LIMIT_FILE_SIZE') return 'Una de las fotos pesa demasiado (máximo 10 MB).';
+  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return `Máximo ${PAST_MAX_PER_REQUEST} fotos cada vez.`;
+  return 'No se han podido subir las fotos.';
+}
 
 let pastIndex = [];            // [{ id, publicId, version, fiesta, year, desc, date }]
 let pastLastRefresh = 0;
@@ -943,12 +961,18 @@ app.get('/api/admin/ping', adminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// Subir fotos del pasado (SOLO admin). Campos: fiesta, year, desc + photos
-app.post('/api/admin/photos/past', adminAuth, photosOnly, (req, res) => {
-  upload.array('photos', 10)(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: uploadErrorMessage(err) });
+// Subir fotos del pasado. Campos: fiesta, year, desc + photos (+ code si no es admin).
+// Con requireCode = false (ruta del admin, ya autenticada) no se pide el código.
+function pastUploadHandler(requireCode) {
+  return (req, res) => {
+  pastUpload.array('photos', PAST_MAX_PER_REQUEST)(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: pastUploadErrorMessage(err) });
 
     try {
+      if (requireCode && !sameSecret(String(req.body?.code || '').trim(), PAST_UPLOAD_CODE)) {
+        return res.status(403).json({ error: 'La contraseña no es correcta.' });
+      }
+
       const files = req.files || [];
       if (!files.length) {
         return res.status(400).json({ error: 'No he recibido ninguna foto válida (JPG, PNG o WEBP).' });
@@ -1024,6 +1048,43 @@ app.post('/api/admin/photos/past', adminAuth, photosOnly, (req, res) => {
       res.status(500).json({ error: 'Ha habido un error en el servidor. Inténtalo otra vez.' });
     }
   });
+  };
+}
+
+// Público (con contraseña) y admin (sin contraseña)
+app.post('/api/photos/past', photosOnly, uploadLimiter, pastUploadHandler(true));
+app.post('/api/admin/photos/past', adminAuth, photosOnly, pastUploadHandler(false));
+
+// Mover una foto del pasado a otra fiesta/año (SOLO admin). Body: { fiesta, year }
+app.patch('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res) => {
+  const { id } = req.params;
+  if (!ID_RE.test(id)) return res.status(400).json({ error: 'Id no válido' });
+
+  const p = pastIndex.find((x) => x.id === id);
+  if (!p) return res.status(404).json({ error: 'No encuentro esa foto.' });
+
+  const fiesta = sanitizeText(req.body?.fiesta, 30);
+  const year = Number(req.body?.year);
+  const maxYear = Number(trakeHoy().slice(0, 4));
+  if (!fiesta) return res.status(400).json({ error: 'Escribe la fiesta.' });
+  if (!Number.isInteger(year) || year < PAST_MIN_YEAR || year > maxYear) {
+    return res.status(400).json({ error: `Pon un año válido (entre ${PAST_MIN_YEAR} y ${maxYear}).` });
+  }
+
+  try {
+    await cloudinary.api.update(p.publicId, {
+      resource_type: 'image',
+      type: 'upload',
+      // Cloudinary espera el contexto como "clave=valor|clave=valor" (ya vienen sin '|' ni '=')
+      context: `fiesta=${fiesta}|year=${year}|desc=${p.desc || ''}`
+    });
+    p.fiesta = fiesta;
+    p.year = year;
+    res.json({ ok: true, fiesta, year });
+  } catch (e) {
+    console.error('No se pudo mover la foto del pasado:', e.message || e);
+    res.status(500).json({ error: 'No se pudo mover la foto.' });
+  }
 });
 
 // Borrar una foto del pasado (SOLO admin)
