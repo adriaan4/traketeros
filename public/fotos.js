@@ -375,6 +375,17 @@ function renderPast() {
   $('pastEmpty').hidden = pastPhotos.length > 0;
   $('pastCount').textContent = pastPhotos.length ? plural(pastPhotos.length, 'foto', 'fotos') : '';
 
+  // Sugerencias para el campo "Fiesta" del formulario: las ya usadas + las de siempre
+  const sugeridas = new Map();
+  [...fiestas, 'San Miguel', 'San Roque', 'Pilares'].forEach((f) => {
+    if (!sugeridas.has(f.toLowerCase())) sugeridas.set(f.toLowerCase(), f);
+  });
+  $('pastFiestaList').replaceChildren(...[...sugeridas.values()].map((f) => {
+    const o = document.createElement('option');
+    o.value = f;
+    return o;
+  }));
+
   // Botones para filtrar por fiesta
   const filters = $('pastFilters');
   filters.replaceChildren();
