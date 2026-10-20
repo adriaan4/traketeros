@@ -468,10 +468,6 @@ if (IS_ADMIN) {
     $('pastSend').disabled = pastSelected.length === 0;
   };
 
-  $('pastFiesta').addEventListener('change', () => {
-    $('pastOtraField').hidden = $('pastFiesta').value !== '__otra';
-  });
-
   pastInput.addEventListener('change', () => {
     pastSelected = Array.from(pastInput.files || []).filter((f) => /^image\//.test(f.type)).slice(0, MAX_SELECTED);
     const tooMany = (pastInput.files || []).length > MAX_SELECTED;
@@ -519,10 +515,10 @@ if (IS_ADMIN) {
     e.preventDefault();
     if (!pastSelected.length) return;
 
-    const fiesta = $('pastFiesta').value === '__otra' ? $('pastOtra').value.trim() : $('pastFiesta').value;
+    const fiesta = $('pastFiesta').value.trim();
     const year = $('pastYear').value.trim();
     const desc = $('pastDesc').value.trim();
-    if (!fiesta) return sayPast('Escribe el nombre de la fiesta.', 'err');
+    if (!fiesta) return sayPast('Escribe la fiesta (San Miguel, San Roque, Pilares...).', 'err');
     if (!/^\d{4}$/.test(year)) return sayPast('Pon el año con 4 cifras (por ejemplo 2019).', 'err');
 
     const send = $('pastSend');
