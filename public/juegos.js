@@ -657,9 +657,16 @@ const PREGUNTAS = {
 };
 const $ = (id) => document.getElementById(id);
 
-// Categorías y palabras para el juego del Impostor. Los jugadores normales
-// reciben la palabra exacta; el impostor solo recibe el nombre de la
-// categoría de la que ha salido esa palabra, a modo de pista.
+// Palabras para el juego del Impostor. Se juntan TODAS las de todas las
+// categorías (sin repetir) y sale una al azar. Los jugadores normales reciben
+// la palabra exacta; el impostor solo recibe, a modo de pista, el nombre de la
+// categoría de la que ha salido (si IMPOSTOR_CON_PISTA está en true).
+const IMPOSTOR_CON_PISTA = true;
+const IMG_IMPOSTOR = {
+  cuchillo: 'assets/impostor/cuchillo.webp',
+  mascara: 'assets/impostor/mascara.webp',
+  shh: 'assets/impostor/shh.webp'
+};
 const CATEGORIAS_IMPOSTOR = [
   { grupo: '🔥 Difíciles', nombre: 'Futbolistas', palabras: ['Mbappé', 'Vinícius Jr.', 'Haaland', 'Bellingham', 'Lamine Yamal', 'Rodri', 'Pedri', 'Nico Williams', 'Julián Álvarez', 'Musiala'] },
   { grupo: '🔥 Difíciles', nombre: 'Marcas de ropa', palabras: ['Nike', 'Adidas', 'Puma', 'New Balance', 'Jordan', 'Lacoste', 'Tommy Hilfiger', 'Calvin Klein', 'The North Face', "Levi's"] },
@@ -693,7 +700,6 @@ const CATEGORIAS_IMPOSTOR = [
 // ---------- Estado del Impostor ----------
 const imp = {
   jugadores: [],           // nombres
-  categorias: new Set(),   // índices seleccionados de CATEGORIAS_IMPOSTOR
   numImpostores: 1,
   roles: [],               // paralelo a jugadores: true = impostor
   palabra: '',
@@ -775,73 +781,32 @@ $('impContinuar1').addEventListener('click', () => {
   if (n > maxImp) n = maxImp;
   imp.numImpostores = n;
 
-  impRenderCategorias();
-  $('impPaso1').hidden = true;
-  $('impPaso2').hidden = false;
-});
-
-function impRenderCategorias() {
-  const cont = $('impCategorias');
-  cont.replaceChildren();
-  let grupoActual = null;
-  let lista = null;
-
-  CATEGORIAS_IMPOSTOR.forEach((cat, i) => {
-    if (cat.grupo !== grupoActual) {
-      grupoActual = cat.grupo;
-      const titulo = document.createElement('div');
-      titulo.className = 'imp-categorias-grupo';
-      titulo.textContent = grupoActual;
-      cont.append(titulo);
-      lista = document.createElement('div');
-      lista.className = 'imp-categorias-lista';
-      cont.append(lista);
-    }
-
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'imp-cat-btn';
-    btn.textContent = cat.nombre;
-    btn.classList.toggle('active', imp.categorias.has(i));
-    btn.addEventListener('click', () => {
-      if (imp.categorias.has(i)) imp.categorias.delete(i);
-      else imp.categorias.add(i);
-      btn.classList.toggle('active', imp.categorias.has(i));
-      $('impContinuar2').disabled = imp.categorias.size === 0;
-    });
-    lista.append(btn);
-  });
-
-  $('impContinuar2').disabled = imp.categorias.size === 0;
-}
-
-$('impVolver2').addEventListener('click', () => {
-  $('impPaso2').hidden = true;
-  $('impPaso1').hidden = false;
-});
-
-$('impContinuar2').addEventListener('click', () => {
-  if (imp.categorias.size === 0) {
-    $('impError2').textContent = 'Elige al menos una categoría.';
-    return;
-  }
-  $('impError2').textContent = '';
   impRepartir();
-  $('impPaso2').hidden = true;
+  $('impPaso1').hidden = true;
   $('impPaso3').hidden = false;
 });
 
-// Baraja los papeles y elige la palabra al azar entre TODAS las categorías
-// marcadas (una sola palabra, no una por categoría).
-function impRepartir() {
-  const pool = [];
-  imp.categorias.forEach((i) => {
-    const cat = CATEGORIAS_IMPOSTOR[i];
-    cat.palabras.forEach((palabra) => pool.push({ palabra, categoria: cat.nombre }));
+// Junta TODAS las palabras de todas las categorías (una palabra repetida en
+// varias categorías cuenta una sola vez y la pista lista sus categorías).
+function impTodasLasPalabras() {
+  const mapa = new Map();
+  CATEGORIAS_IMPOSTOR.forEach((cat) => {
+    cat.palabras.forEach((palabra) => {
+      const k = palabra.trim().toLowerCase();
+      if (!mapa.has(k)) mapa.set(k, { palabra, categorias: [] });
+      const e = mapa.get(k);
+      if (!e.categorias.includes(cat.nombre)) e.categorias.push(cat.nombre);
+    });
   });
+  return Array.from(mapa.values());
+}
+
+// Baraja los papeles y elige una palabra al azar entre todas.
+function impRepartir() {
+  const pool = impTodasLasPalabras();
   const elegida = pool[Math.floor(Math.random() * pool.length)];
   imp.palabra = elegida.palabra;
-  imp.categoriaUsada = elegida.categoria;
+  imp.categoriaUsada = elegida.categorias.join(' / ');
 
   const orden = barajar(imp.jugadores.length);
   imp.roles = imp.jugadores.map(() => false);
@@ -851,6 +816,29 @@ function impRepartir() {
   impMostrarTurno();
 }
 
+// Construye el contenido de la carta con imagen (el nombre va con textContent
+// para que nadie pueda colar HTML).
+function impPintarCarta(carta, { img, claseImg, lineas }) {
+  carta.replaceChildren();
+  if (img) {
+    const im = document.createElement('img');
+    im.className = 'imp-carta-img ' + (claseImg || '');
+    im.src = img;
+    im.alt = '';
+    im.draggable = false;
+    carta.append(im);
+  }
+  const caja = document.createElement('span');
+  caja.className = 'imp-carta-txt';
+  lineas.forEach((l, i) => {
+    if (i) caja.append(document.createElement('br'));
+    const el = document.createElement(l.fuerte ? 'strong' : 'span');
+    el.textContent = l.t;
+    caja.append(el);
+  });
+  carta.append(caja);
+}
+
 function impMostrarTurno() {
   const nombre = imp.jugadores[imp.turno];
   imp.fase = 0;
@@ -858,7 +846,7 @@ function impMostrarTurno() {
 
   const carta = $('impCartaJugador');
   carta.className = 'imp-carta';
-  carta.textContent = nombre;
+  impPintarCarta(carta, { img: IMG_IMPOSTOR.shh, claseImg: 'shh', lineas: [{ t: nombre, fuerte: true }, { t: 'Toca para ver tu papel 👆' }] });
   carta.hidden = false;
   const btnSiguiente = $('impSiguienteJugador');
   btnSiguiente.hidden = true;
@@ -874,14 +862,16 @@ $('impCartaJugador').addEventListener('click', () => {
     carta.classList.add('revelado');
     if (esImpostor) {
       carta.classList.add('es-impostor');
-      carta.innerHTML = `🕵️ Eres el <strong>IMPOSTOR</strong><br>Pista: ${imp.categoriaUsada}`;
+      const lineas = [{ t: '🕵️ Eres el IMPOSTOR', fuerte: true }];
+      if (IMPOSTOR_CON_PISTA) lineas.push({ t: `Pista: ${imp.categoriaUsada}` });
+      impPintarCarta(carta, { img: IMG_IMPOSTOR.cuchillo, claseImg: 'cuchillo', lineas });
     } else {
-      carta.innerHTML = `🤫 La palabra es:<br><strong>${imp.palabra}</strong>`;
+      impPintarCarta(carta, { img: IMG_IMPOSTOR.shh, claseImg: 'shh peque', lineas: [{ t: '🤫 La palabra es:' }, { t: imp.palabra, fuerte: true }] });
     }
   } else if (imp.fase === 1) {
     imp.fase = 2;
     carta.className = 'imp-carta visto';
-    carta.textContent = 'Ya lo has visto ✅ — pásasela a la siguiente persona';
+    impPintarCarta(carta, { lineas: [{ t: 'Ya lo has visto ✅ — pásasela a la siguiente persona' }] });
     const btnSiguiente = $('impSiguienteJugador');
     btnSiguiente.hidden = false;
     btnSiguiente.disabled = false;
@@ -915,14 +905,21 @@ $('impRevelar').addEventListener('click', () => {
     ? `🕵️ Los impostores eran: ${impostores.join(', ')}`
     : `🕵️ El impostor era: ${impostores[0]}`;
   const revelado = $('impRevelado');
-  revelado.textContent = texto;
+  revelado.replaceChildren();
+  const im = document.createElement('img');
+  im.className = 'imp-revelado-img';
+  im.src = IMG_IMPOSTOR.cuchillo;
+  im.alt = '';
+  const t = document.createElement('span');
+  t.textContent = texto;
+  revelado.append(im, t);
   revelado.hidden = false;
 });
 
 function impOcultarRevelado() {
   const revelado = $('impRevelado');
   revelado.hidden = true;
-  revelado.textContent = '';
+  revelado.replaceChildren();
 }
 
 $('impOtraRonda').addEventListener('click', () => {
@@ -935,7 +932,6 @@ $('impOtraRonda').addEventListener('click', () => {
 $('impReiniciar').addEventListener('click', () => {
   impOcultarRevelado();
   imp.jugadores = [];
-  imp.categorias = new Set();
   imp.numImpostores = 1;
   imp.roles = [];
   imp.turno = 0;
@@ -1011,6 +1007,13 @@ function cambiarModo(clave) {
   });
 
   const esImpostor = clave === 'impostor';
+  document.body.classList.toggle('modo-impostor', esImpostor);
+  const tema = document.querySelector('meta[name="theme-color"]');
+  if (tema) {
+    if (!tema.dataset.orig) tema.dataset.orig = tema.content;
+    tema.content = esImpostor ? '#14001f' : tema.dataset.orig;
+  }
+  if (esImpostor) Object.values(IMG_IMPOSTOR).forEach((u) => { new Image().src = u; });
   $('carta').hidden = esImpostor;
   $('gameControls').hidden = esImpostor;
   $('impostor').hidden = !esImpostor;
