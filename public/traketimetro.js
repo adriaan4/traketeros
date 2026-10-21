@@ -277,18 +277,22 @@ async function reducirFoto(file) {
 function quitarFoto() {
   fotoElegida = null;
   $('foto').value = '';
+  $('fotoCam').value = '';
   const prev = $('fotoPreview');
   if (prev.src.startsWith('blob:')) URL.revokeObjectURL(prev.src);
   prev.removeAttribute('src');
   prev.hidden = true;
   $('fotoQuitar').hidden = true;
-  $('fotoBtn').textContent = '📷 Añadir foto';
 }
 
+// Dos entradas: la cámara (en el móvil abre la cámara directamente, gracias a
+// capture="environment") y la galería. Las dos pasan por el mismo manejador.
+$('fotoCamBtn').addEventListener('click', () => $('fotoCam').click());
 $('fotoBtn').addEventListener('click', () => $('foto').click());
 $('fotoQuitar').addEventListener('click', quitarFoto);
-$('foto').addEventListener('change', async () => {
-  const f = $('foto').files[0];
+
+async function fotoSeleccionada(input) {
+  const f = input.files[0];
   if (!f) return;
   const reducida = await reducirFoto(f);
   if (reducida.size > 12 * 1024 * 1024) {
@@ -302,9 +306,10 @@ $('foto').addEventListener('change', async () => {
   prev.src = URL.createObjectURL(reducida);
   prev.hidden = false;
   $('fotoQuitar').hidden = false;
-  $('fotoBtn').textContent = '📷 Cambiar foto';
   decirEstado('');
-});
+}
+$('foto').addEventListener('change', () => fotoSeleccionada($('foto')));
+$('fotoCam').addEventListener('change', () => fotoSeleccionada($('fotoCam')));
 
 // ---------- Historial (día y hora de Madrid) ----------
 const fmtDia = new Intl.DateTimeFormat('es-ES', {
