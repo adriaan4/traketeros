@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 
@@ -31,8 +31,8 @@
 
 <main class="juegos-main">
   <div class="eyebrow">🎮 PARA ROMPER EL HIELO</div>
-  <h1 class="section-title">A <span>jugar.</span></h1>
-  <p class="hint">Elige el juego, dale a la carta y a liarla.</p>
+  <h1 class="section-title" id="tituloJuegos">A <span>jugar.</span></h1>
+  <p class="hint" id="hintJuegos">Elige el juego, dale a la carta y a liarla.</p>
 
   <div class="tabs" role="tablist">
     <button class="tab active" data-modo="yo_nunca" type="button">🙊 Yo nunca</button>
@@ -56,18 +56,14 @@
   <section class="impostor" id="impostor" hidden aria-label="Juego del impostor">
 
     <div class="imp-fondo" aria-hidden="true">
-      <img class="imp-fondo-img f1" src="assets/impostor/shh.webp" alt="" width="225" height="225" loading="lazy">
-      <img class="imp-fondo-img f3" src="assets/impostor/mascara.webp" alt="" width="360" height="360" loading="lazy">
+      <img class="imp-fondo-img f1" src="assets/impostor/shh.webp" alt="" width="225" height="225" decoding="async">
+      <img class="imp-fondo-img f2" src="assets/impostor/cuchillo-t.webp" alt="" width="403" height="381" decoding="async">
+      <img class="imp-fondo-img f3" src="assets/impostor/mascara.webp" alt="" width="360" height="360" decoding="async">
     </div>
 
     <div class="imp-step" id="impPaso1">
-      <div class="imp-hero">
-        <img class="imp-hero-img" src="assets/impostor/mascara.webp" alt="" width="360" height="360">
-        <div>
-          <h2 class="imp-h">¿Quién juega?</h2>
-          <p class="hint">Añade a todos los que estéis y decide cuántos impostores queréis.</p>
-        </div>
-      </div>
+      <h2 class="imp-h">¿Quién juega?</h2>
+      <p class="hint">Añade a todos los que estéis y decide cuántos impostores queréis.</p>
 
       <form class="imp-add" id="impAddForm">
         <input id="impNombre" type="text" maxlength="20" autocomplete="off" placeholder="Nombre de quien juega">
@@ -95,13 +91,8 @@
     </div>
 
     <div class="imp-step" id="impPaso4" hidden>
-      <div class="imp-hero">
-        <img class="imp-hero-img" src="assets/impostor/shh.webp" alt="" width="225" height="225">
-        <div>
-          <h2 class="imp-h">¡Ya está repartido! 🕵️</h2>
-          <p class="hint">Ahora a hablar de la palabra sin decirla, hasta pillar al impostor.</p>
-        </div>
-      </div>
+      <h2 class="imp-h">¡Ya está repartido! 🕵️</h2>
+      <p class="hint">Ahora a hablar de la palabra sin decirla, hasta pillar al impostor.</p>
       <div class="imp-empieza-row">
         <p class="imp-empieza" id="impEmpieza"></p>
         <button class="btn ghost imp-revelar-btn" id="impRevelar" type="button">🕵️ Revelar impostor</button>
@@ -118,6 +109,6 @@
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
-<script src="juegos.js?v=5"></script>
+<script src="juegos.js?v=6"></script>
 </body>
 </html>

@@ -663,7 +663,7 @@ const $ = (id) => document.getElementById(id);
 // categoría de la que ha salido (si IMPOSTOR_CON_PISTA está en true).
 const IMPOSTOR_CON_PISTA = true;
 const IMG_IMPOSTOR = {
-  cuchillo: 'assets/impostor/cuchillo.webp',
+  cuchillo: 'assets/impostor/cuchillo-t.webp',
   mascara: 'assets/impostor/mascara.webp',
   shh: 'assets/impostor/shh.webp'
 };
@@ -1014,6 +1014,20 @@ function cambiarModo(clave) {
     tema.content = esImpostor ? '#14001f' : tema.dataset.orig;
   }
   if (esImpostor) Object.values(IMG_IMPOSTOR).forEach((u) => { new Image().src = u; });
+
+  // Título y texto de la página: cambian con el modo Impostor.
+  const tit = $('tituloJuegos');
+  const hintPag = $('hintJuegos');
+  if (tit && hintPag) {
+    if (!tit.dataset.orig) { tit.dataset.orig = tit.innerHTML; hintPag.dataset.orig = hintPag.textContent; }
+    if (esImpostor) {
+      tit.innerHTML = 'El <span>impostor.</span>';
+      hintPag.textContent = 'Uno de vosotros miente. Pillad al impostor antes de que os engañe a todos.';
+    } else {
+      tit.innerHTML = tit.dataset.orig;
+      hintPag.textContent = hintPag.dataset.orig;
+    }
+  }
   $('carta').hidden = esImpostor;
   $('gameControls').hidden = esImpostor;
   $('impostor').hidden = !esImpostor;

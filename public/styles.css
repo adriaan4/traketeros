@@ -1832,7 +1832,6 @@ a.mini { display: inline-block; text-decoration: none; }
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  mix-blend-mode: multiply;   /* el fondo blanco del dibujo se funde con la carta */
 }
 .imp-carta-txt { display: block; }
 .imp-carta-txt span { font-family: Inter, Arial, sans-serif; font-size: 15px; font-weight: 800; }
@@ -1840,7 +1839,7 @@ a.mini { display: inline-block; text-decoration: none; }
 .imp-carta.revelado .imp-carta-txt strong { font-size: 30px; }
 
 .imp-revelado { display: flex; align-items: center; gap: 12px; }
-.imp-revelado-img { width: 72px; height: auto; flex: none; mix-blend-mode: multiply; }
+.imp-revelado-img { width: 72px; height: auto; flex: none; }
 
 /* Con la pestaña Impostor activa cambia todo el look: noche, rosa y cian */
 body.modo-impostor {
@@ -1857,9 +1856,42 @@ body.modo-impostor {
   overflow: hidden;
   pointer-events: none;
 }
-.imp-fondo-img { position: absolute; max-width: none; user-select: none; }
-.imp-fondo-img.f1 { width: 140px; top: 16%; right: -30px; opacity: .2; border-radius: 28px; transform: rotate(12deg); }
-.imp-fondo-img.f3 { width: 150px; bottom: 7%; left: -34px; opacity: .17; border-radius: 28px; transform: rotate(-9deg); }
+/* Collage de fondo: las 3 imágenes como pegatinas repartidas por la pantalla */
+.imp-fondo-img {
+  position: absolute;
+  max-width: none;
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 10px 22px rgba(0,0,0,.55));
+  animation: impFlota 7s ease-in-out infinite;
+}
+.imp-fondo-img.f1 {            /* rojo "shh": arriba a la derecha */
+  width: clamp(150px, 42vw, 280px);
+  top: 22%; right: -7%;
+  border: 5px solid #fff; border-radius: 28px;
+  opacity: .55;
+  --r: 11deg; transform: rotate(var(--r));
+}
+.imp-fondo-img.f2 {            /* cuchillo: abajo a la derecha */
+  width: clamp(190px, 56vw, 340px);
+  bottom: 9%; right: -5%;
+  opacity: .7;
+  --r: -8deg; transform: rotate(var(--r));
+  animation-delay: -2.5s;
+}
+.imp-fondo-img.f3 {            /* máscara: en medio a la izquierda */
+  width: clamp(150px, 44vw, 290px);
+  top: 52%; left: -6%;
+  border: 5px solid #fff; border-radius: 28px;
+  opacity: .5;
+  --r: -12deg; transform: rotate(var(--r));
+  animation-delay: -4.5s;
+}
+@keyframes impFlota {
+  0%, 100% { transform: translateY(0) rotate(var(--r)); }
+  50%      { transform: translateY(-12px) rotate(calc(var(--r) + 3deg)); }
+}
 
 .modo-impostor main { position: relative; z-index: 1; }
 .modo-impostor .eyebrow { border-color: #fff; box-shadow: 4px 4px 0 var(--red); }
@@ -1868,6 +1900,9 @@ body.modo-impostor {
 .modo-impostor .imp-vacio,
 .modo-impostor .field span { color: #e4d3f0; }
 .modo-impostor .imp-h { color: #fff; }
+.modo-impostor .hint,
+.modo-impostor .imp-h,
+.modo-impostor .imp-hint { text-shadow: 0 2px 8px rgba(0,0,0,.85); }
 .modo-impostor .imp-empieza { color: #ff6bb8; }
 
 .modo-impostor .tab { border-color: #fff; box-shadow: 4px 4px 0 var(--red); }
@@ -1892,4 +1927,5 @@ body.modo-impostor {
 
 @media (prefers-reduced-motion: reduce) {
   .imp-step { animation: none; }
+  .imp-fondo-img { animation: none; }
 }
