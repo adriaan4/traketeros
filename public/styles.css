@@ -1929,3 +1929,7 @@ body.modo-impostor {
   .imp-step { animation: none; }
   .imp-fondo-img { animation: none; }
 }
+
+/* ---------- TKT365: con un enlace más en la cabecera, que el menú no desborde en el móvil ---------- */
+.nav-links,
+.header-copy { min-width: 0; }

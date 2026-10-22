@@ -1,0 +1,980 @@
+// =====================================================================
+// TKT365 · apuestas 100% virtuales de la peña (puntos "TKT", sin dinero real)
+// =====================================================================
+// Los USUARIOS no se guardan aquí: salen siempre del Trakímetro. En el
+// Trakímetro no hay tabla de usuarios; una persona existe cuando su nombre
+// aparece en los meses, en las fechas especiales o en el historial, y su
+// identificador interno es el nombre en minúsculas (name.trim().toLowerCase()).
+// Ese mismo identificador es el que usa TKT365.
+//
+// Lo único propio de TKT365 (saldos, mercados, apuestas y movimientos) se
+// guarda igual que el Trakímetro: memoria + fichero local + copia en
+// Cloudinary (en Render el disco se borra al redesplegar).
+//
+// Todo se valida en el servidor: el navegador nunca decide saldo, cuota,
+// premio, resultado ni ganador.
+// =====================================================================
+
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import express from 'express';
+
+// ---------- Ajustes ----------
+const SALDO_INICIAL = 1000;
+const MAX_SELECCIONES = 8;
+const APUESTA_MIN = 10;
+const APUESTA_MAX = Number(process.env.TKT_MAX_APUESTA) > 0 ? Math.floor(Number(process.env.TKT_MAX_APUESTA)) : 5000;
+const PREMIO_MAX = 1_000_000;
+const CUOTA_MIN = 1.01;
+const CUOTA_MAX = 1000;
+const MARGEN = 0.88;               // las cuotas automáticas reparten un 88 % (la "casa" se queda el resto)
+const CIERRE_HORA_EVENTO = 20;     // los mercados de una fecha cierran a las 20:00 del día que empieza
+const GRACIA_RESOLUCION_MS = 60 * 60 * 1000; // se resuelve 1 h después de que acabe el periodo
+const MAX_MOVIMIENTOS = 20000;
+const VISIBLE_CERRADOS_MS = 14 * 24 * 60 * 60 * 1000;
+
+const TZ = 'Europe/Madrid';
+const METRICAS = {
+  puntos:   { titulo: '¿Quién sumará más puntos?',            desc: 'Gana quien más puntos tenga en el Trakímetro' },
+  cervezas: { titulo: '¿Quién se tomará más cervezas?',       desc: 'Gana quien más cervezas apunte en el Trakímetro' },
+  cubatas:  { titulo: '¿Quién se tomará más cubatas?',        desc: 'Gana quien más cubatas apunte en el Trakímetro' },
+  chupitos: { titulo: '¿Quién se tomará más chupitos?',       desc: 'Gana quien más chupitos apunte en el Trakímetro' },
+  porros:   { titulo: '¿Quién fumará más porros?',            desc: 'Gana quien más porros apunte en el Trakímetro' },
+  apuntes:  { titulo: '¿Quién tendrá más actividad?',         desc: 'Gana quien más veces apunte algo en el Trakímetro' },
+  primero:  { titulo: '¿Quién será el primero en apuntar algo?', desc: 'Gana quien apunte antes su primera consumición en el Trakímetro' },
+  ultimo:   { titulo: '¿Quién será el último en apuntar algo?',  desc: 'Gana quien apunte más tarde su última consumición en el Trakímetro' }
+};
+const MESES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const OTRO_ID = '__otro';
+
+// ---------- Fechas (hora de Madrid) ----------
+const diaFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+const partsFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit'
+});
+
+function madridOffsetMs(ts) {
+  const o = {};
+  for (const p of partsFmt.formatToParts(new Date(ts))) o[p.type] = p.value;
+  return Date.UTC(+o.year, +o.month - 1, +o.day, +o.hour, +o.minute, +o.second) - Math.floor(ts / 1000) * 1000;
+}
+
+// 'YYYY-MM-DD' + hora de Madrid -> milisegundos UTC
+function madridMs(fecha, h = 0, m = 0) {
+  const [y, mo, d] = fecha.split('-').map(Number);
+  const guess = Date.UTC(y, mo - 1, d, h, m);
+  const first = guess - madridOffsetMs(guess);
+  return guess - madridOffsetMs(first);
+}
+
+function addDays(fecha, n) {
+  const [y, m, d] = fecha.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+function mesSiguiente(mes) {
+  const [y, m] = mes.split('-').map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+}
+
+function lunesSiguiente(hoy) {
+  const [y, m, d] = hoy.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 domingo
+  const falta = ((8 - dow) % 7) || 7;
+  return addDays(hoy, falta);
+}
+
+const ddmm = (f) => f.slice(8, 10) + '/' + f.slice(5, 7);
+const round2 = (n) => Math.round(n * 100) / 100;
+const nowMs = () => Date.now();
+const nuevoId = () => Date.now().toString(36) + crypto.randomBytes(5).toString('hex');
+const clean = (s, max) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+export function registerTkt365({
+  app, adminAuth, getTrake, tipos, puntos, hoy, ready, cloudinary, cloudinaryOk, dataDir
+}) {
+  const FILE = path.join(dataDir, 'tkt365.json');
+  const CLOUD_ID = 'traketeros_data/tkt365';
+
+  // ---------- Estado ----------
+  const vacio = () => ({
+    version: 1,
+    balances: Object.create(null), // userId -> { name, balance, since, active }
+    markets: [],
+    bets: [],
+    transactions: []
+  });
+  let st = vacio();
+
+  function normalizar(raw) {
+    const s = vacio();
+    if (!raw || typeof raw !== 'object') return s;
+    if (raw.balances && typeof raw.balances === 'object') Object.assign(s.balances, raw.balances);
+    if (Array.isArray(raw.markets)) s.markets = raw.markets;
+    if (Array.isArray(raw.bets)) s.bets = raw.bets;
+    if (Array.isArray(raw.transactions)) s.transactions = raw.transactions;
+    return s;
+  }
+
+  // ---------- Persistencia ----------
+  function saveLocal() {
+    try {
+      fs.mkdirSync(dataDir, { recursive: true });
+      const tmp = FILE + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(st), 'utf8');
+      fs.renameSync(tmp, FILE);
+    } catch (e) {
+      console.error('TKT365: no se pudo guardar localmente:', e.message || e);
+    }
+  }
+
+  let cloudBusy = false;
+  let cloudDirty = false;
+  async function saveCloud() {
+    if (!cloudinaryOk) return;
+    if (cloudBusy) { cloudDirty = true; return; }
+    cloudBusy = true;
+    try {
+      do {
+        cloudDirty = false;
+        const b64 = Buffer.from(JSON.stringify(st)).toString('base64');
+        await cloudinary.uploader.upload(`data:application/json;base64,${b64}`, {
+          resource_type: 'raw', public_id: CLOUD_ID, overwrite: true, invalidate: true
+        });
+      } while (cloudDirty);
+    } catch (e) {
+      console.error('TKT365: no se pudo respaldar en Cloudinary:', e.message || e);
+    } finally {
+      cloudBusy = false;
+    }
+  }
+
+  function save() {
+    saveLocal();
+    saveCloud();
+  }
+
+  async function load() {
+    if (cloudinaryOk) {
+      try {
+        const info = await cloudinary.api.resource(CLOUD_ID, { resource_type: 'raw' });
+        const resp = await fetch(info.secure_url, { cache: 'no-store' });
+        if (resp.ok) {
+          st = normalizar(await resp.json());
+          console.log('TKT365: datos cargados desde Cloudinary.');
+          return;
+        }
+      } catch (e) {
+        console.warn('TKT365: no se pudo cargar el respaldo de Cloudinary (usando plan B):', e.message || e);
+      }
+    }
+    try {
+      st = normalizar(JSON.parse(fs.readFileSync(FILE, 'utf8')));
+    } catch {
+      st = vacio();
+    }
+  }
+
+  const cargado = load().catch((e) => console.error('TKT365: error al cargar:', e.message || e));
+  const listo = Promise.all([Promise.resolve(ready).catch(() => {}), cargado]);
+  let arrancado = false;
+  listo.then(() => { arrancado = true; tick(); });
+
+  // ---------- Usuarios: SIEMPRE los del Trakímetro ----------
+  function trakeUsuarios() {
+    const t = getTrake();
+    const m = new Map(); // userId -> nombre a mostrar
+    const add = (name) => {
+      const n = String(name || '').trim();
+      if (n) m.set(n.toLowerCase(), n);
+    };
+    for (const b of Object.values(t.months || {})) for (const p of Object.values(b || {})) add(p.name);
+    for (const b of Object.values(t.eventData || {})) for (const p of Object.values(b || {})) add(p.name);
+    for (const l of t.log || []) add(l.name);
+    return m;
+  }
+
+  function movimiento(userId, tipo, cantidad, antes, despues, extra = {}) {
+    st.transactions.push({
+      id: nuevoId(), ts: nowMs(), userId, name: st.balances[userId]?.name || userId,
+      tipo, cantidad, saldoAntes: antes, saldoDespues: despues, ...extra
+    });
+    if (st.transactions.length > MAX_MOVIMIENTOS) st.transactions.splice(0, st.transactions.length - MAX_MOVIMIENTOS);
+  }
+
+  // Crea el saldo inicial de quien aparezca nuevo en el Trakímetro. Quien
+  // desaparezca se queda con su saldo e historial (solo se marca inactivo).
+  function sincronizarUsuarios() {
+    const users = trakeUsuarios();
+    let cambio = false;
+    for (const [id, name] of users) {
+      const b = st.balances[id];
+      if (!b) {
+        st.balances[id] = { name, balance: SALDO_INICIAL, since: nowMs(), active: true };
+        movimiento(id, 'alta', SALDO_INICIAL, 0, SALDO_INICIAL, { motivo: 'Saldo inicial automático' });
+        cambio = true;
+      } else {
+        if (b.name !== name) { b.name = name; cambio = true; }
+        if (!b.active) { b.active = true; cambio = true; }
+      }
+    }
+    for (const [id, b] of Object.entries(st.balances)) {
+      if (!users.has(id) && b.active) { b.active = false; cambio = true; }
+    }
+    return { users, cambio };
+  }
+
+  function usuarioValido(raw) {
+    const id = String(raw || '').trim().toLowerCase();
+    if (!id || id.length > 60) return null;
+    const users = trakeUsuarios();
+    if (!users.has(id)) return null;
+    if (!st.balances[id] && sincronizarUsuarios().cambio) save();
+    return st.balances[id] ? id : null;
+  }
+
+  // ---------- Periodos / ventanas de datos del Trakímetro ----------
+  function ventana(per) {
+    if (!per) return null;
+    const t = getTrake();
+    if (per.tipo === 'evento') {
+      const ev = (t.events || []).find((e) => e.id === per.id);
+      if (!ev) return null;
+      const end = ev.end || ev.start;
+      return { start: ev.start, end, startMs: madridMs(ev.start), endMs: madridMs(addDays(end, 1)), label: ev.name };
+    }
+    if (per.tipo === 'mes') {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(per.id || '')) return null;
+      const sig = mesSiguiente(per.id);
+      const [y, m] = per.id.split('-');
+      return {
+        start: per.id + '-01', end: addDays(sig + '-01', -1),
+        startMs: madridMs(per.id + '-01'), endMs: madridMs(sig + '-01'),
+        label: `${MESES_ES[Number(m) - 1]} ${y}`
+      };
+    }
+    if (per.tipo === 'semana') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(per.start || '')) return null;
+      const end = addDays(per.start, 6);
+      return { start: per.start, end, startMs: madridMs(per.start), endMs: madridMs(addDays(end, 1)), label: `Semana del ${ddmm(per.start)} al ${ddmm(end)}` };
+    }
+    return null;
+  }
+
+  // Estadísticas del historial (log) dentro de una ventana
+  function statsLog(w) {
+    const t = getTrake();
+    const out = new Map();
+    for (const l of t.log || []) {
+      if (!l || l.ts < w.startMs || l.ts >= w.endMs) continue;
+      const id = String(l.name || '').trim().toLowerCase();
+      if (!id) continue;
+      let s = out.get(id);
+      if (!s) { s = { first: l.ts, last: l.ts, count: 0 }; for (const k of tipos) s[k] = 0; out.set(id, s); }
+      s.first = Math.min(s.first, l.ts);
+      s.last = Math.max(s.last, l.ts);
+      s.count += 1;
+      if (tipos.includes(l.tipo)) s[l.tipo] += Number(l.cantidad) || 0;
+    }
+    return out;
+  }
+
+  const puntosDe = (p) => tipos.reduce((s, k) => s + (p[k] || 0) * puntos[k], 0);
+
+  // userId -> valor de la métrica en el periodo (con datos REALES del Trakímetro)
+  function puntuaciones(per, metrica) {
+    const w = ventana(per);
+    if (!w) return null;
+    const t = getTrake();
+    const out = new Map();
+    const usaLog = metrica === 'primero' || metrica === 'ultimo' || metrica === 'apuntes' || per.tipo === 'semana';
+    if (usaLog) {
+      for (const [id, s] of statsLog(w)) {
+        let v;
+        if (metrica === 'primero') v = s.first;
+        else if (metrica === 'ultimo') v = s.last;
+        else if (metrica === 'apuntes') v = s.count;
+        else if (metrica === 'puntos') v = puntosDe(s);
+        else v = s[metrica] || 0;
+        out.set(id, v);
+      }
+    } else {
+      const bucket = per.tipo === 'evento' ? (t.eventData || {})[per.id] : (t.months || {})[per.id];
+      for (const p of Object.values(bucket || {})) {
+        const id = String(p.name || '').trim().toLowerCase();
+        if (!id) continue;
+        out.set(id, metrica === 'puntos' ? puntosDe(p) : (p[metrica] || 0));
+      }
+    }
+    return out;
+  }
+
+  // Ganadores reales (userIds) o null si no hay datos para decidirlo
+  function ganadoresReales(m) {
+    const sc = puntuaciones(m.auto.periodo, m.auto.metrica);
+    if (!sc || !sc.size) return null;
+    const vals = [...sc.values()];
+    const mejor = m.auto.metrica === 'primero' ? Math.min(...vals) : Math.max(...vals);
+    if (m.auto.metrica !== 'primero' && m.auto.metrica !== 'ultimo' && mejor <= 0) return null;
+    return [...sc].filter(([, v]) => v === mejor).map(([id]) => id);
+  }
+
+  // ---------- Cuotas automáticas a partir del historial ----------
+  function estadisticaHistorica(metrica) {
+    const t = getTrake();
+    const out = new Map();
+    const inc = (id, v) => out.set(id, (out.get(id) || 0) + v);
+    if (metrica === 'primero' || metrica === 'ultimo' || metrica === 'apuntes') {
+      for (const l of t.log || []) {
+        const id = String(l.name || '').trim().toLowerCase();
+        if (id) inc(id, 1);
+      }
+    } else {
+      for (const b of Object.values(t.months || {})) {
+        for (const p of Object.values(b || {})) {
+          const id = String(p.name || '').trim().toLowerCase();
+          if (id) inc(id, metrica === 'puntos' ? puntosDe(p) : (p[metrica] || 0));
+        }
+      }
+    }
+    return out;
+  }
+
+  function cuotasAuto(metrica) {
+    const users = trakeUsuarios();
+    const hist = estadisticaHistorica(metrica);
+    let cand = [...users].map(([id, name]) => ({ id, name, stat: hist.get(id) || 0 }));
+    cand.sort((a, b) => b.stat - a.stat || a.name.localeCompare(b.name, 'es'));
+    const conDatos = cand.filter((c) => c.stat > 0).slice(0, 8);
+    cand = conDatos.length >= 2 ? conDatos : cand.slice(0, Math.max(4, conDatos.length));
+    if (cand.length < 2) return null;
+    const media = cand.reduce((s, c) => s + c.stat, 0) / cand.length;
+    const pesos = cand.map((c) => c.stat + 0.25 * media + 1);
+    const otro = 0.1 * pesos.reduce((a, b) => a + b, 0);
+    const total = pesos.reduce((a, b) => a + b, 0) + otro;
+    const cuota = (w) => round2(Math.min(40, Math.max(1.1, MARGEN / (w / total))));
+    const options = cand.map((c, i) => ({ id: 'u:' + c.id, label: c.name, userId: c.id, odds: cuota(pesos[i]) }));
+    options.push({ id: OTRO_ID, label: 'Cualquier otro', odds: cuota(otro) });
+    return options;
+  }
+
+  function crearMercadoAuto({ metrica, periodo, cierra, key }) {
+    const w = ventana(periodo);
+    const def = METRICAS[metrica];
+    if (!w || !def) return null;
+    const options = cuotasAuto(metrica);
+    if (!options) return null;
+    const m = {
+      id: nuevoId(),
+      titulo: def.titulo,
+      descripcion: `${def.desc} durante ${w.label}.`,
+      categoria: 'Estadísticas',
+      evento: w.label,
+      eventoId: periodo.tipo === 'evento' ? periodo.id : null,
+      cierra,
+      estado: 'abierto',
+      fuente: 'trakimetro',
+      options,
+      ganadores: [],
+      creado: nowMs(),
+      actualizado: nowMs(),
+      auto: { key: key || null, metrica, periodo }
+    };
+    st.markets.push(m);
+    return m;
+  }
+
+  // Genera los mercados que tienen sentido con los datos de Trakímetro.
+  // Es idempotente: cada mercado automático tiene una clave y no se repite.
+  function generarAutomaticos() {
+    const t = getTrake();
+    const ahora = nowMs();
+    const hoyStr = hoy();
+    const existe = (key) => st.markets.some((m) => m.auto?.key === key);
+    let creados = 0;
+
+    // Fechas especiales que aún no han empezado (o empiezan hoy y todavía hay tiempo)
+    for (const ev of t.events || []) {
+      if (ev.start < hoyStr) continue;
+      const cierra = madridMs(ev.start, CIERRE_HORA_EVENTO, 0);
+      if (cierra <= ahora) continue;
+      for (const metrica of ['puntos', 'cervezas', 'cubatas', 'chupitos', 'apuntes', 'primero', 'ultimo']) {
+        const key = `auto:e:${ev.id}:${metrica}`;
+        if (existe(key)) continue;
+        if (crearMercadoAuto({ metrica, periodo: { tipo: 'evento', id: ev.id }, cierra, key })) creados++;
+      }
+    }
+
+    // Mes siguiente
+    const mesSig = mesSiguiente(hoyStr.slice(0, 7));
+    for (const metrica of ['puntos', 'cervezas', 'cubatas', 'chupitos', 'apuntes']) {
+      const key = `auto:m:${mesSig}:${metrica}`;
+      if (existe(key)) continue;
+      if (crearMercadoAuto({ metrica, periodo: { tipo: 'mes', id: mesSig }, cierra: madridMs(mesSig + '-01'), key })) creados++;
+    }
+
+    // Semana siguiente (de lunes a domingo)
+    const lunes = lunesSiguiente(hoyStr);
+    for (const metrica of ['puntos', 'cubatas']) {
+      const key = `auto:w:${lunes}:${metrica}`;
+      if (existe(key)) continue;
+      if (crearMercadoAuto({ metrica, periodo: { tipo: 'semana', start: lunes }, cierra: madridMs(lunes), key })) creados++;
+    }
+    return creados;
+  }
+
+  // ---------- Apuestas: liquidación ----------
+  function mercado(id) {
+    return st.markets.find((m) => m.id === id);
+  }
+
+  function evaluarApuesta(b) {
+    let perdida = false;
+    let pendiente = false;
+    let efectiva = 1;
+    let ganada = false;
+    for (const leg of b.legs) {
+      const m = mercado(leg.marketId);
+      if (!m) { pendiente = true; leg.resultado = 'pendiente'; continue; }
+      if (m.estado === 'resuelto') {
+        leg.resultado = m.ganadores.includes(leg.optionId) ? 'ganada' : 'perdida';
+      } else if (m.estado === 'cancelado') {
+        leg.resultado = 'anulada';
+      } else {
+        leg.resultado = 'pendiente';
+      }
+      if (leg.resultado === 'perdida') perdida = true;
+      else if (leg.resultado === 'pendiente') pendiente = true;
+      else if (leg.resultado === 'ganada') { efectiva *= leg.odds; ganada = true; }
+    }
+    if (perdida) return { estado: 'perdida', premio: 0, cuota: 0 };
+    if (pendiente) return { estado: 'pendiente' };
+    if (!ganada) return { estado: 'cancelada', premio: b.stake, cuota: 1 }; // todas anuladas: se devuelve lo apostado
+    const cuota = round2(efectiva);
+    return { estado: 'ganada', premio: Math.floor(b.stake * cuota + 1e-9), cuota };
+  }
+
+  function liquidarMercado(marketId) {
+    for (const b of st.bets) {
+      if (b.estado !== 'pendiente') continue;
+      if (!b.legs.some((l) => l.marketId === marketId)) continue;
+      const r = evaluarApuesta(b);
+      if (r.estado === 'pendiente') continue;
+      b.estado = r.estado;
+      b.cuotaFinal = r.cuota;
+      b.premio = r.premio;
+      b.liquidada = nowMs();
+      const bal = st.balances[b.userId];
+      if (bal && r.premio > 0) {
+        const antes = bal.balance;
+        bal.balance += r.premio;
+        movimiento(b.userId, r.estado === 'ganada' ? 'premio' : 'reembolso', r.premio, antes, bal.balance, {
+          betId: b.id, motivo: r.estado === 'ganada' ? 'Apuesta ganada' : 'Apuesta cancelada: se devuelven los TKT'
+        });
+      }
+    }
+  }
+
+  function resolverMercado(m, ganadores, por) {
+    m.estado = 'resuelto';
+    m.ganadores = ganadores;
+    m.resolucion = { por, ts: nowMs() };
+    m.actualizado = nowMs();
+    liquidarMercado(m.id);
+  }
+
+  function cancelarMercado(m, motivo) {
+    m.estado = 'cancelado';
+    m.motivoCancelacion = motivo || '';
+    m.actualizado = nowMs();
+    liquidarMercado(m.id);
+  }
+
+  // ---------- Reloj: cierra, resuelve y genera ----------
+  let ticking = false;
+  function tick() {
+    if (!arrancado || ticking) return;
+    ticking = true;
+    try {
+      let cambio = sincronizarUsuarios().cambio;
+      const ahora = nowMs();
+      for (const m of st.markets) {
+        if (m.estado === 'abierto' && m.cierra <= ahora) { m.estado = 'cerrado'; m.actualizado = ahora; cambio = true; }
+      }
+      for (const m of st.markets) {
+        if (!m.auto || (m.estado !== 'abierto' && m.estado !== 'cerrado')) continue;
+        const w = ventana(m.auto.periodo);
+        if (!w || ahora < w.endMs + GRACIA_RESOLUCION_MS) continue;
+        const g = ganadoresReales(m);
+        if (!g) {
+          cancelarMercado(m, 'Sin datos en el Trakímetro para decidir el resultado');
+        } else {
+          let ids = m.options.filter((o) => o.userId && g.includes(o.userId)).map((o) => o.id);
+          if (g.some((id) => !m.options.some((o) => o.userId === id)) && m.options.some((o) => o.id === OTRO_ID)) ids.push(OTRO_ID);
+          if (!ids.length) cancelarMercado(m, 'El resultado no coincide con ninguna opción');
+          else resolverMercado(m, ids, 'auto');
+        }
+        cambio = true;
+      }
+      if (generarAutomaticos() > 0) cambio = true;
+      if (cambio) save();
+    } catch (e) {
+      console.error('TKT365: error en el reloj:', e.message || e);
+    } finally {
+      ticking = false;
+    }
+  }
+  setInterval(tick, 30_000).unref();
+
+  // ---------- Vistas públicas ----------
+  function fase(m, ahora) {
+    const w = m.auto ? ventana(m.auto.periodo) : (m.eventoId ? ventana({ tipo: 'evento', id: m.eventoId }) : null);
+    return { w, proximo: Boolean(w && w.startMs > ahora) };
+  }
+
+  function mercadoPublico(m, ahora) {
+    const { w, proximo } = fase(m, ahora);
+    return {
+      id: m.id, titulo: m.titulo, descripcion: m.descripcion, categoria: m.categoria,
+      evento: m.evento, eventoId: m.eventoId || null, cierra: m.cierra, estado: m.estado,
+      fuente: m.fuente === 'trakimetro' ? 'Trakímetro' : 'Manual',
+      options: m.options.map((o) => ({ id: o.id, label: o.label, odds: o.odds })),
+      ganadores: m.ganadores || [],
+      proximo,
+      ventana: w ? { start: w.start, end: w.end, label: w.label } : null,
+      resolucion: m.resolucion || null,
+      motivoCancelacion: m.motivoCancelacion || ''
+    };
+  }
+
+  function estadisticas(userId) {
+    let ganadas = 0, perdidas = 0, apostado = 0, beneficio = 0, pendientes = 0;
+    for (const b of st.bets) {
+      if (b.userId !== userId) continue;
+      if (b.estado === 'cancelada') continue;
+      apostado += b.stake;
+      if (b.estado === 'ganada') { ganadas++; beneficio += b.premio - b.stake; }
+      else if (b.estado === 'perdida') { perdidas++; beneficio -= b.stake; }
+      else pendientes++;
+    }
+    return { ganadas, perdidas, pendientes, apostado, beneficio };
+  }
+
+  function apuestaPublica(b) {
+    return {
+      id: b.id, tipo: b.legs.length > 1 ? 'combinada' : 'simple', ts: b.ts, stake: b.stake,
+      cuota: b.totalOdds, premioPosible: b.potential, estado: b.estado,
+      premio: b.premio || 0, cuotaFinal: b.cuotaFinal ?? null,
+      legs: b.legs.map((l) => ({
+        marketId: l.marketId, mercado: l.marketTitulo, evento: l.evento, opcion: l.label, odds: l.odds, resultado: l.resultado || 'pendiente'
+      }))
+    };
+  }
+
+  function ranking() {
+    return Object.entries(st.balances)
+      .map(([id, b]) => ({ id, name: b.name, active: b.active, balance: b.balance, ...estadisticas(id) }))
+      .sort((a, b) => b.balance - a.balance || b.beneficio - a.beneficio || a.name.localeCompare(b.name, 'es'));
+  }
+
+  // ---------- Colocar apuestas ----------
+  function colocarApuesta(req, res, modo) {
+    const userId = usuarioValido(req.body?.user);
+    if (!userId) return res.status(400).json({ error: 'Usuario no válido: tiene que existir en el Trakímetro.' });
+
+    const stake = Number(req.body?.stake);
+    if (!Number.isInteger(stake) || stake < APUESTA_MIN) {
+      return res.status(400).json({ error: `La apuesta mínima es de ${APUESTA_MIN} TKT (cantidad entera).` });
+    }
+    if (stake > APUESTA_MAX) return res.status(400).json({ error: `La apuesta máxima es de ${APUESTA_MAX} TKT.` });
+
+    const sel = req.body?.selections;
+    if (!Array.isArray(sel) || !sel.length) return res.status(400).json({ error: 'No has elegido ninguna selección.' });
+    if (modo === 'simple' && sel.length !== 1) {
+      return res.status(400).json({ error: 'Una apuesta simple lleva una sola selección. Usa la combinada.' });
+    }
+    if (modo === 'combinada' && sel.length < 2) {
+      return res.status(400).json({ error: 'Una combinada necesita al menos 2 selecciones.' });
+    }
+    if (sel.length > MAX_SELECCIONES) {
+      return res.status(400).json({ error: `Máximo ${MAX_SELECCIONES} selecciones por combinada.` });
+    }
+
+    const ahora = nowMs();
+    const legs = [];
+    const usados = new Set();
+    for (const s of sel) {
+      const m = mercado(String(s?.marketId || ''));
+      if (!m) return res.status(400).json({ error: 'Uno de los mercados ya no existe.' });
+      if (usados.has(m.id)) return res.status(400).json({ error: 'No puedes elegir dos opciones del mismo mercado en una combinada.' });
+      usados.add(m.id);
+      if (m.estado !== 'abierto' || m.cierra <= ahora) {
+        return res.status(409).json({ error: `El mercado «${m.titulo}» ya está cerrado.`, refrescar: true });
+      }
+      const o = m.options.find((x) => x.id === String(s?.optionId || ''));
+      if (!o) return res.status(400).json({ error: 'Una de las opciones no es válida.' });
+      legs.push({ marketId: m.id, marketTitulo: m.titulo, evento: m.evento, optionId: o.id, label: o.label, odds: o.odds, resultado: 'pendiente' });
+    }
+
+    const totalOdds = round2(legs.reduce((p, l) => p * l.odds, 1));
+    const potential = Math.floor(stake * totalOdds + 1e-9);
+    if (potential > PREMIO_MAX) {
+      return res.status(400).json({ error: `El premio máximo por apuesta es de ${PREMIO_MAX} TKT. Baja la cantidad.` });
+    }
+
+    // Solo para avisar de que las cuotas han cambiado; la cuota que vale es la del servidor
+    const esperada = Number(req.body?.expectedOdds);
+    if (Number.isFinite(esperada) && Math.abs(esperada - totalOdds) > 0.001) {
+      return res.status(409).json({ error: 'Las cuotas han cambiado. Revisa el cupón y vuelve a apostar.', refrescar: true, cuota: totalOdds });
+    }
+
+    const bal = st.balances[userId];
+    if (bal.balance < stake) return res.status(400).json({ error: 'No tienes saldo suficiente.' });
+
+    const antes = bal.balance;
+    bal.balance -= stake;
+    const bet = { id: nuevoId(), userId, name: bal.name, ts: ahora, stake, totalOdds, potential, legs, estado: 'pendiente', premio: 0 };
+    st.bets.push(bet);
+    movimiento(userId, 'apuesta', -stake, antes, bal.balance, { betId: bet.id, motivo: legs.length > 1 ? 'Combinada' : 'Apuesta simple' });
+    save();
+    res.json({ ok: true, bet: apuestaPublica(bet), balance: bal.balance });
+  }
+
+  // ---------- Rutas públicas ----------
+  const api = express.Router();
+  api.use(async (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    try { await listo; } catch { /* sigue */ }
+    tick();
+    next();
+  });
+
+  api.get('/markets', (req, res) => {
+    const ahora = nowMs();
+    const users = [...trakeUsuarios()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    const markets = st.markets
+      .filter((m) => m.estado === 'abierto' || ahora - (m.actualizado || m.cierra) < VISIBLE_CERRADOS_MS)
+      .sort((a, b) => a.cierra - b.cierra)
+      .map((m) => mercadoPublico(m, ahora));
+    res.json({
+      ok: true, now: ahora, users, markets,
+      config: { saldoInicial: SALDO_INICIAL, apuestaMin: APUESTA_MIN, apuestaMax: APUESTA_MAX, maxSelecciones: MAX_SELECCIONES }
+    });
+  });
+
+  api.get('/me', (req, res) => {
+    const id = usuarioValido(req.query.user);
+    if (!id) return res.status(404).json({ error: 'Esa persona no está en el Trakímetro.' });
+    res.json({ ok: true, id, name: st.balances[id].name, balance: st.balances[id].balance, ...estadisticas(id) });
+  });
+
+  api.get('/my-bets', (req, res) => {
+    const id = usuarioValido(req.query.user);
+    if (!id) return res.status(404).json({ error: 'Esa persona no está en el Trakímetro.' });
+    const bets = st.bets.filter((b) => b.userId === id).sort((a, b) => b.ts - a.ts).slice(0, 200).map(apuestaPublica);
+    res.json({ ok: true, bets });
+  });
+
+  api.get('/ranking', (req, res) => {
+    res.json({ ok: true, ranking: ranking() });
+  });
+
+  api.post('/bets', (req, res) => colocarApuesta(req, res, 'simple'));
+  api.post('/combination', (req, res) => colocarApuesta(req, res, 'combinada'));
+
+  // ---------- Admin ----------
+  const adm = express.Router();
+  adm.use(adminAuth);
+  adm.use(async (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    try { await listo; } catch { /* sigue */ }
+    tick();
+    next();
+  });
+
+  function adminNombre() {
+    return process.env.ADMIN_USER || 'admin';
+  }
+
+  function statsMercado(m) {
+    const bets = st.bets.filter((b) => b.legs.some((l) => l.marketId === m.id));
+    const usuarios = new Set(bets.map((b) => b.userId));
+    const porOpcion = {};
+    let total = 0;
+    for (const b of bets) {
+      for (const l of b.legs) {
+        if (l.marketId !== m.id) continue;
+        porOpcion[l.optionId] = (porOpcion[l.optionId] || 0) + b.stake;
+      }
+      total += b.stake;
+    }
+    return { apuestas: bets.length, apostado: total, usuarios: usuarios.size, porOpcion };
+  }
+
+  function mercadoAdmin(m, ahora) {
+    return { ...mercadoPublico(m, ahora), auto: m.auto || null, stats: statsMercado(m) };
+  }
+
+  function parseCierre(v) {
+    if (typeof v === 'number' && Number.isFinite(v)) return Math.round(v);
+    const s = String(v || '').trim();
+    const r = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/.exec(s);
+    if (r) return madridMs(r[1], Number(r[2]), Number(r[3]));
+    return NaN;
+  }
+
+  // Valida y construye la lista de opciones. Las opciones de usuario salen
+  // SIEMPRE de Trakímetro (el nombre no se escribe a mano).
+  function construirOpciones(raw, previas = []) {
+    if (!Array.isArray(raw) || raw.length < 2) return { error: 'Hacen falta al menos 2 opciones.' };
+    if (raw.length > 30) return { error: 'Demasiadas opciones (máximo 30).' };
+    const users = trakeUsuarios();
+    const out = [];
+    const vistos = new Set();
+    for (const o of raw) {
+      const odds = round2(Number(o?.odds));
+      if (!Number.isFinite(odds) || odds < CUOTA_MIN || odds > CUOTA_MAX) {
+        return { error: `Cada cuota tiene que estar entre ${CUOTA_MIN} y ${CUOTA_MAX}.` };
+      }
+      let opt;
+      if (o.userId) {
+        const uid = String(o.userId).trim().toLowerCase();
+        if (!users.has(uid)) return { error: 'Una de las personas no existe en el Trakímetro.' };
+        opt = { id: 'u:' + uid, label: users.get(uid), userId: uid, odds };
+      } else {
+        const label = clean(o.label, 60);
+        if (!label) return { error: 'Una opción no tiene nombre.' };
+        const prev = o.id ? previas.find((p) => p.id === o.id && !p.userId) : null;
+        opt = { id: prev ? prev.id : (o.id === OTRO_ID ? OTRO_ID : 'o:' + crypto.randomBytes(4).toString('hex')), label, odds };
+      }
+      const clave = opt.userId ? 'u:' + opt.userId : 'l:' + opt.label.toLowerCase();
+      if (vistos.has(clave) || out.some((x) => x.id === opt.id)) return { error: 'Hay opciones repetidas.' };
+      vistos.add(clave);
+      out.push(opt);
+    }
+    return { options: out };
+  }
+
+  adm.get('/overview', (req, res) => {
+    sincronizarUsuarios();
+    const ahora = nowMs();
+    const t = getTrake();
+    const markets = [...st.markets].sort((a, b) => b.cierra - a.cierra).map((m) => mercadoAdmin(m, ahora));
+    const totalApostado = st.bets.filter((b) => b.estado !== 'cancelada').reduce((s, b) => s + b.stake, 0);
+    res.json({
+      ok: true, now: ahora,
+      markets,
+      users: ranking(),
+      events: (t.events || []).map((e) => ({ id: e.id, name: e.name, start: e.start, end: e.end || e.start })),
+      metricas: Object.entries(METRICAS).map(([id, d]) => ({ id, titulo: d.titulo })),
+      transactions: [...st.transactions].reverse().slice(0, 300),
+      resumen: { mercados: st.markets.length, abiertos: st.markets.filter((m) => m.estado === 'abierto').length, apuestas: st.bets.length, totalApostado },
+      config: { apuestaMin: APUESTA_MIN, apuestaMax: APUESTA_MAX, cuotaMin: CUOTA_MIN, cuotaMax: CUOTA_MAX }
+    });
+  });
+
+  adm.post('/markets', (req, res) => {
+    const titulo = clean(req.body?.titulo, 120);
+    if (!titulo) return res.status(400).json({ error: 'Falta el título.' });
+    const cierra = parseCierre(req.body?.cierra);
+    if (!Number.isFinite(cierra) || cierra <= nowMs()) return res.status(400).json({ error: 'La hora de cierre tiene que ser futura.' });
+    const r = construirOpciones(req.body?.options);
+    if (r.error) return res.status(400).json({ error: r.error });
+
+    const t = getTrake();
+    const eventoId = req.body?.eventoId ? String(req.body.eventoId) : null;
+    const ev = eventoId ? (t.events || []).find((e) => e.id === eventoId) : null;
+    if (eventoId && !ev) return res.status(400).json({ error: 'Esa fecha especial no existe.' });
+
+    const m = {
+      id: nuevoId(), titulo,
+      descripcion: clean(req.body?.descripcion, 300),
+      categoria: clean(req.body?.categoria, 40) || 'General',
+      evento: ev ? ev.name : clean(req.body?.evento, 80),
+      eventoId: ev ? ev.id : null,
+      cierra, estado: 'abierto', fuente: 'manual', options: r.options, ganadores: [],
+      creado: nowMs(), actualizado: nowMs(), auto: null
+    };
+    st.markets.push(m);
+    save();
+    res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  // Mercado automático con datos reales del Trakímetro, elegido a mano
+  adm.post('/auto', (req, res) => {
+    const metrica = String(req.body?.metrica || '');
+    if (!METRICAS[metrica]) return res.status(400).json({ error: 'Métrica no válida.' });
+    const tipo = String(req.body?.periodoTipo || '');
+    let periodo;
+    if (tipo === 'evento') periodo = { tipo, id: String(req.body?.periodoId || '') };
+    else if (tipo === 'mes') periodo = { tipo, id: String(req.body?.periodoId || '') };
+    else if (tipo === 'semana') periodo = { tipo, start: String(req.body?.periodoId || '') };
+    else return res.status(400).json({ error: 'Periodo no válido.' });
+    const w = ventana(periodo);
+    if (!w) return res.status(400).json({ error: 'Periodo no válido.' });
+    if (w.endMs <= nowMs()) return res.status(400).json({ error: 'Ese periodo ya ha terminado.' });
+    const cierra = parseCierre(req.body?.cierra);
+    if (!Number.isFinite(cierra) || cierra <= nowMs()) return res.status(400).json({ error: 'La hora de cierre tiene que ser futura.' });
+    const m = crearMercadoAuto({ metrica, periodo, cierra, key: null });
+    if (!m) return res.status(400).json({ error: 'No hay suficientes personas en el Trakímetro para crear este mercado.' });
+    save();
+    res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  adm.post('/generate', (req, res) => {
+    const n = generarAutomaticos();
+    if (n) save();
+    res.json({ ok: true, creados: n });
+  });
+
+  function mercadoDeRuta(req, res) {
+    const m = mercado(String(req.params.id || ''));
+    if (!m) { res.status(404).json({ error: 'Ese mercado no existe.' }); return null; }
+    return m;
+  }
+
+  adm.put('/markets/:id', (req, res) => {
+    const m = mercadoDeRuta(req, res);
+    if (!m) return;
+    if (m.estado === 'resuelto' || m.estado === 'cancelado') {
+      return res.status(409).json({ error: 'Un mercado resuelto o cancelado no se puede editar.' });
+    }
+    const b = req.body || {};
+    if (b.titulo !== undefined) {
+      const titulo = clean(b.titulo, 120);
+      if (!titulo) return res.status(400).json({ error: 'Falta el título.' });
+      m.titulo = titulo;
+    }
+    if (b.descripcion !== undefined) m.descripcion = clean(b.descripcion, 300);
+    if (b.categoria !== undefined) m.categoria = clean(b.categoria, 40) || 'General';
+    if (b.evento !== undefined && !m.auto) m.evento = clean(b.evento, 80);
+    if (b.cierra !== undefined) {
+      const c = parseCierre(b.cierra);
+      if (!Number.isFinite(c)) return res.status(400).json({ error: 'Hora de cierre no válida.' });
+      m.cierra = c;
+    }
+    if (b.options !== undefined) {
+      const r = construirOpciones(b.options, m.options);
+      if (r.error) return res.status(400).json({ error: r.error });
+      // No se puede quitar una opción sobre la que ya hay apuestas
+      for (const o of m.options) {
+        if (r.options.some((x) => x.id === o.id)) continue;
+        if (st.bets.some((bt) => bt.legs.some((l) => l.marketId === m.id && l.optionId === o.id))) {
+          return res.status(409).json({ error: `La opción «${o.label}» ya tiene apuestas y no se puede quitar.` });
+        }
+      }
+      // Las cuotas nuevas valen para apuestas futuras; las antiguas conservan la suya
+      m.options = r.options;
+    }
+    m.actualizado = nowMs();
+    save();
+    res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  adm.post('/markets/:id/recalc', (req, res) => {
+    const m = mercadoDeRuta(req, res);
+    if (!m) return;
+    if (!m.auto) return res.status(400).json({ error: 'Solo los mercados automáticos se pueden recalcular.' });
+    if (m.estado === 'resuelto' || m.estado === 'cancelado') return res.status(409).json({ error: 'Este mercado ya no está activo.' });
+    const nuevas = cuotasAuto(m.auto.metrica);
+    if (!nuevas) return res.status(400).json({ error: 'No hay datos suficientes.' });
+    // Mantiene las opciones que ya tienen apuestas aunque ya no salgan
+    for (const o of m.options) {
+      if (!nuevas.some((n) => n.id === o.id) && st.bets.some((bt) => bt.legs.some((l) => l.marketId === m.id && l.optionId === o.id))) nuevas.push(o);
+    }
+    m.options = nuevas;
+    m.actualizado = nowMs();
+    save();
+    res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  adm.post('/markets/:id/close', (req, res) => {
+    const m = mercadoDeRuta(req, res);
+    if (!m) return;
+    if (m.estado !== 'abierto') return res.status(409).json({ error: 'Solo se puede cerrar un mercado abierto.' });
+    m.estado = 'cerrado';
+    m.actualizado = nowMs();
+    save();
+    res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  adm.post('/markets/:id/open', (req, res) => {
+    const m = mercadoDeRuta(req, res);
+    if (!m) return;
+    if (m.estado !== 'cerrado') return res.status(409).json({ error: 'Solo se puede abrir un mercado cerrado.' });
+    if (req.body?.cierra !== undefined) {
+      const c = parseCierre(req.body.cierra);
+      if (!Number.isFinite(c)) return res.status(400).json({ error: 'Hora de cierre no válida.' });
+      m.cierra = c;
+    }
+    if (m.cierra <= nowMs()) return res.status(400).json({ error: 'La hora de cierre ya pasó: indica una nueva hora de cierre.' });
+    m.estado = 'abierto';
+    m.actualizado = nowMs();
+    save();
+    res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  adm.post('/markets/:id/resolve', (req, res) => {
+    const m = mercadoDeRuta(req, res);
+    if (!m) return;
+    if (m.estado === 'resuelto' || m.estado === 'cancelado') return res.status(409).json({ error: 'Este mercado ya está resuelto o cancelado.' });
+    let g = req.body?.ganadores;
+    if (!Array.isArray(g)) g = req.body?.ganador ? [req.body.ganador] : [];
+    g = [...new Set(g.map(String))];
+    if (!g.length || g.some((id) => !m.options.some((o) => o.id === id))) {
+      return res.status(400).json({ error: 'Elige una opción ganadora válida.' });
+    }
+    resolverMercado(m, g, 'admin');
+    save();
+    res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  adm.post('/markets/:id/cancel', (req, res) => {
+    const m = mercadoDeRuta(req, res);
+    if (!m) return;
+    if (m.estado === 'resuelto' || m.estado === 'cancelado') return res.status(409).json({ error: 'Este mercado ya está resuelto o cancelado.' });
+    cancelarMercado(m, clean(req.body?.motivo, 120) || 'Cancelado por el administrador');
+    save();
+    res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  adm.get('/markets/:id/bets', (req, res) => {
+    const m = mercadoDeRuta(req, res);
+    if (!m) return;
+    const bets = st.bets
+      .filter((b) => b.legs.some((l) => l.marketId === m.id))
+      .sort((a, b) => b.ts - a.ts)
+      .map((b) => {
+        const leg = b.legs.find((l) => l.marketId === m.id);
+        return {
+          id: b.id, usuario: b.name, ts: b.ts, stake: b.stake, opcion: leg.label, cuotaOpcion: leg.odds,
+          tipo: b.legs.length > 1 ? 'combinada' : 'simple', cuotaTotal: b.totalOdds,
+          premioPosible: b.potential, estado: b.estado, premio: b.premio || 0
+        };
+      });
+    res.json({ ok: true, bets, stats: statsMercado(m) });
+  });
+
+  adm.post('/users/:userId/adjust', (req, res) => {
+    const id = String(req.params.userId || '').trim().toLowerCase();
+    const bal = st.balances[id];
+    if (!bal) return res.status(404).json({ error: 'Esa persona no tiene saldo TKT365.' });
+    const cantidad = Number(req.body?.cantidad);
+    if (!Number.isInteger(cantidad) || cantidad === 0 || Math.abs(cantidad) > 1_000_000) {
+      return res.status(400).json({ error: 'La cantidad tiene que ser un número entero distinto de 0.' });
+    }
+    if (bal.balance + cantidad < 0) return res.status(400).json({ error: 'El saldo no puede quedar por debajo de 0.' });
+    const antes = bal.balance;
+    bal.balance += cantidad;
+    movimiento(id, 'ajuste', cantidad, antes, bal.balance, { admin: adminNombre(), motivo: clean(req.body?.motivo, 120) || 'Sin motivo' });
+    save();
+    res.json({ ok: true, user: { id, name: bal.name, balance: bal.balance } });
+  });
+
+  app.use('/api/tkt365/admin', express.json({ limit: '200kb' }), adm);
+  app.use('/api/tkt365', express.json({ limit: '50kb' }), api);
+
+  return { tick };
+}

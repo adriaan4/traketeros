@@ -8,6 +8,7 @@ import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import sharp from 'sharp';
 import { fileURLToPath } from 'url';
+import { registerTkt365 } from './tkt365.js';
 
 const app = express();
 
@@ -1233,7 +1234,7 @@ async function trakeLoad() {
   }
 }
 
-trakeLoad();
+const trakeReady = trakeLoad();
 
 // ---------- Fechas (hora de Madrid) ----------
 function trakeHoy() {
@@ -1786,6 +1787,24 @@ app.post('/api/admin/traketimetro/ganador', adminAuth, (req, res) => {
   trakeSave();
   broadcastTrakeChanged();
   res.json(trakeRespuesta(periodoDe(req)));
+});
+
+// =========================
+// TKT365: apuestas virtuales con puntos TKT (sin dinero real)
+// =========================
+// Los usuarios salen SIEMPRE del Trakímetro (ver tkt365.js). No se toca nada
+// del Trakímetro ni de la cuota: solo se leen sus datos.
+registerTkt365({
+  app,
+  adminAuth,
+  getTrake: () => trakeData,
+  tipos: TRAKE_TIPOS,
+  puntos: TRAKE_PUNTOS,
+  hoy: trakeHoy,
+  ready: trakeReady,
+  cloudinary,
+  cloudinaryOk: CLOUDINARY_OK,
+  dataDir: TRAKE_DATA_DIR
 });
 
 // =========================

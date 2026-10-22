@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="TKT365: apuestas virtuales de la peña con puntos TKT. Sin dinero real.">
+  <meta name="theme-color" content="#ff2596">
+  <title>Traketeros · TKT365</title>
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=18">
+  <link rel="stylesheet" href="tkt365.css?v=2">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
+  </a>
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>LA PEÑA DE LOS TRAKETOS 🍻</small>
+  </div>
+  <nav class="nav-links">
+    <a class="header-link" href="/">La cuota</a>
+    <a class="header-link" href="fotos.html">📸 Fotos</a>
+    <a class="header-link" href="juegos.html">🎮 Juegos</a>
+    <a class="header-link" href="traketimetro.html">🍻 Traketímetro</a>
+  </nav>
+</header>
+
+<main class="tkt-main">
+  <section class="tkt-hero">
+    <div>
+      <div class="eyebrow">🎰 LA CASA DE APUESTAS DE LA PEÑA</div>
+      <h1 class="tkt-logo">TKT<span>365</span></h1>
+      <p class="tkt-sub">Donde cada noche tiene una cuota.</p>
+      <p class="tkt-aviso">Juego 100&nbsp;% virtual: los TKT son puntos de la peña, no dinero. No hay pagos ni retiradas. Las personas son las del Trakímetro: no hace falta registrarse.</p>
+    </div>
+  </section>
+
+  <section class="tkt-yo" aria-label="Quién eres y tu saldo">
+    <div>
+      <label for="quien">¿QUIÉN ERES? (la lista del Trakímetro)</label>
+      <select id="quien"></select>
+    </div>
+    <div class="tkt-saldo" aria-live="polite">
+      <small>TU SALDO</small>
+      <b id="saldo">—</b>
+    </div>
+  </section>
+
+  <div class="tkt-tabs" role="tablist">
+    <button type="button" role="tab" data-tab="mercados" aria-selected="true">🔥 Mercados</button>
+    <button type="button" role="tab" data-tab="apuestas" aria-selected="false">🧾 Mis apuestas</button>
+    <button type="button" role="tab" data-tab="ranking" aria-selected="false">🏆 Ranking</button>
+  </div>
+
+  <div class="tkt-grid" id="vistaMercados">
+    <div class="tkt-col" id="mercados"><div class="tkt-vacio">Cargando mercados…</div></div>
+
+    <aside class="tkt-cupon" id="cupon" aria-label="Cupón de apuesta">
+      <button class="tkt-cupon-bar" id="cuponBar" type="button">
+        <span>🎟️ MI COMBINADA (<span id="barN">0</span>)</span>
+        <span class="tq" id="barQ">x1.00</span>
+      </button>
+      <div class="tkt-cupon-head">
+        <h2>MI COMBINADA</h2>
+        <span class="tipo" id="cuponTipo">VACÍO</span>
+      </div>
+      <div class="tkt-cupon-body">
+        <ul class="tkt-sels" id="sels"></ul>
+        <div class="tkt-cupon-vacio" id="cuponVacio">Pulsa una cuota para añadirla al cupón. Puedes combinar hasta 8 mercados distintos.</div>
+        <button class="tkt-limpiar" id="limpiar" type="button" hidden>Vaciar cupón</button>
+        <div class="tkt-fila"><span>CUOTA TOTAL</span><b id="cuotaTotal">x1.00</b></div>
+        <div class="tkt-stake">
+          <label for="stake">TKT A APOSTAR</label>
+          <input id="stake" type="number" inputmode="numeric" min="10" step="1" value="100">
+          <div class="tkt-rapidas">
+            <button type="button" data-add="50">+50</button>
+            <button type="button" data-add="100">+100</button>
+            <button type="button" data-add="500">+500</button>
+            <button type="button" data-max="1">MÁX</button>
+          </div>
+        </div>
+        <div class="tkt-fila premio"><span>POSIBLE PREMIO</span><b id="premio">0 TKT</b></div>
+        <button class="tkt-apostar" id="apostar" type="button" disabled>HACER APUESTA</button>
+        <div class="tkt-msg" id="msg" role="status" aria-live="polite"></div>
+      </div>
+    </aside>
+  </div>
+
+  <section id="vistaApuestas" hidden>
+    <h2 class="tkt-sec-title">🧾 MIS APUESTAS</h2>
+    <div class="tkt-apuestas" id="apuestas"></div>
+  </section>
+
+  <section id="vistaRanking" hidden>
+    <h2 class="tkt-sec-title">🏆 RANKING TKT365</h2>
+    <div class="panel tkt-rank" style="margin-top:0">
+      <div class="scroll">
+        <table>
+          <thead><tr><th>#</th><th>Usuario</th><th>TKT</th><th>Ganadas</th><th>Perdidas</th><th>TKT apostados</th><th>Beneficio</th></tr></thead>
+          <tbody id="ranking"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="tkt365.js?v=1"></script>
+</body>
+</html>
