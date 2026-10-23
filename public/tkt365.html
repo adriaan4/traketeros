@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=18">
-  <link rel="stylesheet" href="tkt365.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=19">
+  <link rel="stylesheet" href="tkt365.css?v=6">
 </head>
 <body>
 
@@ -44,15 +44,23 @@
       <div class="eyebrow">🎰 LA CASA DE APUESTAS DE LA PEÑA</div>
       <h1 class="tkt-logo">TKT<span>365</span></h1>
       <p class="tkt-sub">Donde cada noche tiene una cuota.</p>
-      <p class="tkt-aviso">Juego 100&nbsp;% virtual: los TKT son puntos de la peña, no dinero. No hay pagos ni retiradas. Las personas son las del Trakímetro: no hace falta registrarse.</p>
+      <p class="tkt-aviso">Juego 100&nbsp;% virtual: los TKT son puntos de la peña, no dinero. No hay pagos ni retiradas. Puedes apostar con tu nombre del Trakímetro o apuntarte solo para apostar: no hace falta registrarse.</p>
     </div>
   </section>
 
   <section class="tkt-yo" aria-label="Quién eres">
     <div>
-      <label for="quien">¿QUIÉN ERES? (la lista del Trakímetro)</label>
+      <label for="quien">¿QUIÉN ERES?</label>
       <select id="quien"></select>
     </div>
+    <form class="tkt-join" id="join" autocomplete="off">
+      <p><b>¿No estás en el Trakímetro y solo quieres apostar? ¡Apúntate!</b><br><small>Escribe tu nombre o mote y ya tienes tu saldo para apostar. No hace falta apuntarse en el Trakímetro.</small></p>
+      <div class="tkt-join-fila">
+        <input id="joinName" type="text" maxlength="30" placeholder="Tu nombre o mote" aria-label="Tu nombre para apostar" required>
+        <button type="submit" id="joinBtn">APÚNTATE</button>
+      </div>
+      <div class="tkt-msg" id="joinMsg" role="status" aria-live="polite"></div>
+    </form>
     <p class="tkt-nota" id="nota">Elige tu nombre. Una vez elegido queda <b>bloqueado</b> en este dispositivo: si te equivocas, díselo al admin.</p>
   </section>
 
@@ -106,7 +114,7 @@
     <div class="panel tkt-rank" style="margin-top:0">
       <div class="scroll">
         <table>
-          <thead><tr><th>#</th><th>Usuario</th><th>TKT</th><th>Ganadas</th><th>Perdidas</th><th>TKT apostados</th><th>Beneficio</th></tr></thead>
+          <thead><tr><th>#</th><th>Usuario</th><th class="num">TKT</th><th class="num">Ganadas</th><th class="num">Perdidas</th><th class="num">Apostados</th><th class="num">Beneficio</th></tr></thead>
           <tbody id="ranking"></tbody>
         </table>
       </div>
@@ -114,6 +122,6 @@
   </section>
 </main>
 
-<script src="tkt365.js?v=2"></script>
+<script src="tkt365.js?v=4"></script>
 </body>
 </html>

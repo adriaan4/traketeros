@@ -1933,3 +1933,54 @@ body.modo-impostor {
 /* ---------- TKT365: con un enlace más en la cabecera, que el menú no desborde en el móvil ---------- */
 .nav-links,
 .header-copy { min-width: 0; }
+
+
+/* =====================================================================
+   ADAPTACIÓN MÓVIL + ORDENADOR (todas las páginas)
+   ===================================================================== */
+html { -webkit-text-size-adjust: 100%; }
+img, video, iframe { max-width: 100%; }
+td, th { font-variant-numeric: tabular-nums; }
+.scroll { -webkit-overflow-scrolling: touch; }
+
+/* Tablet y móvil: la cabecera se ordena en dos filas (logo + título / enlaces) */
+@media (max-width: 760px) {
+  .site-header {
+    flex-wrap: wrap; align-items: center; gap: 8px 10px;
+    min-height: 0; padding: 10px 4%; margin-top: 0; transform: none;
+  }
+  .brand img { width: 64px; height: 56px; border-radius: 12px; box-shadow: 3px 3px 0 var(--black); }
+  .header-copy { flex: 1 1 calc(100% - 84px); min-width: 0; }
+  .header-copy strong { font-size: 26px; line-height: 1; }
+  .header-copy small { display: block; font-size: 9px; line-height: 1.25; margin-top: 3px; }
+  .site-header .header-link,
+  .site-header .header-pill {
+    display: inline-block; margin-left: 0; padding: 6px 10px; font-size: 12px; white-space: nowrap;
+    transform: none; box-shadow: 3px 3px 0 var(--black);
+  }
+  .site-header .nav-links { width: 100%; margin-left: 0; justify-content: flex-start; gap: 6px; }
+  main { width: 92%; margin: 22px auto 50px; }
+  h1 { font-size: clamp(40px, 13vw, 70px); }
+}
+
+@media (max-width: 600px) {
+  .panel { padding: 14px; box-shadow: 5px 5px 0 var(--black); margin-top: 24px; }
+  .panel h2 { font-size: 28px; }
+  .panel-head .search { width: 100%; }
+  .stats { grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; }
+  .stat { padding: 12px; box-shadow: 4px 4px 0 var(--red); }
+  .stat b { font-size: 32px; }
+  th, td { padding: 9px 8px; }
+  table { font-size: 13px; }
+  .admin-head { gap: 10px; }
+}
+
+@media (max-width: 380px) {
+  .header-copy strong { font-size: 22px; }
+  .site-header .header-link { padding: 5px 8px; font-size: 11.5px; }
+}
+
+/* Pantallas grandes: que no se estire demasiado */
+@media (min-width: 1500px) {
+  main { width: min(1240px, 88%); }
+}

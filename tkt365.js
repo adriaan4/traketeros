@@ -105,6 +105,7 @@ export function registerTkt365({
     markets: [],
     bets: [],
     transactions: [],
+    extras: Object.create(null),  // userId -> { name, ts }  (personas que solo apuestan: no están en el Trakímetro)
     claims: Object.create(null)   // userId -> { hash, ts }  (quién ha elegido qué nombre; el token nunca se guarda en claro)
   });
   let st = vacio();
@@ -117,6 +118,7 @@ export function registerTkt365({
     if (Array.isArray(raw.bets)) s.bets = raw.bets;
     if (Array.isArray(raw.transactions)) s.transactions = raw.transactions;
     if (raw.claims && typeof raw.claims === 'object') Object.assign(s.claims, raw.claims);
+    if (raw.extras && typeof raw.extras === 'object') Object.assign(s.extras, raw.extras);
     return s;
   }
 
@@ -185,7 +187,7 @@ export function registerTkt365({
   listo.then(() => { arrancado = true; tick(); });
 
   // ---------- Usuarios: SIEMPRE los del Trakímetro ----------
-  function trakeUsuarios() {
+  function trakeUsuarios(soloTrake = false) {
     const t = getTrake();
     const m = new Map(); // userId -> nombre a mostrar
     const add = (name) => {
@@ -195,6 +197,10 @@ export function registerTkt365({
     for (const b of Object.values(t.months || {})) for (const p of Object.values(b || {})) add(p.name);
     for (const b of Object.values(t.eventData || {})) for (const p of Object.values(b || {})) add(p.name);
     for (const l of t.log || []) add(l.name);
+    if (!soloTrake) {
+      // Quien solo apuesta (no está en el Trakímetro). Si luego aparece allí, manda el nombre del Trakímetro.
+      for (const [id, e] of Object.entries(st.extras)) if (!m.has(id)) m.set(id, e.name);
+    }
     return m;
   }
 
@@ -364,7 +370,7 @@ export function registerTkt365({
   }
 
   function cuotasAuto(metrica) {
-    const users = trakeUsuarios();
+    const users = trakeUsuarios(true); // los mercados automáticos solo usan gente del Trakímetro
     const hist = estadisticaHistorica(metrica);
     let cand = [...users].map(([id, name]) => ({ id, name, stat: hist.get(id) || 0 }));
     cand.sort((a, b) => b.stat - a.stat || a.name.localeCompare(b.name, 'es'));
@@ -675,7 +681,7 @@ export function registerTkt365({
 
   api.get('/markets', (req, res) => {
     const ahora = nowMs();
-    const users = [...trakeUsuarios()].map(([id, name]) => ({ id, name, taken: Boolean(st.claims[id]) })).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    const users = [...trakeUsuarios()].map(([id, name]) => ({ id, name, taken: Boolean(st.claims[id]), soloApuestas: !trakeUsuarios(true).has(id) })).sort((a, b) => a.name.localeCompare(b.name, 'es'));
     const yo = duenoDe(req.query.token);
     const markets = st.markets
       .filter((m) => m.estado === 'abierto' || ahora - (m.actualizado || m.cierra) < VISIBLE_CERRADOS_MS)
@@ -693,15 +699,48 @@ export function registerTkt365({
     res.json({ ok: true, id, name: st.balances[id].name, balance: st.balances[id].balance, ...estadisticas(id) });
   });
 
+  // Solo las apuestas de quien es dueño de ese dispositivo (nadie ve las de otros)
   api.get('/my-bets', (req, res) => {
-    const id = usuarioValido(req.query.user);
-    if (!id) return res.status(404).json({ error: 'Esa persona no está en el Trakímetro.' });
+    const id = duenoDe(req.query.token);
+    if (!id) return res.status(403).json({ error: 'Elige quién eres para ver tus apuestas.' });
     const bets = st.bets.filter((b) => b.userId === id).sort((a, b) => b.ts - a.ts).slice(0, 200).map(apuestaPublica);
     res.json({ ok: true, bets });
   });
 
   api.get('/ranking', (req, res) => {
     res.json({ ok: true, ranking: ranking() });
+  });
+
+  // ---------- Personas que solo apuestan (sin Trakímetro) ----------
+  const MAX_EXTRAS = 80;
+  function nombreNuevoValido(raw) {
+    const name = clean(raw, 30);
+    if (name.length < 2) return { error: 'Escribe un nombre de al menos 2 letras.' };
+    if (!/[\p{L}\p{N}]/u.test(name)) return { error: 'Ese nombre no vale.' };
+    if (/[<>"`]/.test(name)) return { error: 'El nombre no puede llevar < > " ni comillas raras.' };
+    const id = name.toLowerCase();
+    if (id === OTRO_ID || id.startsWith('__')) return { error: 'Ese nombre no vale.' };
+    if (trakeUsuarios().has(id) || st.balances[id]) return { error: 'Ese nombre ya existe: búscalo en la lista.', existe: true };
+    if (Object.keys(st.extras).length >= MAX_EXTRAS) return { error: 'No caben más personas. Díselo al admin.' };
+    return { id, name };
+  }
+  function crearExtra(id, name) {
+    st.extras[id] = { name, ts: nowMs() };
+    sincronizarUsuarios(); // crea el saldo inicial
+  }
+
+  // Apuntarse solo para apostar. Crea el nombre y lo deja elegido en este dispositivo.
+  api.post('/join', (req, res) => {
+    const token = tokenValido(req.body?.token);
+    if (!token) return res.status(400).json({ error: 'Dispositivo no válido. Recarga la página.' });
+    const propio = duenoDe(token);
+    if (propio) return res.status(409).json({ error: `Ya eres ${st.balances[propio].name}. Si te equivocaste, pídele al admin que te libere el nombre.` });
+    const v = nombreNuevoValido(req.body?.name);
+    if (v.error) return res.status(400).json({ error: v.error, existe: Boolean(v.existe) });
+    crearExtra(v.id, v.name);
+    st.claims[v.id] = { hash: hashToken(token), ts: nowMs() };
+    save();
+    res.json({ ok: true, user: v.id, name: v.name });
   });
 
   // Elegir nombre (una sola vez por dispositivo; solo el admin puede deshacerlo)
@@ -808,7 +847,7 @@ export function registerTkt365({
     res.json({
       ok: true, now: ahora,
       markets,
-      users: ranking().map((u) => ({ ...u, reclamado: st.claims[u.id] ? st.claims[u.id].ts : null })),
+      users: ranking().map((u) => ({ ...u, reclamado: st.claims[u.id] ? st.claims[u.id].ts : null, soloApuestas: Boolean(st.extras[u.id]) && !trakeUsuarios(true).has(u.id) })),
       bets: [...st.bets].sort((a, b) => b.ts - a.ts).slice(0, 500).map((b) => ({ ...apuestaPublica(b), usuario: b.name, userId: b.userId })),
       events: (t.events || []).map((e) => ({ id: e.id, name: e.name, start: e.start, end: e.end || e.start })),
       metricas: Object.entries(METRICAS).map(([id, d]) => ({ id, titulo: d.titulo })),
@@ -1014,6 +1053,28 @@ export function registerTkt365({
     movimiento(id, 'ajuste', cantidad, antes, bal.balance, { admin: adminNombre(), motivo: clean(req.body?.motivo, 120) || 'Sin motivo' });
     save();
     res.json({ ok: true, user: { id, name: bal.name, balance: bal.balance } });
+  });
+
+  // El admin añade a alguien que solo apuesta
+  adm.post('/users', (req, res) => {
+    const v = nombreNuevoValido(req.body?.name);
+    if (v.error) return res.status(400).json({ error: v.error });
+    crearExtra(v.id, v.name);
+    save();
+    res.json({ ok: true, user: { id: v.id, name: v.name } });
+  });
+
+  // Quitar a alguien que solo apuesta (solo si nunca ha apostado)
+  adm.post('/users/:userId/remove', (req, res) => {
+    const id = String(req.params.userId || '').trim().toLowerCase();
+    if (!st.extras[id]) return res.status(404).json({ error: 'Solo se pueden quitar personas añadidas solo para apostar.' });
+    if (trakeUsuarios(true).has(id)) return res.status(409).json({ error: 'Esa persona ya está en el Trakímetro.' });
+    if (st.bets.some((b) => b.userId === id)) return res.status(409).json({ error: 'Ya ha apostado: no se puede quitar (puedes liberar su nombre o ajustar su saldo).' });
+    delete st.extras[id];
+    delete st.claims[id];
+    delete st.balances[id];
+    save();
+    res.json({ ok: true });
   });
 
   // Si alguien eligió el nombre equivocado: se libera y puede volver a elegir

@@ -75,12 +75,12 @@ function render() {
   const q = $('q').value.trim().toLowerCase();
   $('usuarios').innerHTML = data.users.filter((u) => u.name.toLowerCase().includes(q)).map((u, i) => {
     const bn = u.beneficio > 0 ? 'tkt-pos-n' : (u.beneficio < 0 ? 'tkt-neg-n' : '');
-    return `<tr><td>${i + 1}</td><td><b>${esc(u.name)}</b>${u.active ? '' : ' <small>(fuera del Trakímetro)</small>'}</td>` +
+    return `<tr><td>${i + 1}</td><td><b>${esc(u.name)}</b>${u.soloApuestas ? ' <span class="tkt-solo">SOLO APUESTAS</span>' : (u.active ? '' : ' <small>(fuera del Trakímetro)</small>')}</td>` +
       `<td><b>${tkt(u.balance)}</b> TKT</td><td>${u.ganadas} / ${u.perdidas}</td><td>${tkt(u.apostado)}</td>` +
       `<td class="${bn}">${u.beneficio > 0 ? '+' : ''}${tkt(u.beneficio)}</td>` +
       `<td>${u.reclamado
         ? `<span class="tkt-lock" title="Elegido el ${esc(fechaFmt.format(new Date(u.reclamado)))}">🔒 Elegido</span> <button class="mini danger" data-liberar="${esc(u.id)}" data-n="${esc(u.name)}">Liberar</button>`
-        : '<span class="tkt-lock libre">Libre</span>'}</td>` +
+        : '<span class="tkt-lock libre">Libre</span>'}${u.soloApuestas ? ` <button class="mini" data-quitar="${esc(u.id)}" data-n="${esc(u.name)}">Quitar</button>` : ''}</td>` +
       `<td><div class="tkt-ajuste" data-u="${esc(u.id)}">` +
       [100, 500, -100, -500].map((n) => `<button class="mini${n < 0 ? ' danger' : ''}" data-ajuste="${n}">${n > 0 ? '+' : ''}${n}</button>`).join('') +
       `<input class="tkt-in" type="number" step="1" placeholder="Cantidad" data-cant>` +
@@ -371,6 +371,15 @@ $('mercados').addEventListener('click', (e) => {
 
 // ---------- Saldos ----------
 $('usuarios').addEventListener('click', async (e) => {
+  const quitar = e.target.closest('button[data-quitar]');
+  if (quitar) {
+    if (!confirm(`¿Quitar a «${quitar.dataset.n}»? Solo se puede si nunca ha apostado.`)) return;
+    try {
+      await api('/api/tkt365/admin/users/' + encodeURIComponent(quitar.dataset.quitar) + '/remove', 'POST', {});
+      await load();
+    } catch (err) { alert(err.message); }
+    return;
+  }
   const lib = e.target.closest('button[data-liberar]');
   if (lib) {
     if (!confirm(`¿Liberar el nombre «${lib.dataset.n}»? Quien lo tenga podrá volver a elegir nombre, y ese nombre quedará libre para otra persona.`)) return;
@@ -396,6 +405,16 @@ $('usuarios').addEventListener('click', async (e) => {
     await api('/api/tkt365/admin/users/' + encodeURIComponent(userId) + '/adjust', 'POST', { cantidad, motivo });
     await load();
   } catch (err) { alert(err.message); }
+});
+
+$('altaForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('/api/tkt365/admin/users', 'POST', { name: $('altaName').value });
+    $('altaName').value = '';
+    msg('altaMsg', 'Persona añadida ✅ (ya puede elegir su nombre en TKT365)', 'ok');
+    await load();
+  } catch (err) { msg('altaMsg', err.message, 'err'); }
 });
 
 $('q').addEventListener('input', () => data && render());

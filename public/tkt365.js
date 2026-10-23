@@ -73,7 +73,12 @@ async function cargarMercados() {
   state.config = d.config;
   const previo = state.user;
   state.user = d.yo || ''; // el servidor manda: si el admin libera el nombre, aquí se desbloquea
-  if (state.user !== previo) { state.balance = null; cargarYo(); }
+  if (state.user !== previo) {
+    state.balance = null;
+    $('apuestas').innerHTML = '';
+    cargarYo();
+    if (state.tab === 'apuestas') cargarApuestas();
+  }
   conciliarCupon();
   pintarUsuarios();
   pintarMercados();
@@ -95,7 +100,7 @@ async function cargarApuestas() {
   const box = $('apuestas');
   if (!state.user) { box.innerHTML = '<div class="tkt-vacio">Elige quién eres arriba para ver tus apuestas.</div>'; return; }
   try {
-    const d = await api('/api/tkt365/my-bets?user=' + encodeURIComponent(state.user));
+    const d = await api('/api/tkt365/my-bets?token=' + TOKEN);
     pintarApuestas(d.bets);
   } catch (e) {
     box.innerHTML = '<div class="tkt-vacio">' + esc(e.message) + '</div>';
@@ -118,6 +123,35 @@ async function cargarRanking() {
   }
 }
 
+// ---------- Apuntarse solo para apostar (sin Trakímetro) ----------
+$('join').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (state.user) return;
+  const name = $('joinName').value.replace(/\s+/g, ' ').trim();
+  const msg = (t, k) => { const el = $('joinMsg'); el.textContent = t || ''; el.className = 'tkt-msg' + (k ? ' ' + k : ''); };
+  if (name.length < 2) return msg('Escribe un nombre de al menos 2 letras.');
+  if (!confirm(`¿Apuntarte como «${name}»?\n\nUna vez hecho no podrás cambiarlo: solo el admin puede corregirlo.`)) return;
+  $('joinBtn').disabled = true;
+  msg('');
+  try {
+    const d = await api('/api/tkt365/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: TOKEN, name })
+    });
+    state.user = d.user;
+    $('joinName').value = '';
+    await cargarMercados();
+    await cargarYo();
+    mensaje('¡Apuntado! Ya puedes apostar 🎉', 'ok');
+  } catch (err) {
+    msg(err.message);
+    if (err.data?.existe) cargarMercados().catch(() => {});
+  } finally {
+    $('joinBtn').disabled = false;
+  }
+});
+
 // ---------- Identidad (la del Trakímetro, bloqueada tras elegir) ----------
 function pintarUsuarios() {
   const sel = $('quien');
@@ -126,10 +160,12 @@ function pintarUsuarios() {
     sel.innerHTML = `<option value="${esc(propio.id)}">🔒 ${esc(propio.name)}</option>`;
     sel.value = propio.id;
     sel.disabled = true;
+    $('join').hidden = true;
     $('nota').innerHTML = 'Tu nombre está <b>bloqueado</b> en este dispositivo. ¿Te equivocaste? Díselo al admin y te lo cambia.';
     $('walletName').textContent = propio.name;
   } else {
     sel.disabled = false;
+    $('join').hidden = false;
     sel.innerHTML = '<option value="">— Elige tu nombre —</option>' +
       state.users.map((u) => `<option value="${esc(u.id)}"${u.taken ? ' disabled' : ''}>${esc(u.name)}${u.taken ? ' (ya elegido)' : ''}</option>`).join('');
     sel.value = '';

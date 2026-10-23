@@ -35,7 +35,7 @@
 /* Saldo en la esquina (como el monedero de una casa de apuestas): se queda fijo al hacer scroll */
 .tkt-corner {
   position: sticky; top: 8px; z-index: 60; height: 0;
-  display: flex; justify-content: flex-end; padding-right: 10px; pointer-events: none;
+  display: flex; justify-content: flex-end; align-items: flex-start; padding-right: 10px; pointer-events: none;
 }
 .tkt-wallet {
   pointer-events: auto; margin-top: 8px;
@@ -45,7 +45,7 @@
   padding: 5px 12px; min-width: 96px; max-width: 60vw;
 }
 .tkt-wallet-name { font-size: 10px; font-weight: 900; letter-spacing: .5px; opacity: .85; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tkt-wallet b { font-family: Bangers, Impact, sans-serif; font-size: 22px; letter-spacing: 1px; color: var(--yellow); }
+.tkt-wallet b { font-family: Bangers, Impact, sans-serif; font-variant-numeric: tabular-nums; font-size: 22px; letter-spacing: 1px; color: var(--yellow); }
 .tkt-wallet b.sube { animation: tktPop .6s ease; }
 .tkt-saldo { margin-left: auto; text-align: right; }
 .tkt-saldo small { display: block; font-size: 11px; font-weight: 900; letter-spacing: 1px; opacity: .8; }
@@ -255,3 +255,79 @@
 .tkt-lock { display: inline-block; font-size: 11px; font-weight: 900; padding: 2px 6px; border: 2px solid var(--black); background: var(--yellow); }
 .tkt-lock.libre { background: #e9e9e9; }
 .tkt-legs { margin: 0; padding-left: 16px; font-size: 12px; white-space: normal; min-width: 200px; }
+
+
+/* ---------- Dinero en cuadrícula ---------- */
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+#ranking td:nth-child(n+3),
+#mercados td:nth-child(4), #mercados td:nth-child(5),
+#apuestasAdmin td:nth-child(n+5):nth-child(-n+7),
+#usuarios td:nth-child(n+3):nth-child(-n+6),
+#movs td:nth-child(n+4):nth-child(-n+6) { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Cupón: cada cifra en su casilla */
+.tkt-cupon-body .tkt-fila {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
+  border: 2px solid rgba(255,255,255,.28); padding: 8px 12px; margin-top: 8px;
+}
+.tkt-cupon-body .tkt-fila b { font-variant-numeric: tabular-nums; text-align: right; }
+.tkt-stake input { font-variant-numeric: tabular-nums; text-align: right; }
+.tkt-rapidas { display: grid !important; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tkt-rapidas button { width: 100%; }
+
+/* Mis apuestas: cifras en casillas iguales */
+.tkt-ap-nums {
+  display: grid !important; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 0 !important;
+  border: 3px solid var(--black); font-size: 11px; font-weight: 900; letter-spacing: .5px; text-transform: uppercase; color: #555;
+}
+.tkt-ap-nums span { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-right: 2px solid #ddd; border-bottom: 2px solid #ddd; margin: -1px 0 0 -1px; }
+.tkt-ap-nums b { font-size: 18px; font-variant-numeric: tabular-nums; text-transform: none; letter-spacing: 0; color: var(--black); }
+.tkt-ap li span:last-child { font-variant-numeric: tabular-nums; font-weight: 800; }
+
+/* Ranking: cabeceras y cifras alineadas a la derecha */
+.tkt-rank th.num { text-align: right; }
+
+/* ---------- Móvil ---------- */
+@media (max-width: 760px) {
+  .tkt-main { width: 92%; }
+  .tkt-logo { font-size: clamp(56px, 20vw, 96px); }
+  .tkt-sub { font-size: 16px; }
+  .tkt-yo { padding: 12px; margin-top: 18px; box-shadow: 4px 4px 0 var(--red); }
+  .tkt-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tkt-tabs button { padding: 10px 6px; font-size: 13px; white-space: nowrap; }
+  .tkt-sec-title { font-size: 24px; }
+  .tkt-ap { padding: 12px; }
+  .tkt-ajuste .tkt-in, .tkt-ajuste .tkt-in.motivo { width: 100%; }
+  .tkt-modal { width: 94vw; max-width: 94vw; }
+}
+@media (max-width: 380px) {
+  .tkt-tabs button { font-size: 12px; }
+  .tkt-ap-nums { grid-template-columns: 1fr 1fr; }
+}
+
+/* Las pestañas: el atributo hidden siempre gana (antes .tkt-grid seguía visible bajo "Mis apuestas") */
+.tkt-grid[hidden], #vistaApuestas[hidden], #vistaRanking[hidden] { display: none !important; }
+
+/* El monedero tiene su propio hueco para no tapar el título */
+@media (max-width: 760px) {
+  .tkt-main { margin-top: 54px; }
+}
+@media (min-width: 761px) {
+  .tkt-main { margin-top: 56px; }
+}
+
+
+/* ¿No estás en el Trakímetro? Apúntate solo para apostar */
+.tkt-join { flex: 1 1 100%; order: 3; margin: 0; padding-top: 12px; border-top: 2px dashed rgba(255,255,255,.35); }
+.tkt-join[hidden] { display: none; }
+.tkt-join p { margin: 0 0 8px; font-size: 14px; color: white; }
+.tkt-join small { font-weight: 600; opacity: .85; }
+.tkt-join-fila { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.tkt-join input { font: inherit; font-weight: 800; padding: 9px 10px; border: 3px solid var(--yellow); background: white; color: var(--black); min-width: 0; }
+.tkt-join button { font: inherit; font-weight: 900; letter-spacing: .5px; padding: 9px 16px; cursor: pointer; background: var(--yellow); color: var(--black); border: 3px solid var(--black); box-shadow: 3px 3px 0 var(--red); }
+.tkt-join button:disabled { opacity: .6; cursor: wait; }
+.tkt-join .tkt-msg { margin-top: 6px; color: #ffb4b4; }
+.tkt-join .tkt-msg.ok { color: #7dff9b; }
+.tkt-solo { display: inline-block; font-size: 10px; font-weight: 900; padding: 1px 5px; border: 2px solid var(--black); background: #cfe9ff; margin-left: 4px; }
+.tkt-alta { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.tkt-alta .tkt-in { flex: 1 1 200px; padding: 8px 10px; }

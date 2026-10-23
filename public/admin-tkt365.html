@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=18">
-  <link rel="stylesheet" href="tkt365.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=19">
+  <link rel="stylesheet" href="tkt365.css?v=6">
 </head>
 <body>
 
@@ -51,7 +51,7 @@
     <div class="panel-head"><h2>Mercados</h2></div>
     <div class="scroll">
       <table>
-        <thead><tr><th>Mercado</th><th>Estado</th><th>Cierre (Madrid)</th><th>Apuestas</th><th>TKT apostados</th><th>Fuente</th><th></th></tr></thead>
+        <thead><tr><th>Mercado</th><th>Estado</th><th>Cierre (Madrid)</th><th class="num">Apuestas</th><th class="num">TKT apostados</th><th>Fuente</th><th></th></tr></thead>
         <tbody id="mercados"></tbody>
       </table>
     </div>
@@ -121,7 +121,7 @@
     <p class="hint">Aquí ves todo lo que ha apostado la gente. «Ganada» paga el premio y «Perdida» la cierra sin pagar: útil para mercados que creas tú. Si te equivocas, usa «Corregir» y el saldo se ajusta solo. «Anular» devuelve los TKT apostados (por ejemplo, si apostó con el nombre equivocado).</p>
     <div class="scroll">
       <table>
-        <thead><tr><th>Fecha</th><th>Persona</th><th>Tipo</th><th>Selecciones</th><th>Apostado</th><th>Cuota</th><th>Premio posible</th><th>Estado</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Persona</th><th>Tipo</th><th>Selecciones</th><th class="num">Apostado</th><th class="num">Cuota</th><th class="num">Premio posible</th><th>Estado</th><th></th></tr></thead>
         <tbody id="apuestasAdmin"></tbody>
       </table>
     </div>
@@ -130,9 +130,14 @@
   <section class="panel">
     <div class="panel-head"><h2>Usuarios, saldos y ranking</h2><input class="search" id="q" type="search" placeholder="Buscar…"></div>
     <p class="hint">Las personas salen del Trakímetro: aquí no se crean ni se borran. «🔒 Elegido» significa que alguien ya reclamó ese nombre; con «Liberar» puede volver a elegir (por si se equivocó). Para corregir dinero, usa +/- o escribe una cantidad.</p>
+    <form class="tkt-alta" id="altaForm" autocomplete="off">
+      <input class="tkt-in" id="altaName" maxlength="30" placeholder="Añadir a alguien que solo apuesta (no está en el Trakímetro)" aria-label="Nombre">
+      <button class="mini" type="submit">Añadir persona</button>
+    </form>
+    <div class="tkt-msg" id="altaMsg" role="status"></div>
     <div class="scroll">
       <table>
-        <thead><tr><th>#</th><th>Usuario</th><th>Saldo</th><th>G / P</th><th>Apostado</th><th>Beneficio</th><th>Nombre</th><th>Ajustar saldo</th></tr></thead>
+        <thead><tr><th>#</th><th>Usuario</th><th class="num">Saldo</th><th class="num">G / P</th><th class="num">Apostado</th><th class="num">Beneficio</th><th>Nombre</th><th>Ajustar saldo</th></tr></thead>
         <tbody id="usuarios"></tbody>
       </table>
     </div>
@@ -142,7 +147,7 @@
     <div class="panel-head"><h2>Movimientos</h2></div>
     <div class="scroll">
       <table>
-        <thead><tr><th>Fecha</th><th>Usuario</th><th>Tipo</th><th>Cantidad</th><th>Antes</th><th>Después</th><th>Admin</th><th>Motivo</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Usuario</th><th>Tipo</th><th class="num">Cantidad</th><th class="num">Antes</th><th class="num">Después</th><th>Admin</th><th>Motivo</th></tr></thead>
         <tbody id="movs"></tbody>
       </table>
     </div>
@@ -151,6 +156,6 @@
 
 <dialog class="tkt-modal" id="modal"></dialog>
 
-<script src="admin-tkt365.js?v=3"></script>
+<script src="admin-tkt365.js?v=4"></script>
 </body>
 </html>
