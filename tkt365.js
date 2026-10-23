@@ -780,7 +780,8 @@ export function registerTkt365({
   }
 
   function statsMercado(m) {
-    const bets = st.bets.filter((b) => b.legs.some((l) => l.marketId === m.id));
+    // Las apuestas anuladas/canceladas no cuentan como apuestas hechas ni como TKT apostados
+    const bets = st.bets.filter((b) => b.estado !== 'cancelada' && b.legs.some((l) => l.marketId === m.id));
     const usuarios = new Set(bets.map((b) => b.userId));
     const porOpcion = {};
     let total = 0;
@@ -852,7 +853,7 @@ export function registerTkt365({
       events: (t.events || []).map((e) => ({ id: e.id, name: e.name, start: e.start, end: e.end || e.start })),
       metricas: Object.entries(METRICAS).map(([id, d]) => ({ id, titulo: d.titulo })),
       transactions: [...st.transactions].reverse().slice(0, 300),
-      resumen: { mercados: st.markets.length, abiertos: st.markets.filter((m) => m.estado === 'abierto').length, apuestas: st.bets.length, totalApostado },
+      resumen: { mercados: st.markets.length, abiertos: st.markets.filter((m) => m.estado === 'abierto').length, apuestas: st.bets.filter((b) => b.estado !== 'cancelada').length, totalApostado },
       config: { apuestaMin: APUESTA_MIN, apuestaMax: APUESTA_MAX, cuotaMin: CUOTA_MIN, cuotaMax: CUOTA_MAX }
     });
   });
