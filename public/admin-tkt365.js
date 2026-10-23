@@ -78,12 +78,17 @@ function render() {
     return `<tr><td>${i + 1}</td><td><b>${esc(u.name)}</b>${u.active ? '' : ' <small>(fuera del Trakímetro)</small>'}</td>` +
       `<td><b>${tkt(u.balance)}</b> TKT</td><td>${u.ganadas} / ${u.perdidas}</td><td>${tkt(u.apostado)}</td>` +
       `<td class="${bn}">${u.beneficio > 0 ? '+' : ''}${tkt(u.beneficio)}</td>` +
+      `<td>${u.reclamado
+        ? `<span class="tkt-lock" title="Elegido el ${esc(fechaFmt.format(new Date(u.reclamado)))}">🔒 Elegido</span> <button class="mini danger" data-liberar="${esc(u.id)}" data-n="${esc(u.name)}">Liberar</button>`
+        : '<span class="tkt-lock libre">Libre</span>'}</td>` +
       `<td><div class="tkt-ajuste" data-u="${esc(u.id)}">` +
       [100, 500, -100, -500].map((n) => `<button class="mini${n < 0 ? ' danger' : ''}" data-ajuste="${n}">${n > 0 ? '+' : ''}${n}</button>`).join('') +
       `<input class="tkt-in" type="number" step="1" placeholder="Cantidad" data-cant>` +
       `<input class="tkt-in motivo" type="text" maxlength="120" placeholder="Motivo" data-motivo>` +
       `<button class="mini" data-ajuste="custom">Aplicar</button></div></td></tr>`;
-  }).join('') || '<tr><td colspan="7">Sin resultados</td></tr>';
+  }).join('') || '<tr><td colspan="8">Sin resultados</td></tr>';
+
+  pintarApuestasAdmin();
 
   $('movs').innerHTML = data.transactions.map((t) =>
     `<tr><td>${esc(fechaFmt.format(new Date(t.ts)))}</td><td>${esc(t.name)}</td><td>${esc(t.tipo)}</td>` +
@@ -100,6 +105,61 @@ function render() {
   if (!$('aMetrica').options.length) $('aMetrica').innerHTML = data.metricas.map((m) => `<option value="${esc(m.id)}">${esc(m.titulo)}</option>`).join('');
   if (!editando) pintarFormUsuarios();
 }
+
+const ESTADO_AP = { pendiente: '🟡 Pendiente', ganada: '🟢 Ganada', perdida: '🔴 Perdida', cancelada: '⚪ Cancelada' };
+const RES_AP = { pendiente: '🟡', ganada: '🟢', perdida: '🔴', anulada: '⚪' };
+
+function accionesApuesta(b) {
+  const d = `data-id="${esc(b.id)}" data-n="${esc(b.usuario)}" data-s="${b.stake}" data-p="${b.premioPosible}"`;
+  const out = [];
+  if (b.estado !== 'ganada' && b.estado !== 'cancelada') out.push(`<button class="mini" data-settle="ganada" ${d}>${b.estado === 'perdida' ? 'Corregir: ganada' : 'Ganada'}</button>`);
+  if (b.estado !== 'perdida' && b.estado !== 'cancelada') out.push(`<button class="mini danger" data-settle="perdida" ${d}>${b.estado === 'ganada' ? 'Corregir: perdida' : 'Perdida'}</button>`);
+  if (b.estado === 'pendiente') out.push(`<button class="mini" data-anular="${esc(b.id)}" data-n="${esc(b.usuario)}" data-s="${b.stake}">Anular</button>`);
+  return out.join('');
+}
+
+function pintarApuestasAdmin() {
+  const q = $('bq').value.trim().toLowerCase();
+  const est = $('bEstado').value;
+  const lista = data.bets.filter((b) =>
+    (!est || b.estado === est) &&
+    (!q || b.usuario.toLowerCase().includes(q) || b.legs.some((l) => (l.mercado + ' ' + l.opcion).toLowerCase().includes(q))));
+  $('apuestasAdmin').innerHTML = lista.map((b) => {
+    const legs = '<ul class="tkt-legs">' + b.legs.map((l) =>
+      `<li>${RES_AP[l.resultado] || '🟡'} <b>${esc(l.opcion)}</b> · ${esc(l.mercado)} <small>x${l.odds.toFixed(2)}</small></li>`).join('') + '</ul>';
+    const cobro = b.estado === 'ganada' ? `<br><small>Cobrado: ${tkt(b.premio)}</small>` : (b.estado === 'cancelada' ? `<br><small>Devuelto: ${tkt(b.premio)}</small>` : '');
+    return `<tr><td>${esc(fechaFmt.format(new Date(b.ts)))}</td><td><b>${esc(b.usuario)}</b></td>` +
+      `<td>${b.tipo === 'combinada' ? 'Combinada' : 'Simple'}</td><td style="white-space:normal">${legs}</td>` +
+      `<td>${tkt(b.stake)}</td><td>x${b.cuota.toFixed(2)}</td><td>${tkt(b.premioPosible)}</td>` +
+      `<td>${esc(ESTADO_AP[b.estado] || b.estado)}${cobro}</td>` +
+      `<td><div class="tkt-acc">${accionesApuesta(b)}</div></td></tr>`;
+  }).join('') || '<tr><td colspan="9">Todavía no hay apuestas.</td></tr>';
+}
+$('bq').addEventListener('input', () => data && pintarApuestasAdmin());
+$('bEstado').addEventListener('change', () => data && pintarApuestasAdmin());
+
+$('apuestasAdmin').addEventListener('click', async (e) => {
+  const st = e.target.closest('button[data-settle]');
+  if (st) {
+    const gana = st.dataset.settle === 'ganada';
+    const txt = gana
+      ? `¿Dar por GANADA la apuesta de ${st.dataset.n}? Se le pagarán ${tkt(Number(st.dataset.p))} TKT.`
+      : `¿Dar por PERDIDA la apuesta de ${st.dataset.n}?` + ' Si estaba ganada, se le quitará el premio cobrado.';
+    if (!confirm(txt)) return;
+    try {
+      await api('/api/tkt365/admin/bets/' + encodeURIComponent(st.dataset.id) + '/settle', 'POST', { resultado: st.dataset.settle });
+      await load();
+    } catch (err) { alert(err.message); }
+    return;
+  }
+  const b = e.target.closest('button[data-anular]');
+  if (!b) return;
+  if (!confirm(`¿Anular la apuesta de ${b.dataset.n} y devolverle ${tkt(Number(b.dataset.s))} TKT?`)) return;
+  try {
+    await api('/api/tkt365/admin/bets/' + encodeURIComponent(b.dataset.anular) + '/void', 'POST', {});
+    await load();
+  } catch (err) { alert(err.message); }
+});
 
 // ---------- Formulario de mercado manual ----------
 function pintarFormUsuarios(markets) {
@@ -311,6 +371,15 @@ $('mercados').addEventListener('click', (e) => {
 
 // ---------- Saldos ----------
 $('usuarios').addEventListener('click', async (e) => {
+  const lib = e.target.closest('button[data-liberar]');
+  if (lib) {
+    if (!confirm(`¿Liberar el nombre «${lib.dataset.n}»? Quien lo tenga podrá volver a elegir nombre, y ese nombre quedará libre para otra persona.`)) return;
+    try {
+      await api('/api/tkt365/admin/users/' + encodeURIComponent(lib.dataset.liberar) + '/release', 'POST', {});
+      await load();
+    } catch (err) { alert(err.message); }
+    return;
+  }
   const b = e.target.closest('button[data-ajuste]');
   if (!b) return;
   const cont = b.closest('.tkt-ajuste');

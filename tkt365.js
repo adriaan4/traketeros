@@ -104,7 +104,8 @@ export function registerTkt365({
     balances: Object.create(null), // userId -> { name, balance, since, active }
     markets: [],
     bets: [],
-    transactions: []
+    transactions: [],
+    claims: Object.create(null)   // userId -> { hash, ts }  (quién ha elegido qué nombre; el token nunca se guarda en claro)
   });
   let st = vacio();
 
@@ -115,6 +116,7 @@ export function registerTkt365({
     if (Array.isArray(raw.markets)) s.markets = raw.markets;
     if (Array.isArray(raw.bets)) s.bets = raw.bets;
     if (Array.isArray(raw.transactions)) s.transactions = raw.transactions;
+    if (raw.claims && typeof raw.claims === 'object') Object.assign(s.claims, raw.claims);
     return s;
   }
 
@@ -233,6 +235,25 @@ export function registerTkt365({
     if (!users.has(id)) return null;
     if (!st.balances[id] && sincronizarUsuarios().cambio) save();
     return st.balances[id] ? id : null;
+  }
+
+  // ---------- Identidad: un nombre = un dispositivo ----------
+  // El navegador genera un token aleatorio y lo guarda. Aquí solo se guarda su
+  // hash. Un token solo puede tener UN nombre y un nombre solo puede tenerlo
+  // UN token. Solo el admin puede liberar un nombre (si alguien se equivoca).
+  const TOKEN_RE = /^[a-f0-9]{32,64}$/;
+  const hashToken = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
+  function tokenValido(t) {
+    const s = String(t || '').trim().toLowerCase();
+    return TOKEN_RE.test(s) ? s : null;
+  }
+  // userId que posee este token (o null)
+  function duenoDe(token) {
+    const t = tokenValido(token);
+    if (!t) return null;
+    const h = hashToken(t);
+    for (const [id, c] of Object.entries(st.claims)) if (c.hash === h) return id;
+    return null;
   }
 
   // ---------- Periodos / ventanas de datos del Trakímetro ----------
@@ -581,8 +602,9 @@ export function registerTkt365({
 
   // ---------- Colocar apuestas ----------
   function colocarApuesta(req, res, modo) {
-    const userId = usuarioValido(req.body?.user);
-    if (!userId) return res.status(400).json({ error: 'Usuario no válido: tiene que existir en el Trakímetro.' });
+    const userId = duenoDe(req.body?.token);
+    if (!userId) return res.status(403).json({ error: 'Primero elige quién eres (arriba). Si ya lo hiciste y no funciona, díselo al admin.', identidad: true });
+    if (!usuarioValido(userId)) return res.status(400).json({ error: 'Usuario no válido: tiene que existir en el Trakímetro.' });
 
     const stake = Number(req.body?.stake);
     if (!Number.isInteger(stake) || stake < APUESTA_MIN) {
@@ -653,13 +675,14 @@ export function registerTkt365({
 
   api.get('/markets', (req, res) => {
     const ahora = nowMs();
-    const users = [...trakeUsuarios()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    const users = [...trakeUsuarios()].map(([id, name]) => ({ id, name, taken: Boolean(st.claims[id]) })).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    const yo = duenoDe(req.query.token);
     const markets = st.markets
       .filter((m) => m.estado === 'abierto' || ahora - (m.actualizado || m.cierra) < VISIBLE_CERRADOS_MS)
       .sort((a, b) => a.cierra - b.cierra)
       .map((m) => mercadoPublico(m, ahora));
     res.json({
-      ok: true, now: ahora, users, markets,
+      ok: true, now: ahora, users, markets, yo,
       config: { saldoInicial: SALDO_INICIAL, apuestaMin: APUESTA_MIN, apuestaMax: APUESTA_MAX, maxSelecciones: MAX_SELECCIONES }
     });
   });
@@ -679,6 +702,25 @@ export function registerTkt365({
 
   api.get('/ranking', (req, res) => {
     res.json({ ok: true, ranking: ranking() });
+  });
+
+  // Elegir nombre (una sola vez por dispositivo; solo el admin puede deshacerlo)
+  api.post('/claim', (req, res) => {
+    const token = tokenValido(req.body?.token);
+    if (!token) return res.status(400).json({ error: 'Dispositivo no válido. Recarga la página.' });
+    const id = usuarioValido(req.body?.user);
+    if (!id) return res.status(404).json({ error: 'Esa persona no está en el Trakímetro.' });
+    const propio = duenoDe(token);
+    if (propio === id) return res.json({ ok: true, user: id, name: st.balances[id].name });
+    if (propio) {
+      return res.status(409).json({ error: `Ya eres ${st.balances[propio].name}. Si te equivocaste, pídele al admin que te libere el nombre.` });
+    }
+    if (st.claims[id]) {
+      return res.status(409).json({ error: `${st.balances[id].name} ya lo ha elegido otra persona. Si eres tú, díselo al admin.`, refrescar: true });
+    }
+    st.claims[id] = { hash: hashToken(token), ts: nowMs() };
+    save();
+    res.json({ ok: true, user: id, name: st.balances[id].name });
   });
 
   api.post('/bets', (req, res) => colocarApuesta(req, res, 'simple'));
@@ -766,7 +808,8 @@ export function registerTkt365({
     res.json({
       ok: true, now: ahora,
       markets,
-      users: ranking(),
+      users: ranking().map((u) => ({ ...u, reclamado: st.claims[u.id] ? st.claims[u.id].ts : null })),
+      bets: [...st.bets].sort((a, b) => b.ts - a.ts).slice(0, 500).map((b) => ({ ...apuestaPublica(b), usuario: b.name, userId: b.userId })),
       events: (t.events || []).map((e) => ({ id: e.id, name: e.name, start: e.start, end: e.end || e.start })),
       metricas: Object.entries(METRICAS).map(([id, d]) => ({ id, titulo: d.titulo })),
       transactions: [...st.transactions].reverse().slice(0, 300),
@@ -971,6 +1014,74 @@ export function registerTkt365({
     movimiento(id, 'ajuste', cantidad, antes, bal.balance, { admin: adminNombre(), motivo: clean(req.body?.motivo, 120) || 'Sin motivo' });
     save();
     res.json({ ok: true, user: { id, name: bal.name, balance: bal.balance } });
+  });
+
+  // Si alguien eligió el nombre equivocado: se libera y puede volver a elegir
+  adm.post('/users/:userId/release', (req, res) => {
+    const id = String(req.params.userId || '').trim().toLowerCase();
+    if (!st.claims[id]) return res.status(404).json({ error: 'Ese nombre no está elegido por nadie.' });
+    delete st.claims[id];
+    movimiento(id, 'nombre', 0, st.balances[id]?.balance ?? 0, st.balances[id]?.balance ?? 0, { admin: adminNombre(), motivo: 'Nombre liberado por el admin' });
+    save();
+    res.json({ ok: true });
+  });
+
+  // Dar una apuesta por ganada o perdida a mano (para mercados manuales).
+  // También sirve para corregir un error: pasar de ganada a perdida (o al revés)
+  // ajusta el saldo con la diferencia.
+  adm.post('/bets/:id/settle', (req, res) => {
+    const b = st.bets.find((x) => x.id === String(req.params.id || ''));
+    if (!b) return res.status(404).json({ error: 'Esa apuesta no existe.' });
+    const r = String(req.body?.resultado || '');
+    if (r !== 'ganada' && r !== 'perdida') return res.status(400).json({ error: 'Resultado no válido.' });
+    if (b.estado === 'cancelada') return res.status(409).json({ error: 'Esa apuesta está anulada y devuelta.' });
+    if (b.estado === r) return res.status(409).json({ error: `Esa apuesta ya está ${r}.` });
+    const bal = st.balances[b.userId];
+    if (!bal) return res.status(404).json({ error: 'Esa persona no tiene saldo TKT365.' });
+    const antesPremio = b.estado === 'ganada' ? (b.premio || 0) : 0;
+    const nuevoPremio = r === 'ganada' ? b.potential : 0;
+    const delta = nuevoPremio - antesPremio;
+    if (bal.balance + delta < 0) return res.status(400).json({ error: 'No se puede: el saldo de esa persona quedaría por debajo de 0.' });
+    const estabaPendiente = b.estado === 'pendiente';
+    b.estado = r;
+    b.premio = nuevoPremio;
+    b.cuotaFinal = r === 'ganada' ? b.totalOdds : 0;
+    b.liquidada = nowMs();
+    b.manual = true;
+    for (const l of b.legs) {
+      if (r === 'ganada') l.resultado = 'ganada';
+      else if (l.resultado !== 'perdida') l.resultado = 'perdida'; // en una perdida, se marcan como falladas las no resueltas
+    }
+    if (delta !== 0) {
+      const antes = bal.balance;
+      bal.balance += delta;
+      movimiento(b.userId, delta > 0 ? (estabaPendiente ? 'premio' : 'ajuste') : 'ajuste', delta, antes, bal.balance, {
+        betId: b.id, admin: adminNombre(),
+        motivo: estabaPendiente ? 'Apuesta ganada (marcada por el admin)' : `Apuesta corregida a ${r} por el admin`
+      });
+    }
+    save();
+    res.json({ ok: true, balance: bal.balance });
+  });
+
+  // Anular una apuesta pendiente y devolver los TKT apostados
+  adm.post('/bets/:id/void', (req, res) => {
+    const b = st.bets.find((x) => x.id === String(req.params.id || ''));
+    if (!b) return res.status(404).json({ error: 'Esa apuesta no existe.' });
+    if (b.estado !== 'pendiente') return res.status(409).json({ error: 'Solo se pueden anular apuestas pendientes. Para las ya resueltas, ajusta el saldo a mano.' });
+    b.estado = 'cancelada';
+    b.premio = b.stake;
+    b.cuotaFinal = 1;
+    b.liquidada = nowMs();
+    for (const l of b.legs) if (l.resultado === 'pendiente') l.resultado = 'anulada';
+    const bal = st.balances[b.userId];
+    if (bal) {
+      const antes = bal.balance;
+      bal.balance += b.stake;
+      movimiento(b.userId, 'reembolso', b.stake, antes, bal.balance, { betId: b.id, admin: adminNombre(), motivo: clean(req.body?.motivo, 120) || 'Apuesta anulada por el admin' });
+    }
+    save();
+    res.json({ ok: true });
   });
 
   app.use('/api/tkt365/admin', express.json({ limit: '200kb' }), adm);

@@ -11,6 +11,19 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento: no pasa nada */ } }
 };
 
+// Identificador anónimo de este dispositivo. El servidor liga UN nombre a este token.
+function tokenDispositivo() {
+  let t = store.get('tkt-token');
+  if (!/^[a-f0-9]{32}$/.test(t)) {
+    const b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    t = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+    store.set('tkt-token', t);
+  }
+  return t;
+}
+const TOKEN = tokenDispositivo();
+
 const nf = new Intl.NumberFormat('es-ES', { useGrouping: 'always', maximumFractionDigits: 0 });
 const tkt = (n) => nf.format(Math.round(n || 0));
 const cuotaTxt = (n) => 'x' + Number(n || 0).toFixed(2);
@@ -53,11 +66,14 @@ const ahora = () => Date.now() + state.skew;
 
 // ---------- Carga ----------
 async function cargarMercados() {
-  const d = await api('/api/tkt365/markets');
+  const d = await api('/api/tkt365/markets?token=' + TOKEN);
   state.skew = d.now - Date.now();
   state.users = d.users;
   state.markets = d.markets;
   state.config = d.config;
+  const previo = state.user;
+  state.user = d.yo || ''; // el servidor manda: si el admin libera el nombre, aquí se desbloquea
+  if (state.user !== previo) { state.balance = null; cargarYo(); }
   conciliarCupon();
   pintarUsuarios();
   pintarMercados();
@@ -102,30 +118,54 @@ async function cargarRanking() {
   }
 }
 
-// ---------- Identidad (la del Trakímetro) ----------
+// ---------- Identidad (la del Trakímetro, bloqueada tras elegir) ----------
 function pintarUsuarios() {
   const sel = $('quien');
-  const previo = state.user;
-  sel.innerHTML = '<option value="">— Elige tu nombre —</option>' +
-    state.users.map((u) => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('');
-  if (!state.user) {
-    const guardado = store.get('trake-name').trim().toLowerCase();
-    if (guardado && state.users.some((u) => u.id === guardado)) state.user = guardado;
+  const propio = state.users.find((u) => u.id === state.user);
+  if (propio) {
+    sel.innerHTML = `<option value="${esc(propio.id)}">🔒 ${esc(propio.name)}</option>`;
+    sel.value = propio.id;
+    sel.disabled = true;
+    $('nota').innerHTML = 'Tu nombre está <b>bloqueado</b> en este dispositivo. ¿Te equivocaste? Díselo al admin y te lo cambia.';
+    $('walletName').textContent = propio.name;
+  } else {
+    sel.disabled = false;
+    sel.innerHTML = '<option value="">— Elige tu nombre —</option>' +
+      state.users.map((u) => `<option value="${esc(u.id)}"${u.taken ? ' disabled' : ''}>${esc(u.name)}${u.taken ? ' (ya elegido)' : ''}</option>`).join('');
+    sel.value = '';
+    $('nota').innerHTML = 'Elige tu nombre. Una vez elegido queda <b>bloqueado</b> en este dispositivo: si te equivocas, díselo al admin.';
+    $('walletName').textContent = 'Sin nombre';
   }
-  if (state.user && !state.users.some((u) => u.id === state.user)) state.user = '';
-  sel.value = state.user;
-  if (state.user !== previo) cargarYo();
 }
 
-$('quien').addEventListener('change', () => {
-  state.user = $('quien').value;
-  const u = state.users.find((x) => x.id === state.user);
-  if (u) store.set('trake-name', u.name); // el mismo nombre que usa el Trakímetro
-  mensaje('');
-  cargarYo();
-  if (state.tab === 'apuestas') cargarApuestas();
-  if (state.tab === 'ranking') cargarRanking();
-  pintarCupon();
+$('quien').addEventListener('change', async () => {
+  const id = $('quien').value;
+  if (!id || state.user) return;
+  const u = state.users.find((x) => x.id === id);
+  if (!u) return;
+  if (!confirm(`¿Eres ${u.name}?\n\nUna vez elegido no podrás cambiarlo: solo el admin puede corregirlo.`)) {
+    $('quien').value = '';
+    return;
+  }
+  try {
+    await api('/api/tkt365/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: id, token: TOKEN })
+    });
+    state.user = id;
+    store.set('trake-name', u.name); // el mismo nombre que usa el Trakímetro
+    mensaje('');
+    pintarUsuarios();
+    cargarYo();
+    if (state.tab === 'apuestas') cargarApuestas();
+    if (state.tab === 'ranking') cargarRanking();
+    pintarCupon();
+  } catch (e) {
+    $('quien').value = '';
+    mensaje(e.message, 'err');
+    cargarMercados().catch(() => {});
+  }
 });
 
 function pintarSaldo(nuevo) {
@@ -327,7 +367,7 @@ $('apostar').addEventListener('click', async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        user: state.user,
+        token: TOKEN,
         stake,
         expectedOdds: cuotaTotal(sels), // solo para avisar si las cuotas han cambiado: la cuota real la pone el servidor
         selections: sels.map(({ m, o }) => ({ marketId: m.id, optionId: o.id }))
@@ -339,7 +379,7 @@ $('apostar').addEventListener('click', async () => {
     cargarMercados().catch(() => {});
   } catch (e) {
     mensaje(e.message, 'err');
-    if (e.data?.refrescar) cargarMercados().catch(() => {});
+    if (e.data?.refrescar || e.data?.identidad) cargarMercados().catch(() => {});
   } finally {
     state.enviando = false;
     pintarMercados();
