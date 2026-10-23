@@ -1,14 +1,14 @@
 // =====================================================================
 // TKT365 · apuestas 100% virtuales de la peña (puntos "TKT", sin dinero real)
 // =====================================================================
-// Los USUARIOS no se guardan aquí: salen siempre del Trakímetro. En el
-// Trakímetro no hay tabla de usuarios; una persona existe cuando su nombre
+// Los USUARIOS no se guardan aquí: salen siempre del Traketímetro. En el
+// Traketímetro no hay tabla de usuarios; una persona existe cuando su nombre
 // aparece en los meses, en las fechas especiales o en el historial, y su
 // identificador interno es el nombre en minúsculas (name.trim().toLowerCase()).
 // Ese mismo identificador es el que usa TKT365.
 //
 // Lo único propio de TKT365 (saldos, mercados, apuestas y movimientos) se
-// guarda igual que el Trakímetro: memoria + fichero local + copia en
+// guarda igual que el Traketímetro: memoria + fichero local + copia en
 // Cloudinary (en Render el disco se borra al redesplegar).
 //
 // Todo se valida en el servidor: el navegador nunca decide saldo, cuota,
@@ -36,14 +36,14 @@ const VISIBLE_CERRADOS_MS = 14 * 24 * 60 * 60 * 1000;
 
 const TZ = 'Europe/Madrid';
 const METRICAS = {
-  puntos:   { titulo: '¿Quién sumará más puntos?',            desc: 'Gana quien más puntos tenga en el Trakímetro' },
-  cervezas: { titulo: '¿Quién se tomará más cervezas?',       desc: 'Gana quien más cervezas apunte en el Trakímetro' },
-  cubatas:  { titulo: '¿Quién se tomará más cubatas?',        desc: 'Gana quien más cubatas apunte en el Trakímetro' },
-  chupitos: { titulo: '¿Quién se tomará más chupitos?',       desc: 'Gana quien más chupitos apunte en el Trakímetro' },
-  porros:   { titulo: '¿Quién fumará más porros?',            desc: 'Gana quien más porros apunte en el Trakímetro' },
-  apuntes:  { titulo: '¿Quién tendrá más actividad?',         desc: 'Gana quien más veces apunte algo en el Trakímetro' },
-  primero:  { titulo: '¿Quién será el primero en apuntar algo?', desc: 'Gana quien apunte antes su primera consumición en el Trakímetro' },
-  ultimo:   { titulo: '¿Quién será el último en apuntar algo?',  desc: 'Gana quien apunte más tarde su última consumición en el Trakímetro' }
+  puntos:   { titulo: '¿Quién sumará más puntos?',            desc: 'Gana quien más puntos tenga en el Traketímetro' },
+  cervezas: { titulo: '¿Quién se tomará más cervezas?',       desc: 'Gana quien más cervezas apunte en el Traketímetro' },
+  cubatas:  { titulo: '¿Quién se tomará más cubatas?',        desc: 'Gana quien más cubatas apunte en el Traketímetro' },
+  chupitos: { titulo: '¿Quién se tomará más chupitos?',       desc: 'Gana quien más chupitos apunte en el Traketímetro' },
+  porros:   { titulo: '¿Quién fumará más porros?',            desc: 'Gana quien más porros apunte en el Traketímetro' },
+  apuntes:  { titulo: '¿Quién tendrá más actividad?',         desc: 'Gana quien más veces apunte algo en el Traketímetro' },
+  primero:  { titulo: '¿Quién será el primero en apuntar algo?', desc: 'Gana quien apunte antes su primera consumición en el Traketímetro' },
+  ultimo:   { titulo: '¿Quién será el último en apuntar algo?',  desc: 'Gana quien apunte más tarde su última consumición en el Traketímetro' }
 };
 const MESES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const OTRO_ID = '__otro';
@@ -105,7 +105,7 @@ export function registerTkt365({
     markets: [],
     bets: [],
     transactions: [],
-    extras: Object.create(null),  // userId -> { name, ts }  (personas que solo apuestan: no están en el Trakímetro)
+    extras: Object.create(null),  // userId -> { name, ts }  (personas que solo apuestan: no están en el Traketímetro)
     claims: Object.create(null)   // userId -> { hash, ts }  (quién ha elegido qué nombre; el token nunca se guarda en claro)
   });
   let st = vacio();
@@ -186,7 +186,7 @@ export function registerTkt365({
   let arrancado = false;
   listo.then(() => { arrancado = true; tick(); });
 
-  // ---------- Usuarios: SIEMPRE los del Trakímetro ----------
+  // ---------- Usuarios: SIEMPRE los del Traketímetro ----------
   function trakeUsuarios(soloTrake = false) {
     const t = getTrake();
     const m = new Map(); // userId -> nombre a mostrar
@@ -198,7 +198,7 @@ export function registerTkt365({
     for (const b of Object.values(t.eventData || {})) for (const p of Object.values(b || {})) add(p.name);
     for (const l of t.log || []) add(l.name);
     if (!soloTrake) {
-      // Quien solo apuesta (no está en el Trakímetro). Si luego aparece allí, manda el nombre del Trakímetro.
+      // Quien solo apuesta (no está en el Traketímetro). Si luego aparece allí, manda el nombre del Traketímetro.
       for (const [id, e] of Object.entries(st.extras)) if (!m.has(id)) m.set(id, e.name);
     }
     return m;
@@ -212,7 +212,7 @@ export function registerTkt365({
     if (st.transactions.length > MAX_MOVIMIENTOS) st.transactions.splice(0, st.transactions.length - MAX_MOVIMIENTOS);
   }
 
-  // Crea el saldo inicial de quien aparezca nuevo en el Trakímetro. Quien
+  // Crea el saldo inicial de quien aparezca nuevo en el Traketímetro. Quien
   // desaparezca se queda con su saldo e historial (solo se marca inactivo).
   function sincronizarUsuarios() {
     const users = trakeUsuarios();
@@ -262,7 +262,7 @@ export function registerTkt365({
     return null;
   }
 
-  // ---------- Periodos / ventanas de datos del Trakímetro ----------
+  // ---------- Periodos / ventanas de datos del Traketímetro ----------
   function ventana(per) {
     if (!per) return null;
     const t = getTrake();
@@ -310,7 +310,7 @@ export function registerTkt365({
 
   const puntosDe = (p) => tipos.reduce((s, k) => s + (p[k] || 0) * puntos[k], 0);
 
-  // userId -> valor de la métrica en el periodo (con datos REALES del Trakímetro)
+  // userId -> valor de la métrica en el periodo (con datos REALES del Traketímetro)
   function puntuaciones(per, metrica) {
     const w = ventana(per);
     if (!w) return null;
@@ -370,7 +370,7 @@ export function registerTkt365({
   }
 
   function cuotasAuto(metrica) {
-    const users = trakeUsuarios(true); // los mercados automáticos solo usan gente del Trakímetro
+    const users = trakeUsuarios(true); // los mercados automáticos solo usan gente del Traketímetro
     const hist = estadisticaHistorica(metrica);
     let cand = [...users].map(([id, name]) => ({ id, name, stat: hist.get(id) || 0 }));
     cand.sort((a, b) => b.stat - a.stat || a.name.localeCompare(b.name, 'es'));
@@ -413,7 +413,7 @@ export function registerTkt365({
     return m;
   }
 
-  // Genera los mercados que tienen sentido con los datos de Trakímetro.
+  // Genera los mercados que tienen sentido con los datos de Traketímetro.
   // Es idempotente: cada mercado automático tiene una clave y no se repite.
   function generarAutomaticos() {
     const t = getTrake();
@@ -536,7 +536,7 @@ export function registerTkt365({
         if (!w || ahora < w.endMs + GRACIA_RESOLUCION_MS) continue;
         const g = ganadoresReales(m);
         if (!g) {
-          cancelarMercado(m, 'Sin datos en el Trakímetro para decidir el resultado');
+          cancelarMercado(m, 'Sin datos en el Traketímetro para decidir el resultado');
         } else {
           let ids = m.options.filter((o) => o.userId && g.includes(o.userId)).map((o) => o.id);
           if (g.some((id) => !m.options.some((o) => o.userId === id)) && m.options.some((o) => o.id === OTRO_ID)) ids.push(OTRO_ID);
@@ -564,9 +564,9 @@ export function registerTkt365({
   function mercadoPublico(m, ahora) {
     const { w, proximo } = fase(m, ahora);
     return {
-      id: m.id, titulo: m.titulo, descripcion: m.descripcion, categoria: m.categoria,
+      id: m.id, titulo: m.titulo, descripcion: String(m.descripcion || '').replace(/Trak[ií]metro/g, 'Traketímetro'), categoria: m.categoria,
       evento: m.evento, eventoId: m.eventoId || null, cierra: m.cierra, estado: m.estado,
-      fuente: m.fuente === 'trakimetro' ? 'Trakímetro' : 'Manual',
+      fuente: m.fuente === 'trakimetro' ? 'Traketímetro' : 'Manual',
       options: m.options.map((o) => ({ id: o.id, label: o.label, odds: o.odds })),
       ganadores: m.ganadores || [],
       proximo,
@@ -610,7 +610,7 @@ export function registerTkt365({
   function colocarApuesta(req, res, modo) {
     const userId = duenoDe(req.body?.token);
     if (!userId) return res.status(403).json({ error: 'Primero elige quién eres (arriba). Si ya lo hiciste y no funciona, díselo al admin.', identidad: true });
-    if (!usuarioValido(userId)) return res.status(400).json({ error: 'Usuario no válido: tiene que existir en el Trakímetro.' });
+    if (!usuarioValido(userId)) return res.status(400).json({ error: 'Usuario no válido: tiene que existir en el Traketímetro.' });
 
     const stake = Number(req.body?.stake);
     if (!Number.isInteger(stake) || stake < APUESTA_MIN) {
@@ -695,7 +695,7 @@ export function registerTkt365({
 
   api.get('/me', (req, res) => {
     const id = usuarioValido(req.query.user);
-    if (!id) return res.status(404).json({ error: 'Esa persona no está en el Trakímetro.' });
+    if (!id) return res.status(404).json({ error: 'Esa persona no está en el Traketímetro.' });
     res.json({ ok: true, id, name: st.balances[id].name, balance: st.balances[id].balance, ...estadisticas(id) });
   });
 
@@ -711,7 +711,7 @@ export function registerTkt365({
     res.json({ ok: true, ranking: ranking() });
   });
 
-  // ---------- Personas que solo apuestan (sin Trakímetro) ----------
+  // ---------- Personas que solo apuestan (sin Traketímetro) ----------
   const MAX_EXTRAS = 80;
   function nombreNuevoValido(raw) {
     const name = clean(raw, 30);
@@ -748,7 +748,7 @@ export function registerTkt365({
     const token = tokenValido(req.body?.token);
     if (!token) return res.status(400).json({ error: 'Dispositivo no válido. Recarga la página.' });
     const id = usuarioValido(req.body?.user);
-    if (!id) return res.status(404).json({ error: 'Esa persona no está en el Trakímetro.' });
+    if (!id) return res.status(404).json({ error: 'Esa persona no está en el Traketímetro.' });
     const propio = duenoDe(token);
     if (propio === id) return res.json({ ok: true, user: id, name: st.balances[id].name });
     if (propio) {
@@ -808,7 +808,7 @@ export function registerTkt365({
   }
 
   // Valida y construye la lista de opciones. Las opciones de usuario salen
-  // SIEMPRE de Trakímetro (el nombre no se escribe a mano).
+  // SIEMPRE de Traketímetro (el nombre no se escribe a mano).
   function construirOpciones(raw, previas = []) {
     if (!Array.isArray(raw) || raw.length < 2) return { error: 'Hacen falta al menos 2 opciones.' };
     if (raw.length > 30) return { error: 'Demasiadas opciones (máximo 30).' };
@@ -823,7 +823,7 @@ export function registerTkt365({
       let opt;
       if (o.userId) {
         const uid = String(o.userId).trim().toLowerCase();
-        if (!users.has(uid)) return { error: 'Una de las personas no existe en el Trakímetro.' };
+        if (!users.has(uid)) return { error: 'Una de las personas no existe en el Traketímetro.' };
         opt = { id: 'u:' + uid, label: users.get(uid), userId: uid, odds };
       } else {
         const label = clean(o.label, 60);
@@ -885,7 +885,7 @@ export function registerTkt365({
     res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
   });
 
-  // Mercado automático con datos reales del Trakímetro, elegido a mano
+  // Mercado automático con datos reales del Traketímetro, elegido a mano
   adm.post('/auto', (req, res) => {
     const metrica = String(req.body?.metrica || '');
     if (!METRICAS[metrica]) return res.status(400).json({ error: 'Métrica no válida.' });
@@ -901,7 +901,7 @@ export function registerTkt365({
     const cierra = parseCierre(req.body?.cierra);
     if (!Number.isFinite(cierra) || cierra <= nowMs()) return res.status(400).json({ error: 'La hora de cierre tiene que ser futura.' });
     const m = crearMercadoAuto({ metrica, periodo, cierra, key: null });
-    if (!m) return res.status(400).json({ error: 'No hay suficientes personas en el Trakímetro para crear este mercado.' });
+    if (!m) return res.status(400).json({ error: 'No hay suficientes personas en el Traketímetro para crear este mercado.' });
     save();
     res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
   });
@@ -1069,7 +1069,7 @@ export function registerTkt365({
   adm.post('/users/:userId/remove', (req, res) => {
     const id = String(req.params.userId || '').trim().toLowerCase();
     if (!st.extras[id]) return res.status(404).json({ error: 'Solo se pueden quitar personas añadidas solo para apostar.' });
-    if (trakeUsuarios(true).has(id)) return res.status(409).json({ error: 'Esa persona ya está en el Trakímetro.' });
+    if (trakeUsuarios(true).has(id)) return res.status(409).json({ error: 'Esa persona ya está en el Traketímetro.' });
     if (st.bets.some((b) => b.userId === id)) return res.status(409).json({ error: 'Ya ha apostado: no se puede quitar (puedes liberar su nombre o ajustar su saldo).' });
     delete st.extras[id];
     delete st.claims[id];

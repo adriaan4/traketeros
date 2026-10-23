@@ -64,14 +64,14 @@
         <label>Título<input id="fTitulo" maxlength="120" required placeholder="¿Quién será el último en irse?"></label>
         <label>Categoría<input id="fCategoria" maxlength="40" placeholder="General"></label>
         <label>Cierre (hora de Madrid)<input id="fCierra" type="datetime-local" required></label>
-        <label>Fecha especial del Trakímetro
+        <label>Fecha especial del Traketímetro
           <select id="fEventoId"><option value="">— Ninguna (texto libre) —</option></select>
         </label>
         <label>Evento (texto libre)<input id="fEvento" maxlength="80" placeholder="Fiesta sábado"></label>
       </div>
       <label>Descripción<textarea id="fDesc" rows="2" maxlength="300" placeholder="Apuesta quién crees que será el último en abandonar la fiesta."></textarea></label>
       <div>
-        <b style="font-size:12px">OPCIONES: marca a las personas del Trakímetro y pon su cuota</b>
+        <b style="font-size:12px">OPCIONES: marca a las personas del Traketímetro y pon su cuota</b>
         <div class="tkt-adm-opts" id="fUsuarios"></div>
         <div class="tkt-acc" style="margin-top:8px">
           <button class="mini" id="addLibre" type="button">+ Opción de texto libre (ej. "Nadie")</button>
@@ -84,8 +84,8 @@
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2>Mercado automático desde el Trakímetro</h2></div>
-    <p class="hint">Se calcula con los datos reales del Trakímetro (cuotas según el historial) y se resuelve solo cuando acaba el periodo.</p>
+    <div class="panel-head"><h2>Mercado automático desde el Traketímetro</h2></div>
+    <p class="hint">Se calcula con los datos reales del Traketímetro (cuotas según el historial) y se resuelve solo cuando acaba el periodo.</p>
     <form class="tkt-adm-form" id="formAuto" autocomplete="off">
       <div class="tkt-adm-grid">
         <label>Qué se apuesta<select id="aMetrica"></select></label>
@@ -129,9 +129,9 @@
 
   <section class="panel">
     <div class="panel-head"><h2>Usuarios, saldos y ranking</h2><input class="search" id="q" type="search" placeholder="Buscar…"></div>
-    <p class="hint">Las personas salen del Trakímetro: aquí no se crean ni se borran. «🔒 Elegido» significa que alguien ya reclamó ese nombre; con «Liberar» puede volver a elegir (por si se equivocó). Para corregir dinero, usa +/- o escribe una cantidad.</p>
+    <p class="hint">Las personas salen del Traketímetro: aquí no se crean ni se borran. «🔒 Elegido» significa que alguien ya reclamó ese nombre; con «Liberar» puede volver a elegir (por si se equivocó). Para corregir dinero, usa +/- o escribe una cantidad.</p>
     <form class="tkt-alta" id="altaForm" autocomplete="off">
-      <input class="tkt-in" id="altaName" maxlength="30" placeholder="Añadir a alguien que solo apuesta (no está en el Trakímetro)" aria-label="Nombre">
+      <input class="tkt-in" id="altaName" maxlength="30" placeholder="Añadir a alguien que solo apuesta (no está en el Traketímetro)" aria-label="Nombre">
       <button class="mini" type="submit">Añadir persona</button>
     </form>
     <div class="tkt-msg" id="altaMsg" role="status"></div>

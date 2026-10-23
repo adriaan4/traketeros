@@ -1,6 +1,6 @@
 // TKT365 (web pública). Todo lo importante (saldo, cuotas, premios, resultados)
 // lo decide el servidor; aquí solo se muestra y se manda lo que elige la persona.
-// Las personas son las del Trakímetro: se reutiliza el nombre guardado allí ("trake-name").
+// Las personas son las del Traketímetro: se reutiliza el nombre guardado allí ("trake-name").
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
@@ -114,7 +114,7 @@ async function cargarRanking() {
       const bn = r.beneficio > 0 ? 'tkt-pos-bn' : (r.beneficio < 0 ? 'tkt-neg' : '');
       return `<tr class="${r.id === state.user ? 'yo' : ''}">` +
         `<td><span class="tkt-pos tkt-pos-${i + 1}">${i + 1}</span></td>` +
-        `<td><b>${esc(r.name)}</b>${r.active ? '' : ' <small>(fuera del Trakímetro)</small>'}</td>` +
+        `<td><b>${esc(r.name)}</b>${r.active ? '' : ' <small>(fuera del Traketímetro)</small>'}</td>` +
         `<td><b>${tkt(r.balance)}</b></td><td>${r.ganadas}</td><td>${r.perdidas}</td><td>${tkt(r.apostado)}</td>` +
         `<td class="${bn}">${r.beneficio > 0 ? '+' : ''}${tkt(r.beneficio)}</td></tr>`;
     }).join('') || '<tr><td colspan="7">Todavía no hay nadie.</td></tr>';
@@ -123,7 +123,7 @@ async function cargarRanking() {
   }
 }
 
-// ---------- Apuntarse solo para apostar (sin Trakímetro) ----------
+// ---------- Apuntarse solo para apostar (sin Traketímetro) ----------
 $('join').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (state.user) return;
@@ -152,7 +152,7 @@ $('join').addEventListener('submit', async (e) => {
   }
 });
 
-// ---------- Identidad (la del Trakímetro, bloqueada tras elegir) ----------
+// ---------- Identidad (la del Traketímetro, bloqueada tras elegir) ----------
 function pintarUsuarios() {
   const sel = $('quien');
   const propio = state.users.find((u) => u.id === state.user);
@@ -190,7 +190,7 @@ $('quien').addEventListener('change', async () => {
       body: JSON.stringify({ user: id, token: TOKEN })
     });
     state.user = id;
-    store.set('trake-name', u.name); // el mismo nombre que usa el Trakímetro
+    store.set('trake-name', u.name); // el mismo nombre que usa el Traketímetro
     mensaje('');
     pintarUsuarios();
     cargarYo();
@@ -242,7 +242,7 @@ function tarjeta(m) {
   }).join('');
   let pie;
   if (m.estado === 'cancelado') pie = '<div class="tkt-cierre">Mercado cancelado: se devuelven los TKT.' + (m.motivoCancelacion ? ' ' + esc(m.motivoCancelacion) : '') + '</div>';
-  else if (m.estado === 'resuelto') pie = '<div class="tkt-cierre">Resuelto' + (m.resolucion?.por === 'auto' ? ' automáticamente con los datos del Trakímetro' : '') + '.</div>';
+  else if (m.estado === 'resuelto') pie = '<div class="tkt-cierre">Resuelto' + (m.resolucion?.por === 'auto' ? ' automáticamente con los datos del Traketímetro' : '') + '.</div>';
   else if (m.estado === 'cerrado') pie = '<div class="tkt-cierre">Cerrado: esperando el resultado.</div>';
   else pie = `<div class="tkt-cierre">${cierreTxt(m)}</div>`;
   return `<article class="tkt-card ${esc(m.estado)}">` +
@@ -281,7 +281,7 @@ function pintarMercados() {
       html += `<div class="tkt-grupo">${esc(nombre || 'Próximamente')}</div><div class="tkt-mercados">${lista.map(tarjeta).join('')}</div>`;
     }
   } else {
-    html += '<div class="tkt-vacio">Aún no hay fechas especiales próximas en el Trakímetro.</div>';
+    html += '<div class="tkt-vacio">Aún no hay fechas especiales próximas en el Traketímetro.</div>';
   }
 
   if (resto.length) {

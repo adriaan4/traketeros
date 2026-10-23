@@ -1,5 +1,5 @@
 // Admin de TKT365. Las rutas /api/tkt365/admin/* están protegidas con usuario y clave
-// (el navegador los pide). Las personas salen del Trakímetro: no se crean aquí.
+// (el navegador los pide). Las personas salen del Traketímetro: no se crean aquí.
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
@@ -75,7 +75,7 @@ function render() {
   const q = $('q').value.trim().toLowerCase();
   $('usuarios').innerHTML = data.users.filter((u) => u.name.toLowerCase().includes(q)).map((u, i) => {
     const bn = u.beneficio > 0 ? 'tkt-pos-n' : (u.beneficio < 0 ? 'tkt-neg-n' : '');
-    return `<tr><td>${i + 1}</td><td><b>${esc(u.name)}</b>${u.soloApuestas ? ' <span class="tkt-solo">SOLO APUESTAS</span>' : (u.active ? '' : ' <small>(fuera del Trakímetro)</small>')}</td>` +
+    return `<tr><td>${i + 1}</td><td><b>${esc(u.name)}</b>${u.soloApuestas ? ' <span class="tkt-solo">SOLO APUESTAS</span>' : (u.active ? '' : ' <small>(fuera del Traketímetro)</small>')}</td>` +
       `<td><b>${tkt(u.balance)}</b> TKT</td><td>${u.ganadas} / ${u.perdidas}</td><td>${tkt(u.apostado)}</td>` +
       `<td class="${bn}">${u.beneficio > 0 ? '+' : ''}${tkt(u.beneficio)}</td>` +
       `<td>${u.reclamado
@@ -101,7 +101,7 @@ function render() {
   const prevEv = $('fEventoId').value;
   $('fEventoId').innerHTML = '<option value="">— Ninguna (texto libre) —</option>' + evOpts;
   $('fEventoId').value = prevEv;
-  $('aEvento').innerHTML = evOpts || '<option value="">(No hay fechas especiales en el Trakímetro)</option>';
+  $('aEvento').innerHTML = evOpts || '<option value="">(No hay fechas especiales en el Traketímetro)</option>';
   if (!$('aMetrica').options.length) $('aMetrica').innerHTML = data.metricas.map((m) => `<option value="${esc(m.id)}">${esc(m.titulo)}</option>`).join('');
   if (!editando) pintarFormUsuarios();
 }
@@ -171,7 +171,7 @@ function pintarFormUsuarios(markets) {
     const p = previos.get(u.id) || {};
     return `<div class="tkt-adm-opt" data-u="${esc(u.id)}"><input type="checkbox"${p.on ? ' checked' : ''} aria-label="${esc(u.name)}">` +
       `<span>${esc(u.name)}</span><input type="number" step="0.01" min="1.01" max="1000" placeholder="x3.00" value="${esc(p.odds ?? '')}"></div>`;
-  }).join('') || '<small>No hay personas en el Trakímetro todavía.</small>';
+  }).join('') || '<small>No hay personas en el Traketímetro todavía.</small>';
 }
 
 function filaLibre(label = '', odds = '', id = '') {
@@ -327,7 +327,7 @@ async function accion(a, id) {
       }
       await api(base + '/open', 'POST', body);
     } else if (a === 'recalc') {
-      if (!confirm('Recalcular las cuotas con el historial actual del Trakímetro? Las apuestas ya hechas conservan su cuota.')) return;
+      if (!confirm('Recalcular las cuotas con el historial actual del Traketímetro? Las apuestas ya hechas conservan su cuota.')) return;
       await api(base + '/recalc', 'POST', {});
     } else if (a === 'cancel') {
       if (!confirm(`¿Cancelar «${m.titulo}»? Se devolverán los TKT de las apuestas (en una combinada, esa selección cuenta como x1).`)) return;
