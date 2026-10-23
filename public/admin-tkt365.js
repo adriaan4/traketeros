@@ -42,6 +42,18 @@ async function load() {
   render();
 }
 
+// En móvil las tablas se ven como tarjetas: cada celda lleva el nombre de su columna
+function etiquetar() {
+  document.querySelectorAll('.tkt-admin .scroll table').forEach((t) => {
+    if (!t.tHead || !t.tBodies[0]) return;
+    const heads = [...t.tHead.rows[0].cells].map((th) => th.textContent.trim());
+    t.tBodies[0].querySelectorAll('tr').forEach((tr) => {
+      if (tr.cells.length !== heads.length) return;
+      [...tr.cells].forEach((td, i) => { td.dataset.label = heads[i]; });
+    });
+  });
+}
+
 // ---------- Pintar ----------
 function render() {
   const r = data.resumen;
@@ -104,6 +116,7 @@ function render() {
   $('aEvento').innerHTML = evOpts || '<option value="">(No hay fechas especiales en el Traketímetro)</option>';
   if (!$('aMetrica').options.length) $('aMetrica').innerHTML = data.metricas.map((m) => `<option value="${esc(m.id)}">${esc(m.titulo)}</option>`).join('');
   if (!editando) pintarFormUsuarios();
+  etiquetar();
 }
 
 const ESTADO_AP = { pendiente: '🟡 Pendiente', ganada: '🟢 Ganada', perdida: '🔴 Perdida', cancelada: '⚪ Cancelada' };
@@ -134,6 +147,7 @@ function pintarApuestasAdmin() {
       `<td>${esc(ESTADO_AP[b.estado] || b.estado)}${cobro}</td>` +
       `<td><div class="tkt-acc">${accionesApuesta(b)}</div></td></tr>`;
   }).join('') || '<tr><td colspan="9">Todavía no hay apuestas.</td></tr>';
+  etiquetar();
 }
 $('bq').addEventListener('input', () => data && pintarApuestasAdmin());
 $('bEstado').addEventListener('change', () => data && pintarApuestasAdmin());
@@ -332,6 +346,7 @@ const modal = $('modal');
 function abrirModal(html) {
   modal.innerHTML = html;
   if (!modal.open) modal.showModal();
+  etiquetar();
 }
 modal.addEventListener('click', (e) => {
   if (e.target === modal || e.target.matches('[data-cerrar]')) modal.close();

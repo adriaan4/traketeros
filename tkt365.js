@@ -349,17 +349,20 @@ export function registerTkt365({
   }
 
   // ---------- Cuotas automáticas a partir del historial ----------
-  function estadisticaHistorica(metrica) {
+  function estadisticaHistorica(metrica, antesDe) {
     const t = getTrake();
     const out = new Map();
     const inc = (id, v) => out.set(id, (out.get(id) || 0) + v);
     if (metrica === 'primero' || metrica === 'ultimo' || metrica === 'apuntes') {
+      const limite = antesDe ? madridMs(antesDe + '-01') : Infinity;
       for (const l of t.log || []) {
+        if (l.ts >= limite) continue;
         const id = String(l.name || '').trim().toLowerCase();
         if (id) inc(id, 1);
       }
     } else {
-      for (const b of Object.values(t.months || {})) {
+      for (const [mesId, b] of Object.entries(t.months || {})) {
+        if (antesDe && mesId >= antesDe) continue; // ese mes y los siguientes no cuentan: arrancan de cero
         for (const p of Object.values(b || {})) {
           const id = String(p.name || '').trim().toLowerCase();
           if (id) inc(id, metrica === 'puntos' ? puntosDe(p) : (p[metrica] || 0));
@@ -371,7 +374,7 @@ export function registerTkt365({
 
   function cuotasAuto(metrica, opts) {
     const users = trakeUsuarios(true); // los mercados automáticos solo usan gente del Traketímetro
-    const hist = estadisticaHistorica(metrica);
+    const hist = estadisticaHistorica(metrica, opts?.antesDe);
     let cand = [...users].map(([id, name]) => ({ id, name, stat: hist.get(id) || 0 }));
     cand.sort((a, b) => b.stat - a.stat || a.name.localeCompare(b.name, 'es'));
     const conDatos = cand.filter((c) => c.stat > 0).slice(0, opts?.todos ? 12 : 8);
@@ -970,7 +973,8 @@ export function registerTkt365({
     if (!m) return;
     if (!m.auto) return res.status(400).json({ error: 'Solo los mercados automáticos se pueden recalcular.' });
     if (m.estado === 'resuelto' || m.estado === 'cancelado') return res.status(409).json({ error: 'Este mercado ya no está activo.' });
-    const nuevas = cuotasAuto(m.auto.metrica);
+    const delMes = m.auto.periodo?.tipo === 'mes' ? m.auto.periodo.id : null;
+    const nuevas = cuotasAuto(m.auto.metrica, { antesDe: delMes });
     if (!nuevas) return res.status(400).json({ error: 'No hay datos suficientes.' });
     aplicarCuotas(m, nuevas);
     save();
@@ -984,7 +988,7 @@ export function registerTkt365({
     const m = st.markets.find((x) => x.auto && x.auto.metrica === 'puntos' && x.auto.periodo?.tipo === 'mes' && x.auto.periodo.id === mes);
     if (!m) return res.status(404).json({ error: 'No existe el mercado del Cubata de Oro de ese mes.' });
     if (m.estado === 'resuelto' || m.estado === 'cancelado') return res.status(409).json({ error: 'Ese mercado ya no está activo.' });
-    const nuevas = cuotasAuto('puntos', { todos: true });
+    const nuevas = cuotasAuto('puntos', { todos: true, antesDe: mes }); // todos empiezan el mes con 0: solo cuenta lo anterior
     if (!nuevas) return res.status(400).json({ error: 'No hay datos suficientes.' });
     aplicarCuotas(m, nuevas);
     save();

@@ -348,3 +348,40 @@
 .tkt-resguardo-bt { display: flex; gap: 10px; margin-top: 12px; }
 .tkt-resguardo-bt button { flex: 1; font: inherit; font-weight: 900; font-size: 15px; padding: 12px; border: 3px solid var(--black, #1a0018); background: var(--yellow, #ffd400); cursor: pointer; }
 .tkt-resguardo-bt button[data-r="close"] { background: #fff; }
+
+/* ---------- Admin TKT365 en móvil: las tablas pasan a tarjetas ---------- */
+@media (max-width: 760px) {
+  .tkt-admin .admin-head { flex-direction: column; align-items: stretch; }
+  .tkt-admin .admin-head .tkt-acc .mini { flex: 1 1 calc(50% - 6px); padding: 10px 8px; font-size: 13px; }
+  .tkt-admin .panel-head { flex-direction: column; align-items: stretch; }
+  .tkt-admin .panel-head .search, .tkt-admin .panel-head select { width: 100%; }
+  .tkt-admin input, .tkt-admin select, .tkt-admin textarea { font-size: 16px; } /* evita el zoom de iOS */
+  .tkt-admin .scroll { overflow: visible; }
+  .tkt-admin .scroll table, .tkt-admin .scroll tbody { display: block; width: 100%; }
+  .tkt-admin .scroll thead { display: none; }
+  .tkt-admin .scroll tr {
+    display: block; margin: 0 0 14px; padding: 6px 12px;
+    border: 3px solid var(--black); background: #fff; box-shadow: 4px 4px 0 var(--black);
+  }
+  .tkt-admin .scroll td {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    padding: 7px 0; border: 0; border-bottom: 1px dashed #ddd;
+    white-space: normal !important; min-width: 0 !important; text-align: right;
+  }
+  .tkt-admin .scroll td:last-child { border-bottom: 0; }
+  .tkt-admin .scroll td::before {
+    content: attr(data-label); flex: 0 0 34%; text-align: left;
+    font-size: 11px; font-weight: 900; letter-spacing: .5px; color: #555; text-transform: uppercase;
+  }
+  /* Celdas sin título (acciones) y filas vacías: ocupan todo el ancho */
+  .tkt-admin .scroll td[data-label=""], .tkt-admin .scroll td[colspan] { display: block; text-align: left; }
+  .tkt-admin .scroll td[data-label=""]::before, .tkt-admin .scroll td[colspan]::before { display: none; }
+  .tkt-admin .scroll td > div, .tkt-admin .scroll td > ul { text-align: left; min-width: 0; }
+  .tkt-admin .tkt-legs { margin: 0; padding-left: 0; list-style: none; }
+  .tkt-admin .tkt-acc .mini { padding: 8px 12px; }
+  .tkt-admin .tkt-ajuste { width: 100%; }
+  .tkt-admin .tkt-ajuste .tkt-in, .tkt-admin .tkt-ajuste .tkt-in.motivo { flex: 1 1 100%; width: 100%; }
+  .tkt-admin .tkt-alta .mini { width: 100%; }
+  .tkt-admin .tkt-modal { padding: 16px; }
+  .tkt-admin .tkt-modal .scroll tr { box-shadow: none; }
+}
