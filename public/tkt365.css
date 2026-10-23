@@ -340,3 +340,11 @@
   background: var(--black); color: white; border: 2px solid var(--black); padding: 4px 10px; box-shadow: 2px 2px 0 var(--red);
 }
 .tkt-compartir:disabled { opacity: .6; cursor: wait; }
+
+/* Resguardo tras apostar */
+.tkt-resguardo { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.75); display: flex; align-items: center; justify-content: center; padding: 14px; overflow-y: auto; }
+.tkt-resguardo-caja { max-width: 460px; width: 100%; margin: auto; }
+.tkt-resguardo-caja img { display: block; width: 100%; height: auto; }
+.tkt-resguardo-bt { display: flex; gap: 10px; margin-top: 12px; }
+.tkt-resguardo-bt button { flex: 1; font: inherit; font-weight: 900; font-size: 15px; padding: 12px; border: 3px solid var(--black, #1a0018); background: var(--yellow, #ffd400); cursor: pointer; }
+.tkt-resguardo-bt button[data-r="close"] { background: #fff; }

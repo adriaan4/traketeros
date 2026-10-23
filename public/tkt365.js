@@ -413,6 +413,7 @@ $('apostar').addEventListener('click', async () => {
     pintarSaldo(d.balance);
     mensaje(`¡Apuesta hecha! Posible premio: ${tkt(d.bet.premioPosible)} TKT 🎉`, 'ok');
     cargarMercados().catch(() => {});
+    mostrarResguardo(d.bet).catch(() => {});
   } catch (e) {
     mensaje(e.message, 'err');
     if (e.data?.refrescar || e.data?.identidad) cargarMercados().catch(() => {});
@@ -461,6 +462,24 @@ function envolver(ctx, texto, ancho) {
   }
   if (linea) out.push(linea);
   return out;
+}
+
+// Bangers dibuja el 1 casi igual que el 7: al 1 se le añade una base para que se distinga
+function textoBangers(ctx, texto, cx, y, tam) {
+  ctx.font = tam + 'px Bangers, Impact, sans-serif';
+  const prevAlign = ctx.textAlign;
+  ctx.textAlign = 'left';
+  const anchos = [...texto].map((ch) => ctx.measureText(ch).width);
+  let x = cx - anchos.reduce((a, b) => a + b, 0) / 2;
+  [...texto].forEach((ch, i) => {
+    ctx.fillText(ch, x, y);
+    if (ch === '1') {
+      const bw = anchos[i] * 0.78, bh = Math.max(4, tam * 0.1);
+      ctx.fillRect(x + (anchos[i] - bw) / 2 - tam * 0.02, y - bh, bw, bh);
+    }
+    x += anchos[i];
+  });
+  ctx.textAlign = prevAlign;
 }
 
 // Dibuja la apuesta y devuelve la altura total que ocupa
@@ -535,17 +554,12 @@ function dibujarApuesta(ctx, W, b, nombre) {
     ctx.font = tam + 'px Bangers, Impact, sans-serif';
     while (tam > 30 && ctx.measureText(val).width > cw - 24) { tam -= 4; ctx.font = tam + 'px Bangers, Impact, sans-serif'; }
     ctx.fillStyle = i === 2 && b.estado === 'ganada' ? '#22a84a' : (i === 1 ? IMG.rosa : IMG.negro);
-    ctx.fillText(val, cx + cw / 2, y + 110);
+    textoBangers(ctx, val, cx + cw / 2, y + 110, tam);
   });
   ctx.textAlign = 'left';
   y += ch + 40;
 
-  ctx.font = '700 24px Inter, Arial, sans-serif'; ctx.fillStyle = '#777'; ctx.textAlign = 'center';
-  ctx.fillText('Juego 100 % virtual · los TKT no son dinero real', W / 2, y + 16);
-  ctx.fillStyle = IMG.rosa; ctx.font = '900 26px Inter, Arial, sans-serif';
-  ctx.fillText(location.host + '/tkt365.html', W / 2, y + 56);
-  ctx.textAlign = 'left';
-  return y + 56 + 40 + M;
+  return y + 44;
 }
 
 async function imagenApuesta(b) {
@@ -566,28 +580,51 @@ async function imagenApuesta(b) {
   return new Promise((ok, ko) => cv.toBlob((bl) => (bl ? ok(bl) : ko(new Error('No se pudo crear la imagen.'))), 'image/png'));
 }
 
+async function enviarImagen(blob) {
+  const file = new File([blob], 'apuesta-tkt365.png', { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'Mi apuesta en TKT365' }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; /* si falla, se descarga */ }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'apuesta-tkt365.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 async function compartirApuesta(id, btn) {
   const b = (state.misApuestas || []).find((x) => x.id === id);
   if (!b) return;
   const antes = btn.textContent;
   btn.disabled = true; btn.textContent = 'Creando…';
   try {
-    const blob = await imagenApuesta(b);
-    const file = new File([blob], 'apuesta-tkt365.png', { type: 'image/png' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: 'Mi apuesta en TKT365' }); return; }
-      catch (e) { if (e && e.name === 'AbortError') return; /* si falla, se descarga */ }
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'apuesta-tkt365.png';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    await enviarImagen(await imagenApuesta(b));
   } catch (e) {
     alert(e.message || 'No se pudo crear la imagen.');
   } finally {
     btn.disabled = false; btn.textContent = antes;
   }
+}
+
+// Resguardo que se enseña nada más hacer la apuesta
+async function mostrarResguardo(bet) {
+  const blob = await imagenApuesta(bet);
+  const url = URL.createObjectURL(blob);
+  const ov = document.createElement('div');
+  ov.className = 'tkt-resguardo';
+  ov.innerHTML = '<div class="tkt-resguardo-caja"><img alt="Resguardo de tu apuesta">' +
+    '<div class="tkt-resguardo-bt"><button type="button" data-r="share">📤 Compartir</button><button type="button" data-r="close">Cerrar</button></div></div>';
+  ov.querySelector('img').src = url;
+  const cerrar = () => { ov.remove(); URL.revokeObjectURL(url); };
+  ov.addEventListener('click', (e) => {
+    if (e.target === ov) return cerrar();
+    const r = e.target.closest('button[data-r]');
+    if (!r) return;
+    if (r.dataset.r === 'close') cerrar();
+    else enviarImagen(blob).catch((err) => alert(err.message || 'No se pudo compartir.'));
+  });
+  document.body.appendChild(ov);
 }
 $('apuestas').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-share]');
