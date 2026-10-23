@@ -429,18 +429,170 @@ const RES = { pendiente: '🟡', ganada: '🟢', perdida: '🔴', anulada: '⚪'
 
 function pintarApuestas(bets) {
   const box = $('apuestas');
+  state.misApuestas = bets;
   if (!bets.length) { box.innerHTML = '<div class="tkt-vacio">Todavía no has apostado nada. ¡Anímate!</div>'; return; }
   box.innerHTML = bets.map((b) => {
     const fecha = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(b.ts));
     const premio = b.estado === 'ganada' ? `<span>Cobrado: <b>${tkt(b.premio)} TKT</b></span>`
       : b.estado === 'cancelada' ? `<span>Devuelto: <b>${tkt(b.premio)} TKT</b></span>` : '';
     return `<article class="tkt-ap"><div class="tkt-ap-head"><span>${b.tipo === 'combinada' ? '🎟️ Combinada' : '🎯 Simple'} <small>· ${esc(fecha)}</small></span>` +
-      `<span class="tkt-est ${esc(b.estado)}">${EST[b.estado] || esc(b.estado)}</span></div>` +
+      `<span class="tkt-ap-der"><span class="tkt-est ${esc(b.estado)}">${EST[b.estado] || esc(b.estado)}</span>` +
+      `<button type="button" class="tkt-compartir" data-share="${esc(b.id)}">📤 Compartir</button></span></div>` +
       `<ul>${b.legs.map((l) => `<li><span>${RES[l.resultado] || '🟡'} <b>${esc(l.opcion)}</b> · ${esc(l.mercado)}</span><span>${cuotaTxt(l.odds)}</span></li>`).join('')}</ul>` +
       `<div class="tkt-ap-nums"><span>Apostado: <b>${tkt(b.stake)} TKT</b></span><span>Cuota: <b>${cuotaTxt(b.cuota)}</b></span>` +
       `<span>Premio posible: <b>${tkt(b.premioPosible)} TKT</b></span>${premio}</div></article>`;
   }).join('');
 }
+
+// ---------- Compartir una apuesta como imagen ----------
+const IMG = { rosa: '#ff2596', azul: '#00a8e6', negro: '#1a0018', crema: '#fff3fa' };
+const IMG_ESTADO = {
+  pendiente: ['PENDIENTE', '#fff1a8'], ganada: ['GANADA', '#b7f0c1'],
+  perdida: ['PERDIDA', '#ffc9c9'], cancelada: ['CANCELADA', '#e6e6e6']
+};
+const IMG_PUNTO = { ganada: '#22a84a', perdida: '#e03131', anulada: '#9a9a9a', pendiente: '#f2b705' };
+
+function envolver(ctx, texto, ancho) {
+  const out = [];
+  let linea = '';
+  for (const palabra of String(texto).split(' ')) {
+    const prueba = linea ? linea + ' ' + palabra : palabra;
+    if (linea && ctx.measureText(prueba).width > ancho) { out.push(linea); linea = palabra; } else linea = prueba;
+  }
+  if (linea) out.push(linea);
+  return out;
+}
+
+// Dibuja la apuesta y devuelve la altura total que ocupa
+function dibujarApuesta(ctx, W, b, nombre) {
+  const M = 40, P = 44, X = M + P, ANCHO = W - 2 * M - 2 * P;
+  const fecha = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(b.ts));
+  let y = M;
+
+  // Cabecera negra
+  const cabY = y + 4, cabH = 150;
+  ctx.fillStyle = IMG.negro; ctx.fillRect(M, cabY, W - 2 * M, cabH);
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  ctx.font = '104px Bangers, Impact, sans-serif';
+  ctx.fillStyle = '#fff'; ctx.fillText('TKT', X, cabY + 112);
+  const wTkt = ctx.measureText('TKT').width;
+  ctx.fillStyle = IMG.rosa; ctx.fillText('365', X + wTkt, cabY + 112);
+  ctx.textAlign = 'right'; ctx.font = '900 26px Inter, Arial, sans-serif'; ctx.fillStyle = IMG.azul;
+  ctx.fillText('LA CASA DE APUESTAS', W - M - P, cabY + 70);
+  ctx.fillStyle = '#fff'; ctx.fillText('DE LOS TRAKETEROS', W - M - P, cabY + 104);
+  y = cabY + cabH + 44;
+
+  // Quién y cuándo + estado
+  const [txtEst, colEst] = IMG_ESTADO[b.estado] || [String(b.estado).toUpperCase(), '#eee'];
+  ctx.textAlign = 'left'; ctx.fillStyle = IMG.negro;
+  ctx.font = '900 46px Inter, Arial, sans-serif';
+  ctx.fillText(nombre || 'Apuesta', X, y + 36);
+  ctx.font = '700 28px Inter, Arial, sans-serif'; ctx.fillStyle = '#555';
+  ctx.fillText((b.tipo === 'combinada' ? 'COMBINADA ×' + b.legs.length : 'SIMPLE') + '  ·  ' + fecha, X, y + 78);
+  ctx.font = '900 30px Inter, Arial, sans-serif';
+  const wE = ctx.measureText(txtEst).width + 40;
+  ctx.fillStyle = colEst; ctx.fillRect(W - M - P - wE, y + 4, wE, 54);
+  ctx.strokeStyle = IMG.negro; ctx.lineWidth = 4; ctx.strokeRect(W - M - P - wE, y + 4, wE, 54);
+  ctx.fillStyle = IMG.negro; ctx.textAlign = 'center'; ctx.fillText(txtEst, W - M - P - wE / 2, y + 43);
+  ctx.textAlign = 'left';
+  y += 112;
+
+  // Selecciones
+  for (const l of b.legs) {
+    ctx.fillStyle = IMG.negro; ctx.fillRect(X, y - 4, ANCHO, 4);
+    y += 30;
+    const cuota = cuotaTxt(l.odds);
+    ctx.font = '900 42px Inter, Arial, sans-serif';
+    const wC = ctx.measureText(cuota).width;
+    const lineasOp = envolver(ctx, l.opcion, ANCHO - wC - 70);
+    ctx.fillStyle = IMG_PUNTO[l.resultado] || IMG_PUNTO.pendiente;
+    ctx.beginPath(); ctx.arc(X + 14, y + 22, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = IMG.negro;
+    lineasOp.forEach((t, i) => ctx.fillText(t, X + 46, y + 36 + i * 50));
+    ctx.textAlign = 'right'; ctx.fillStyle = IMG.rosa;
+    ctx.fillText(cuota, X + ANCHO, y + 36);
+    ctx.textAlign = 'left';
+    y += 36 + (lineasOp.length - 1) * 50 + 12;
+    ctx.font = '700 28px Inter, Arial, sans-serif'; ctx.fillStyle = '#555';
+    for (const t of envolver(ctx, l.mercado, ANCHO - 46).slice(0, 2)) { ctx.fillText(t, X + 46, y + 28); y += 36; }
+    y += 18;
+  }
+  ctx.fillStyle = IMG.negro; ctx.fillRect(X, y - 4, ANCHO, 4);
+  y += 36;
+
+  // Dinero en casillas
+  const ultimo = b.estado === 'ganada' ? ['COBRADO', b.premio] : (b.estado === 'cancelada' ? ['DEVUELTO', b.premio] : ['PREMIO POSIBLE', b.premioPosible]);
+  const celdas = [['APOSTADO', tkt(b.stake) + ' TKT'], ['CUOTA', cuotaTxt(b.cuota)], [ultimo[0], tkt(ultimo[1]) + ' TKT']];
+  const cw = ANCHO / 3, ch = 150;
+  ctx.strokeStyle = IMG.negro; ctx.lineWidth = 5; ctx.strokeRect(X, y, ANCHO, ch);
+  celdas.forEach(([lab, val], i) => {
+    const cx = X + i * cw;
+    if (i) { ctx.fillStyle = IMG.negro; ctx.fillRect(cx - 2, y, 4, ch); }
+    ctx.textAlign = 'center';
+    ctx.font = '900 22px Inter, Arial, sans-serif'; ctx.fillStyle = '#555';
+    ctx.fillText(lab, cx + cw / 2, y + 44);
+    let tam = 66;
+    ctx.font = tam + 'px Bangers, Impact, sans-serif';
+    while (tam > 30 && ctx.measureText(val).width > cw - 24) { tam -= 4; ctx.font = tam + 'px Bangers, Impact, sans-serif'; }
+    ctx.fillStyle = i === 2 && b.estado === 'ganada' ? '#22a84a' : (i === 1 ? IMG.rosa : IMG.negro);
+    ctx.fillText(val, cx + cw / 2, y + 110);
+  });
+  ctx.textAlign = 'left';
+  y += ch + 40;
+
+  ctx.font = '700 24px Inter, Arial, sans-serif'; ctx.fillStyle = '#777'; ctx.textAlign = 'center';
+  ctx.fillText('Juego 100 % virtual · los TKT no son dinero real', W / 2, y + 16);
+  ctx.fillStyle = IMG.rosa; ctx.font = '900 26px Inter, Arial, sans-serif';
+  ctx.fillText(location.host + '/tkt365.html', W / 2, y + 56);
+  ctx.textAlign = 'left';
+  return y + 56 + 40 + M;
+}
+
+async function imagenApuesta(b) {
+  try { await Promise.all([document.fonts.load('100px Bangers'), document.fonts.load('900 40px Inter'), document.fonts.load('700 28px Inter')]); } catch { /* se usan las de reserva */ }
+  const W = 1080;
+  const nombre = (state.users.find((u) => u.id === state.user) || {}).name || '';
+  const prueba = document.createElement('canvas').getContext('2d');
+  prueba.canvas.width = W; prueba.canvas.height = 10;
+  const H = Math.ceil(dibujarApuesta(prueba, W, b, nombre));
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = IMG.rosa; ctx.fillRect(0, 0, W, H);                       // fondo rosa
+  ctx.fillStyle = IMG.negro; ctx.fillRect(40 + 14, 40 + 14, W - 80, H - 80); // sombra de la tarjeta
+  ctx.fillStyle = '#fff'; ctx.fillRect(40, 40, W - 80, H - 80);              // tarjeta
+  ctx.strokeStyle = IMG.negro; ctx.lineWidth = 8; ctx.strokeRect(40, 40, W - 80, H - 80);
+  dibujarApuesta(ctx, W, b, nombre);
+  return new Promise((ok, ko) => cv.toBlob((bl) => (bl ? ok(bl) : ko(new Error('No se pudo crear la imagen.'))), 'image/png'));
+}
+
+async function compartirApuesta(id, btn) {
+  const b = (state.misApuestas || []).find((x) => x.id === id);
+  if (!b) return;
+  const antes = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Creando…';
+  try {
+    const blob = await imagenApuesta(b);
+    const file = new File([blob], 'apuesta-tkt365.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Mi apuesta en TKT365' }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; /* si falla, se descarga */ }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'apuesta-tkt365.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (e) {
+    alert(e.message || 'No se pudo crear la imagen.');
+  } finally {
+    btn.disabled = false; btn.textContent = antes;
+  }
+}
+$('apuestas').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-share]');
+  if (b) compartirApuesta(b.dataset.share, b);
+});
 
 // ---------- Pestañas ----------
 function irA(tab) {

@@ -331,3 +331,12 @@
 .tkt-solo { display: inline-block; font-size: 10px; font-weight: 900; padding: 1px 5px; border: 2px solid var(--black); background: #cfe9ff; margin-left: 4px; }
 .tkt-alta { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
 .tkt-alta .tkt-in { flex: 1 1 200px; padding: 8px 10px; }
+
+
+/* Compartir apuesta */
+.tkt-ap-der { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.tkt-compartir {
+  font: inherit; font-size: 12px; font-weight: 900; cursor: pointer;
+  background: var(--black); color: white; border: 2px solid var(--black); padding: 4px 10px; box-shadow: 2px 2px 0 var(--red);
+}
+.tkt-compartir:disabled { opacity: .6; cursor: wait; }
