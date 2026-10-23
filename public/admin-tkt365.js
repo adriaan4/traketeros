@@ -293,6 +293,32 @@ $('formAuto').addEventListener('submit', async (e) => {
   }
 });
 
+// Mes siguiente (el del próximo Cubata de Oro) a partir de la hora del servidor
+function mesSiguienteAdmin() {
+  const [y, m] = localFmt.format(new Date(data.now)).slice(0, 7).split('-').map(Number);
+  const d = new Date(Date.UTC(y, m, 1));
+  return { id: d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'), label: new Intl.DateTimeFormat('es-ES', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(d) };
+}
+
+$('cubataOro').addEventListener('click', async () => {
+  const mes = mesSiguienteAdmin();
+  if (!confirm(`¿Recalcular las cuotas del Cubata de Oro de ${mes.label} con las estadísticas totales de la peña? Las apuestas ya hechas conservan su cuota.`)) return;
+  try {
+    await api('/api/tkt365/admin/recalc-cubata-oro', 'POST', { mes: mes.id });
+    alert('Cuotas recalculadas.');
+    await load();
+  } catch (err) { alert(err.message); }
+});
+
+$('purgar').addEventListener('click', async () => {
+  if (!confirm('¿Borrar todos los mercados cerrados, resueltos y cancelados? Los que tengan apuestas pendientes se conservan hasta que los resuelvas o canceles.')) return;
+  try {
+    const r = await api('/api/tkt365/admin/markets/purge-closed', 'POST', {});
+    alert(`Borrados: ${r.borrados}.` + (r.conservados ? ` Conservados por tener apuestas pendientes: ${r.conservados}.` : ''));
+    await load();
+  } catch (err) { alert(err.message); }
+});
+
 $('generar').addEventListener('click', async () => {
   try {
     const r = await api('/api/tkt365/admin/generate', 'POST', {});
@@ -329,6 +355,9 @@ async function accion(a, id) {
     } else if (a === 'recalc') {
       if (!confirm('Recalcular las cuotas con el historial actual del Traketímetro? Las apuestas ya hechas conservan su cuota.')) return;
       await api(base + '/recalc', 'POST', {});
+    } else if (a === 'borrar') {
+      if (!confirm(`¿Borrar «${m.titulo}»? Desaparece del panel; las apuestas ya liquidadas conservan su historial.`)) return;
+      await api(base, 'DELETE');
     } else if (a === 'cancel') {
       if (!confirm(`¿Cancelar «${m.titulo}»? Se devolverán los TKT de las apuestas (en una combinada, esa selección cuenta como x1).`)) return;
       await api(base + '/cancel', 'POST', {});

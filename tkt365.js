@@ -369,12 +369,12 @@ export function registerTkt365({
     return out;
   }
 
-  function cuotasAuto(metrica) {
+  function cuotasAuto(metrica, opts) {
     const users = trakeUsuarios(true); // los mercados automáticos solo usan gente del Traketímetro
     const hist = estadisticaHistorica(metrica);
     let cand = [...users].map(([id, name]) => ({ id, name, stat: hist.get(id) || 0 }));
     cand.sort((a, b) => b.stat - a.stat || a.name.localeCompare(b.name, 'es'));
-    const conDatos = cand.filter((c) => c.stat > 0).slice(0, 8);
+    const conDatos = cand.filter((c) => c.stat > 0).slice(0, opts?.todos ? 12 : 8);
     cand = conDatos.length >= 2 ? conDatos : cand.slice(0, Math.max(4, conDatos.length));
     if (cand.length < 2) return null;
     const media = cand.reduce((s, c) => s + c.stat, 0) / cand.length;
@@ -956,6 +956,15 @@ export function registerTkt365({
     res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
   });
 
+  // Sustituye las cuotas de un mercado conservando las opciones que ya tienen apuestas
+  function aplicarCuotas(m, nuevas) {
+    for (const o of m.options) {
+      if (!nuevas.some((n) => n.id === o.id) && st.bets.some((bt) => bt.legs.some((l) => l.marketId === m.id && l.optionId === o.id))) nuevas.push(o);
+    }
+    m.options = nuevas;
+    m.actualizado = nowMs();
+  }
+
   adm.post('/markets/:id/recalc', (req, res) => {
     const m = mercadoDeRuta(req, res);
     if (!m) return;
@@ -963,14 +972,50 @@ export function registerTkt365({
     if (m.estado === 'resuelto' || m.estado === 'cancelado') return res.status(409).json({ error: 'Este mercado ya no está activo.' });
     const nuevas = cuotasAuto(m.auto.metrica);
     if (!nuevas) return res.status(400).json({ error: 'No hay datos suficientes.' });
-    // Mantiene las opciones que ya tienen apuestas aunque ya no salgan
-    for (const o of m.options) {
-      if (!nuevas.some((n) => n.id === o.id) && st.bets.some((bt) => bt.legs.some((l) => l.marketId === m.id && l.optionId === o.id))) nuevas.push(o);
-    }
-    m.options = nuevas;
-    m.actualizado = nowMs();
+    aplicarCuotas(m, nuevas);
     save();
     res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  // Cubata de Oro de un mes (el mercado "¿Quién sumará más puntos?" de ese mes):
+  // cuotas recalculadas con las estadísticas TOTALES de la peña (todos los meses sumados).
+  adm.post('/recalc-cubata-oro', (req, res) => {
+    const mes = String(req.body?.mes || mesSiguiente(hoy().slice(0, 7)));
+    const m = st.markets.find((x) => x.auto && x.auto.metrica === 'puntos' && x.auto.periodo?.tipo === 'mes' && x.auto.periodo.id === mes);
+    if (!m) return res.status(404).json({ error: 'No existe el mercado del Cubata de Oro de ese mes.' });
+    if (m.estado === 'resuelto' || m.estado === 'cancelado') return res.status(409).json({ error: 'Ese mercado ya no está activo.' });
+    const nuevas = cuotasAuto('puntos', { todos: true });
+    if (!nuevas) return res.status(400).json({ error: 'No hay datos suficientes.' });
+    aplicarCuotas(m, nuevas);
+    save();
+    res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  // ---------- Borrar mercados ----------
+  // Solo se borra lo que ya no puede dejar apuestas colgadas: si una apuesta
+  // pendiente depende del mercado, se conserva hasta resolverlo o cancelarlo.
+  const tienePendientes = (id) => st.bets.some((b) => b.estado === 'pendiente' && b.legs.some((l) => l.marketId === id));
+
+  adm.post('/markets/purge-closed', (req, res) => {
+    const finales = ['cerrado', 'resuelto', 'cancelado'];
+    const quitar = st.markets.filter((m) => finales.includes(m.estado) && !tienePendientes(m.id));
+    const conservados = st.markets.filter((m) => finales.includes(m.estado) && tienePendientes(m.id)).length;
+    if (quitar.length) {
+      const ids = new Set(quitar.map((m) => m.id));
+      st.markets = st.markets.filter((m) => !ids.has(m.id));
+      save();
+    }
+    res.json({ ok: true, borrados: quitar.length, conservados });
+  });
+
+  adm.delete('/markets/:id', (req, res) => {
+    const m = mercadoDeRuta(req, res);
+    if (!m) return;
+    if (m.estado === 'abierto') return res.status(409).json({ error: 'Cierra el mercado antes de borrarlo.' });
+    if (tienePendientes(m.id)) return res.status(409).json({ error: 'Tiene apuestas pendientes: resuélvelo o cancélalo primero.' });
+    st.markets = st.markets.filter((x) => x.id !== m.id);
+    save();
+    res.json({ ok: true });
   });
 
   adm.post('/markets/:id/close', (req, res) => {
