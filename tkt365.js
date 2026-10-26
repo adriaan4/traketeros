@@ -36,14 +36,14 @@ const VISIBLE_CERRADOS_MS = 14 * 24 * 60 * 60 * 1000;
 
 const TZ = 'Europe/Madrid';
 const METRICAS = {
-  puntos:   { titulo: '¿Quién sumará más puntos?',            desc: 'Gana quien más puntos tenga en el Traketímetro' },
-  cervezas: { titulo: '¿Quién se tomará más cervezas?',       desc: 'Gana quien más cervezas apunte en el Traketímetro' },
-  cubatas:  { titulo: '¿Quién se tomará más cubatas?',        desc: 'Gana quien más cubatas apunte en el Traketímetro' },
-  chupitos: { titulo: '¿Quién se tomará más chupitos?',       desc: 'Gana quien más chupitos apunte en el Traketímetro' },
-  porros:   { titulo: '¿Quién fumará más porros?',            desc: 'Gana quien más porros apunte en el Traketímetro' },
-  apuntes:  { titulo: '¿Quién tendrá más actividad?',         desc: 'Gana quien más veces apunte algo en el Traketímetro' },
-  primero:  { titulo: '¿Quién será el primero en apuntar algo?', desc: 'Gana quien apunte antes su primera consumición en el Traketímetro' },
-  ultimo:   { titulo: '¿Quién será el último en apuntar algo?',  desc: 'Gana quien apunte más tarde su última consumición en el Traketímetro' }
+  puntos:   { titulo: 'Más puntos',       desc: 'Gana quien más puntos tenga en el Traketímetro' },
+  cervezas: { titulo: 'Más cervezas',     desc: 'Gana quien más cervezas apunte en el Traketímetro' },
+  cubatas:  { titulo: 'Más cubatas',      desc: 'Gana quien más cubatas apunte en el Traketímetro' },
+  chupitos: { titulo: 'Más chupitos',     desc: 'Gana quien más chupitos apunte en el Traketímetro' },
+  porros:   { titulo: 'Más porros',       desc: 'Gana quien más porros apunte en el Traketímetro' },
+  apuntes:  { titulo: 'Más actividad',    desc: 'Gana quien más veces apunte algo en el Traketímetro' },
+  primero:  { titulo: 'Primero en apuntar', desc: 'Gana quien apunte antes su primera consumición en el Traketímetro' },
+  ultimo:   { titulo: 'Último en apuntar',  desc: 'Gana quien apunte más tarde su última consumición en el Traketímetro' }
 };
 const MESES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const OTRO_ID = '__otro';
@@ -290,6 +290,23 @@ export function registerTkt365({
     return null;
   }
 
+  // Título corto de un mercado automático: "Cubata de Oro noviembre", "Más cervezas semana 2/11"...
+  // Se calcula siempre al vuelo, así también se arreglan los mercados que ya estaban guardados.
+  function tituloAuto(metrica, periodo) {
+    const def = METRICAS[metrica];
+    const w = ventana(periodo);
+    if (!def || !w) return null;
+    if (periodo.tipo === 'mes') {
+      const [y, m] = periodo.id.split('-');
+      const nombre = MESES_ES[Number(m) - 1].toLowerCase();
+      const año = y !== hoy().slice(0, 4) ? ' ' + y : '';
+      const base = metrica === 'puntos' ? 'Cubata de Oro' : def.titulo;
+      return `${base} ${nombre}${año}`;
+    }
+    if (periodo.tipo === 'semana') return `${def.titulo} · ${ddmm(periodo.start)} al ${ddmm(addDays(periodo.start, 6))}`;
+    return `${def.titulo} · ${w.label}`;
+  }
+
   // Estadísticas del historial (log) dentro de una ventana
   function statsLog(w) {
     const t = getTrake();
@@ -398,7 +415,7 @@ export function registerTkt365({
     if (!options) return null;
     const m = {
       id: nuevoId(),
-      titulo: def.titulo,
+      titulo: tituloAuto(metrica, periodo) || def.titulo,
       descripcion: `${def.desc} durante ${w.label}.`,
       categoria: 'Estadísticas',
       evento: w.label,
@@ -567,7 +584,7 @@ export function registerTkt365({
   function mercadoPublico(m, ahora) {
     const { w, proximo } = fase(m, ahora);
     return {
-      id: m.id, titulo: m.titulo, descripcion: String(m.descripcion || '').replace(/Trak[ií]metro/g, 'Traketímetro'), categoria: m.categoria,
+      id: m.id, titulo: (m.auto && tituloAuto(m.auto.metrica, m.auto.periodo)) || m.titulo, descripcion: String(m.descripcion || '').replace(/Trak[ií]metro/g, 'Traketímetro'), categoria: m.categoria,
       evento: m.evento, eventoId: m.eventoId || null, cierra: m.cierra, estado: m.estado,
       fuente: m.fuente === 'trakimetro' ? 'Traketímetro' : 'Manual',
       options: m.options.map((o) => ({ id: o.id, label: o.label, odds: o.odds })),
@@ -592,13 +609,18 @@ export function registerTkt365({
     return { ganadas, perdidas, pendientes, apostado, beneficio };
   }
 
+  function tituloMercado(id) {
+    const m = st.markets.find((x) => x.id === id);
+    return m?.auto ? tituloAuto(m.auto.metrica, m.auto.periodo) : null;
+  }
+
   function apuestaPublica(b) {
     return {
       id: b.id, tipo: b.legs.length > 1 ? 'combinada' : 'simple', ts: b.ts, stake: b.stake,
       cuota: b.totalOdds, premioPosible: b.potential, estado: b.estado,
       premio: b.premio || 0, cuotaFinal: b.cuotaFinal ?? null,
       legs: b.legs.map((l) => ({
-        marketId: l.marketId, mercado: l.marketTitulo, evento: l.evento, opcion: l.label, odds: l.odds, resultado: l.resultado || 'pendiente'
+        marketId: l.marketId, mercado: tituloMercado(l.marketId) || l.marketTitulo, evento: l.evento, opcion: l.label, odds: l.odds, resultado: l.resultado || 'pendiente'
       }))
     };
   }
