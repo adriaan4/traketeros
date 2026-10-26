@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="description" content="TKT365: apuestas virtuales de la peña con puntos TKT. Sin dinero real.">
   <meta name="theme-color" content="#ff2596">
   <title>Traketeros · TKT365</title>
@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=19">
-  <link rel="stylesheet" href="tkt365.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=20">
+  <link rel="stylesheet" href="tkt365.css?v=10">
 </head>
 <body>
 
@@ -43,8 +43,8 @@
     <div>
       <div class="eyebrow">🎰 LA CASA DE APUESTAS DE LA PEÑA</div>
       <h1 class="tkt-logo">TKT<span>365</span></h1>
-      <p class="tkt-sub">Donde cada noche tiene una cuota.</p>
-      <p class="tkt-aviso">Juego 100&nbsp;% virtual: los TKT son puntos de la peña, no dinero. No hay pagos ni retiradas. Puedes apostar con tu nombre del Traketímetro o apuntarte solo para apostar: no hace falta registrarse.</p>
+      <p class="tkt-sub">Cada noche tiene su cuota.</p>
+      <p class="tkt-aviso">100&nbsp;% virtual: los TKT son puntos de la peña, no dinero real.</p>
     </div>
   </section>
 
@@ -54,18 +54,18 @@
       <select id="quien"></select>
     </div>
     <form class="tkt-join" id="join" autocomplete="off">
-      <p><b>¿No estás en el Traketímetro y solo quieres apostar? ¡Apúntate!</b><br><small>Escribe tu nombre o mote y ya tienes tu saldo para apostar. No hace falta apuntarse en el Traketímetro.</small></p>
+      <p><b>¿No estás en el Traketímetro? Apúntate solo para apostar</b><br><small>Escribe tu nombre o mote y ya tienes saldo.</small></p>
       <div class="tkt-join-fila">
         <input id="joinName" type="text" maxlength="30" placeholder="Tu nombre o mote" aria-label="Tu nombre para apostar" required>
         <button type="submit" id="joinBtn">APÚNTATE</button>
       </div>
       <div class="tkt-msg" id="joinMsg" role="status" aria-live="polite"></div>
     </form>
-    <p class="tkt-nota" id="nota">Elige tu nombre. Una vez elegido queda <b>bloqueado</b> en este dispositivo: si te equivocas, díselo al admin.</p>
+    <p class="tkt-nota" id="nota">Elige tu nombre. Queda <b>bloqueado</b> en este móvil: si te equivocas, díselo al admin.</p>
   </section>
 
   <div class="tkt-tabs" role="tablist">
-    <button type="button" role="tab" data-tab="mercados" aria-selected="true">🔥 Mercados</button>
+    <button type="button" role="tab" data-tab="mercados" aria-selected="true">🔥 Apostar</button>
     <button type="button" role="tab" data-tab="apuestas" aria-selected="false">🧾 Mis apuestas</button>
     <button type="button" role="tab" data-tab="ranking" aria-selected="false">🏆 Ranking</button>
   </div>
@@ -84,7 +84,7 @@
       </div>
       <div class="tkt-cupon-body">
         <ul class="tkt-sels" id="sels"></ul>
-        <div class="tkt-cupon-vacio" id="cuponVacio">Pulsa una cuota para añadirla al cupón. Puedes combinar hasta 8 mercados distintos.</div>
+        <div class="tkt-cupon-vacio" id="cuponVacio">Toca una cuota para añadirla. Puedes combinar hasta 8 apuestas.</div>
         <button class="tkt-limpiar" id="limpiar" type="button" hidden>Vaciar cupón</button>
         <div class="tkt-fila"><span>CUOTA TOTAL</span><b id="cuotaTotal">x1.00</b></div>
         <div class="tkt-stake">
@@ -122,6 +122,6 @@
   </section>
 </main>
 
-<script src="tkt365.js?v=7"></script>
+<script src="tkt365.js?v=8"></script>
 </body>
 </html>

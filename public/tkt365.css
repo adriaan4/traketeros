@@ -385,3 +385,74 @@
   .tkt-admin .tkt-modal { padding: 16px; }
   .tkt-admin .tkt-modal .scroll tr { box-shadow: none; }
 }
+
+
+/* =====================================================================
+   Revisión de interfaz: más limpia, fácil de leer y pensada para móvil
+   ===================================================================== */
+
+/* Tarjetas de apuesta: título claro, opciones grandes y fáciles de tocar */
+.tkt-card { gap: 12px; padding: 16px 16px 14px; }
+.tkt-card h3 { font-size: 21px; line-height: 1.15; font-weight: 900; }
+.tkt-opts { gap: 8px; }
+.tkt-odd { min-height: 52px; padding: 8px 10px 8px 14px; font-size: 16px; border-radius: 0; -webkit-tap-highlight-color: transparent; }
+.tkt-odd .nm { white-space: normal; overflow-wrap: anywhere; line-height: 1.15; }
+.tkt-odd .qt { flex: none; min-width: 64px; text-align: center; font-size: 24px; padding: 2px 10px; }
+.tkt-odd:active:not(:disabled) { transform: translate(2px, 2px); }
+.tkt-mas {
+  font: inherit; font-size: 14px; font-weight: 900; cursor: pointer; width: 100%;
+  background: none; border: 3px dashed var(--black); padding: 10px; color: var(--black);
+}
+.tkt-mas:hover { background: var(--cream); }
+.tkt-cierre { font-size: 13px; padding-top: 2px; border-top: 2px solid #eee; margin-top: 2px; padding-top: 10px; }
+
+/* Títulos de sección y avisos más discretos */
+.tkt-sec-title { margin: 26px 0 12px; }
+.tkt-aviso { font-size: 12px; }
+
+/* Entradas a 16px: evita el zoom automático de iOS al escribir */
+.tkt-yo select, .tkt-join input, .tkt-stake input { font-size: 16px; }
+
+/* Zonas seguras (iPhone con notch / barra inferior) */
+.tkt-cupon-bar { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+.tkt-cupon.abierto .tkt-cupon-body { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+
+@media (max-width: 760px) {
+  /* Cabecera compacta: logo y subtítulo en una sola fila */
+  .tkt-hero { gap: 4px; }
+  .tkt-logo { font-size: clamp(48px, 16vw, 72px); margin-top: 2px; }
+  .tkt-sub { font-size: 15px; margin-top: 2px; }
+  .tkt-aviso { margin-top: 4px; }
+
+  /* Bloque «¿Quién eres?» más corto */
+  .tkt-yo { margin-top: 14px; gap: 10px; }
+  .tkt-yo > div:first-child { flex: 1 1 100%; }
+  .tkt-nota { flex: 1 1 100%; font-size: 12px; }
+  .tkt-join p { font-size: 13px; }
+
+  /* Pestañas grandes y claras */
+  .tkt-tabs { margin-top: 16px; gap: 8px; }
+  .tkt-tabs button { padding: 12px 4px; font-size: 14px; box-shadow: 3px 3px 0 var(--black); }
+
+  /* Una sola columna, tarjetas más ligeras */
+  .tkt-grid { margin-top: 16px; }
+  .tkt-mercados { gap: 16px; }
+  .tkt-card { border-width: 3px; box-shadow: 4px 4px 0 var(--black); }
+  .tkt-sec-title { font-size: 22px; margin: 22px 0 10px; }
+  .tkt-grupo { font-size: 12px; margin: 14px 0 8px; }
+
+  /* Cupón inferior: más fácil de abrir y de usar */
+  .tkt-cupon-bar { font-size: 17px; padding-top: 16px; }
+  .tkt-cupon.abierto { max-height: 88vh; }
+  .tkt-sels li { padding: 10px 12px; }
+  .tkt-sels .sx { font-size: 26px; padding: 0 6px; min-width: 40px; min-height: 40px; }
+  .tkt-rapidas button { padding: 10px 0; font-size: 14px; }
+  .tkt-apostar { font-size: 20px; padding: 16px; }
+  .tkt-main { margin-bottom: 140px; }
+
+  /* Mis apuestas y ranking */
+  .tkt-ap { box-shadow: 4px 4px 0 var(--black); border-width: 3px; }
+  .tkt-ap li { font-size: 15px; }
+  .tkt-compartir { padding: 8px 12px; font-size: 13px; }
+  .tkt-rank td, .tkt-rank th { padding: 10px 8px; font-size: 14px; }
+}

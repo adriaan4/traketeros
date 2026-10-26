@@ -41,6 +41,7 @@ const state = {
   user: '',           // id (nombre en minúsculas) de quien apuesta
   balance: null,
   sel: new Map(),     // marketId -> optionId (el cupón)
+  abiertas: new Set(), // mercados con todas las opciones desplegadas
   tab: 'mercados',
   enviando: false
 };
@@ -231,25 +232,34 @@ function cierreTxt(m) {
   return 'Cierra ' + esc(fecha) + resto;
 }
 
+const OPCIONES_VISIBLES = 4;
+
 function tarjeta(m) {
   const abierto = m.estado === 'abierto' && m.cierra > ahora();
   const elegido = state.sel.get(m.id);
-  const opts = m.options.map((o) => {
+  // Se ven las 4 primeras (las favoritas); el resto, tras «Ver más». Lo elegido y lo ganador siempre se ven.
+  const desplegado = state.abiertas.has(m.id);
+  const visibles = (o, i) => desplegado || i < OPCIONES_VISIBLES || o.id === elegido || (m.estado === 'resuelto' && m.ganadores.includes(o.id));
+  const ocultas = m.options.filter((o, i) => !visibles(o, i)).length;
+  const opts = m.options.filter(visibles).map((o) => {
     const gan = m.estado === 'resuelto' && m.ganadores.includes(o.id);
     const cls = 'tkt-odd' + (elegido === o.id ? ' sel' : '') + (gan ? ' ganadora' : '');
     return `<button type="button" class="${cls}" data-m="${esc(m.id)}" data-o="${esc(o.id)}"${abierto ? '' : ' disabled'} ` +
       `aria-pressed="${elegido === o.id}"><span class="nm">${esc(o.label)}</span><span class="qt">${cuotaTxt(o.odds)}</span></button>`;
   }).join('');
+  const mas = ocultas > 0
+    ? `<button type="button" class="tkt-mas" data-mas="${esc(m.id)}">Ver ${ocultas} más ▾</button>`
+    : (desplegado && m.options.length > OPCIONES_VISIBLES ? `<button type="button" class="tkt-mas" data-mas="${esc(m.id)}">Ver menos ▴</button>` : '');
   let pie;
-  if (m.estado === 'cancelado') pie = '<div class="tkt-cierre">Mercado cancelado: se devuelven los TKT.' + (m.motivoCancelacion ? ' ' + esc(m.motivoCancelacion) : '') + '</div>';
-  else if (m.estado === 'resuelto') pie = '<div class="tkt-cierre">Resuelto' + (m.resolucion?.por === 'auto' ? ' automáticamente con los datos del Traketímetro' : '') + '.</div>';
-  else if (m.estado === 'cerrado') pie = '<div class="tkt-cierre">Cerrado: esperando el resultado.</div>';
+  if (m.estado === 'cancelado') pie = '<div class="tkt-cierre">Cancelado: se devuelven los TKT.' + (m.motivoCancelacion ? ' ' + esc(m.motivoCancelacion) : '') + '</div>';
+  else if (m.estado === 'resuelto') pie = '<div class="tkt-cierre">Resuelto.</div>';
+  else if (m.estado === 'cerrado') pie = '<div class="tkt-cierre">Cerrado: esperando resultado.</div>';
   else pie = `<div class="tkt-cierre">${cierreTxt(m)}</div>`;
+  // La descripción larga solo se enseña en las apuestas que ha puesto el admin a mano
+  const desc = m.descripcion && m.fuente !== 'Traketímetro' ? `<p>${esc(m.descripcion)}</p>` : '';
   return `<article class="tkt-card ${esc(m.estado)}">` +
-    `<h3>${esc(m.titulo)}</h3>` +
-    `<div class="tkt-meta">${m.evento ? `<span>${esc(m.evento)}</span>` : ''}<span>${esc(m.categoria)}</span><span class="tk">${esc(m.fuente)}</span></div>` +
-    (m.descripcion ? `<p>${esc(m.descripcion)}</p>` : '') +
-    `<div class="tkt-opts">${opts}</div>${pie}</article>`;
+    `<h3>${esc(m.titulo)}</h3>${desc}` +
+    `<div class="tkt-opts">${opts}${mas}</div>${pie}</article>`;
 }
 
 function grupos(lista) {
@@ -270,12 +280,12 @@ function pintarMercados() {
   const resto = state.markets.filter((m) => !(m.estado === 'abierto' && m.cierra > t)).sort((a, b) => b.cierra - a.cierra);
 
   let html = '';
-  html += '<h2 class="tkt-sec-title">🔥 MERCADOS ABIERTOS</h2>';
+  html += '<h2 class="tkt-sec-title">🔥 APUESTAS ABIERTAS</h2>';
   html += actuales.length
     ? `<div class="tkt-mercados">${actuales.map(tarjeta).join('')}</div>`
-    : '<div class="tkt-vacio">Ahora mismo no hay mercados abiertos. Mira los próximos 👇</div>';
+    : '<div class="tkt-vacio">Ahora no hay apuestas abiertas. Mira las próximas 👇</div>';
 
-  html += '<h2 class="tkt-sec-title">🔥 PRÓXIMOS MERCADOS</h2>';
+  html += '<h2 class="tkt-sec-title">⏭️ PRÓXIMAS</h2>';
   if (proximos.length) {
     for (const [nombre, lista] of grupos(proximos)) {
       html += `<div class="tkt-grupo">${esc(nombre || 'Próximamente')}</div><div class="tkt-mercados">${lista.map(tarjeta).join('')}</div>`;
@@ -306,6 +316,13 @@ function conciliarCupon() {
 }
 
 $('mercados').addEventListener('click', (e) => {
+  const mas = e.target.closest('button.tkt-mas');
+  if (mas) {
+    const id = mas.dataset.mas;
+    if (state.abiertas.has(id)) state.abiertas.delete(id); else state.abiertas.add(id);
+    pintarMercados();
+    return;
+  }
   const b = e.target.closest('button.tkt-odd');
   if (!b || b.disabled) return;
   const mid = b.dataset.m;
