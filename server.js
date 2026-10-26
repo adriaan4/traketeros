@@ -180,6 +180,21 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, uptime: Math.round(process.uptime()) });
 });
 
+// =========================
+// PANEL DE CONTROL (solo admin)
+// =========================
+// Reúne todas las subwebs de admin en una sola página. El HTML vive en /private
+// (fuera de public/), así que NO se sirve como archivo normal: solo sale por esta
+// ruta y solo después de pedir usuario y clave. No está enlazado desde ninguna
+// página ni listado en robots.txt (para no delatar la ruta); además va con noindex.
+app.get(['/panel', '/panel/'], adminAuth, (req, res) => {
+  res.set({
+    'Cache-Control': 'no-store',
+    'X-Robots-Tag': 'noindex, nofollow, noarchive'
+  });
+  res.sendFile(path.join(__dirname, 'private', 'panel.html'));
+});
+
 // Archivos de la web
 app.use(express.static(path.join(__dirname, 'public')));
 
