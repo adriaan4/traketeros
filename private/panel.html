@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#ff2596">
   <title>Panel · Traketeros</title>
+  <script src="/tema.js?v=1" data-boton="no"></script>
   <link rel="icon" href="/assets/traketeros.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -110,6 +111,15 @@
     }
     .stage iframe.activo { display: block; }
 
+
+    /* ---------- Modo noche (lo activa /tema.js) ---------- */
+    html[data-tema="noche"] { color-scheme: dark; --cream: #150014; --black: #ecdcf2; }
+    html[data-tema="noche"] .btn,
+    html[data-tema="noche"] .tab { background: #241024; }
+    html[data-tema="noche"] .tab:hover { background: #43153a; }
+    html[data-tema="noche"] .tab[aria-selected="true"] { background: var(--cyan); color: #1a0018; }
+    html[data-tema="noche"] .stage { background: #150014; }
+
     @media (max-width: 560px) {
       .top { padding: 8px 10px; }
       .top .titulo strong { font-size: 22px; }
@@ -126,6 +136,7 @@
     <small>PANEL DE CONTROL</small>
   </div>
   <div class="acciones">
+    <button class="btn" id="tema" type="button" title="Cambiar tema">🌗<span class="txt"> Tema</span></button>
     <button class="btn" id="recargar" type="button" title="Recargar esta sección">↻<span class="txt"> Recargar</span></button>
     <button class="btn" id="aparte" type="button" title="Abrir esta sección en otra pestaña">↗<span class="txt"> Abrir aparte</span></button>
   </div>
@@ -207,6 +218,24 @@
   document.getElementById('aparte').addEventListener('click', () => {
     if (actual) window.open(actual.url, '_blank', 'noopener');
   });
+
+
+  // ---------- Tema día / noche ----------
+  const $tema = document.getElementById('tema');
+  const ICONOS_TEMA = { auto: '🌗', noche: '🌙', dia: '☀️' };
+  const NOMBRES_TEMA = { auto: 'Auto', noche: 'Noche', dia: 'Día' };
+  function pintarTema(e) {
+    $tema.firstChild.textContent = ICONOS_TEMA[e.modo];
+    $tema.querySelector('.txt').textContent = ' ' + NOMBRES_TEMA[e.modo];
+    $tema.title = 'Tema: ' + NOMBRES_TEMA[e.modo].toLowerCase() + (e.modo === 'auto' ? ' (ahora de ' + (e.noche ? 'noche' : 'día') + ')' : '') + ' · pulsa para cambiar';
+  }
+  if (window.temaTraketeros) {
+    pintarTema(window.temaTraketeros.estado());
+    window.addEventListener('tema-cambio', (ev) => pintarTema(ev.detail));
+    $tema.addEventListener('click', () => window.temaTraketeros.ciclar());
+  } else {
+    $tema.hidden = true;
+  }
 
   window.addEventListener('hashchange', () => abrir(location.hash.slice(1), { guardar: false }));
 

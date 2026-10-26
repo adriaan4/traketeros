@@ -1,0 +1,185 @@
+/* ============================================================
+   MODO NOCHE · Traketeros
+   Se activa solo cuando tema.js pone  <html data-tema="noche">
+   (de noche en Zaragoza, o a mano con el botón 🌙).
+   Este archivo se carga DESPUÉS de styles.css (y de tkt365.css).
+   ============================================================ */
+
+html[data-tema="noche"] {
+  color-scheme: dark;           /* inputs, selects, scrollbars y diálogos nativos, en oscuro */
+  --cream: #150014;               /* fondo de página */
+  --black: #ecdcf2;                /* tinta: texto, bordes y sombras (en el día era casi negro) */
+  --noche-surf: #241024;         /* fondo de tarjetas y paneles (en el día era blanco) */
+}
+
+/* Las sombras duras claras son muy chillonas sobre fondo oscuro: las suavizamos un poco */
+html[data-tema="noche"] .card, html[data-tema="noche"] .panel, html[data-tema="noche"] .tile,
+html[data-tema="noche"] .tkt-card, html[data-tema="noche"] .tkt-ap { --black: #d9c4e3; }
+
+/* Textos con contorno de cómic: el contorno se queda oscuro */
+html[data-tema="noche"] h1 span, html[data-tema="noche"] .price, html[data-tema="noche"] .multa-title {
+  -webkit-text-stroke-color: #1a0018;
+}
+
+/* ---- Reglas generadas a partir de styles.css y tkt365.css: fondos blancos, pasteles y grises ---- */
+
+/* · styles.css */
+:where(html[data-tema="noche"]) .header-pill,
+:where(html[data-tema="noche"]) .header-link { color: #1a0018; }
+:where(html[data-tema="noche"]) .eyebrow { color: #1a0018; }
+:where(html[data-tema="noche"]) .mini-list div { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .photo-sticker { color: #1a0018; }
+:where(html[data-tema="noche"]) .card { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .scribble { color: #1a0018; }
+:where(html[data-tema="noche"]) .perks span { background: #2d2433; }
+:where(html[data-tema="noche"]) .note { color: #bfaecb; }
+:where(html[data-tema="noche"]) .side-note { color: #1a0018; }
+:where(html[data-tema="noche"]) .tape { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .success-card { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .check { color: #1a0018; }
+:where(html[data-tema="noche"]) .stat { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .stat small { color: #bfaecb; }
+:where(html[data-tema="noche"]) .panel { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) th,
+:where(html[data-tema="noche"]) td { border-bottom: 2px solid rgba(236,220,242,.14); }
+:where(html[data-tema="noche"]) th { color: #bfaecb; }
+:where(html[data-tema="noche"]) td small { color: #bfaecb; }
+:where(html[data-tema="noche"]) .on { background: #1b4d2b; }
+:where(html[data-tema="noche"]) .off { background: #5a1c25; }
+:where(html[data-tema="noche"]) .warn { color: #1a0018; }
+:where(html[data-tema="noche"]) .mini { color: #1a0018; }
+:where(html[data-tema="noche"]) .uploader { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .pick:hover { background: #473a12; }
+:where(html[data-tema="noche"]) .bar { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .bar::-webkit-progress-bar { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .msg.ok { color: #5fe38a; }
+:where(html[data-tema="noche"]) .ph { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .ph img { background: #2d2433; }
+:where(html[data-tema="noche"]) .ph-desc { color: #bfaecb; }
+:where(html[data-tema="noche"]) .empty { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .lb-box { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .lb-box img { background: #0b000a; }
+:where(html[data-tema="noche"]) .lb-desc { color: #bfaecb; }
+:where(html[data-tema="noche"]) .lb-cap small { color: #bfaecb; }
+:where(html[data-tema="noche"]) a.mini { color: #1a0018; }
+:where(html[data-tema="noche"]) .tab { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .game-card .badge { color: #1a0018; }
+:where(html[data-tema="noche"]) .contador { background: #2d2433; }
+:where(html[data-tema="noche"]) .imp-jugadores li { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .imp-vacio { color: #bfaecb; }
+:where(html[data-tema="noche"]) .imp-cat-btn { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .imp-cat-btn.active { color: #1a0018; }
+:where(html[data-tema="noche"]) .btn.ghost { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .imp-carta.es-impostor { background: #4a1a22; }
+:where(html[data-tema="noche"]) .imp-carta.visto { background: var(--noche-surf); color: #bfaecb; }
+:where(html[data-tema="noche"]) .tile { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tile:active,
+:where(html[data-tema="noche"]) .tile.pulse { color: #1a0018; }
+:where(html[data-tema="noche"]) .undo { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .ranking-scroll { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .ranking-table th,
+:where(html[data-tema="noche"]) .ranking-table td { border-bottom: 2px solid rgba(236,220,242,.14); }
+:where(html[data-tema="noche"]) .ranking-table .rk-edit-btn { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .ranking-vacio { color: #bfaecb; }
+:where(html[data-tema="noche"]) .mantenimiento-pago { color: #1a0018; }
+:where(html[data-tema="noche"]) .cuota-row { background: #43153a; }
+:where(html[data-tema="noche"]) .cuota-row.paid { background: #1b4d2b; }
+:where(html[data-tema="noche"]) .cuota-btns .mini { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .cuota-msg.bad { color: #ff8e8e; }
+:where(html[data-tema="noche"]) .periodo-field select { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .periodo-info { color: #bfaecb; }
+:where(html[data-tema="noche"]) .admin-fechas select { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .fechas-list li { border-bottom: 2px solid rgba(236,220,242,.14); }
+:where(html[data-tema="noche"]) .fechas-list .fechas-vacio { color: #bfaecb; }
+:where(html[data-tema="noche"]) .admin-fechas .rk-edit-btn { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .countdown { background: #0b000a; }
+:where(html[data-tema="noche"]) .cd-box { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .trofeo.en-juego { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .trofeo.en-juego b { color: #bfaecb; }
+:where(html[data-tema="noche"]) .trofeo.en-juego em { color: #bfaecb; }
+:where(html[data-tema="noche"]) .salon-vacio { color: #bfaecb; }
+:where(html[data-tema="noche"]) .multa { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .est-frame { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .est-card { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .enlace { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .enlace span { color: #1a0018; }
+:where(html[data-tema="noche"]) .clip { background: #0b000a; }
+:where(html[data-tema="noche"]) .clip video { background: #0b000a; }
+:where(html[data-tema="noche"]) .historial-list { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .hist-item { border-bottom: 2px solid rgba(236,220,242,.14); }
+:where(html[data-tema="noche"]) .hist-info small { color: #bfaecb; }
+:where(html[data-tema="noche"]) .hist-foto { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .past-chip { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .modo-impostor .imp-carta.es-impostor { background: #4a1a22; }
+/* · tkt365.css */
+:where(html[data-tema="noche"]) .tkt-aviso { color: #bfaecb; }
+:where(html[data-tema="noche"]) .tkt-yo { background: #0b000a; }
+:where(html[data-tema="noche"]) .tkt-yo select { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tkt-wallet { background: #0b000a; }
+:where(html[data-tema="noche"]) .tkt-tabs button { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tkt-grupo { color: #1a0018; }
+:where(html[data-tema="noche"]) .tkt-card { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tkt-card p { color: #bfaecb; }
+:where(html[data-tema="noche"]) .tkt-meta .tk { color: #1a0018; }
+:where(html[data-tema="noche"]) .tkt-odd .qt { color: #1a0018; }
+:where(html[data-tema="noche"]) .tkt-odd:hover:not(:disabled) { background: #43153a; }
+:where(html[data-tema="noche"]) .tkt-odd.sel .qt { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tkt-odd.ganadora { background: #1b4d2b; }
+:where(html[data-tema="noche"]) .tkt-cierre { color: #bfaecb; }
+:where(html[data-tema="noche"]) .tkt-vacio { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tkt-cupon { background: #0b000a; }
+:where(html[data-tema="noche"]) .tkt-cupon-head .tipo { color: #1a0018; }
+:where(html[data-tema="noche"]) .tkt-stake input { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tkt-rapidas button:hover { color: #1a0018; }
+:where(html[data-tema="noche"]) .tkt-apostar { color: #1a0018; }
+:where(html[data-tema="noche"]) .tkt-ap { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tkt-ap-head small { color: #bfaecb; }
+:where(html[data-tema="noche"]) .tkt-est.pendiente { background: #5a4a10; }
+:where(html[data-tema="noche"]) .tkt-est.ganada { background: #1b4d2b; }
+:where(html[data-tema="noche"]) .tkt-est.perdida { background: #5a1c25; }
+:where(html[data-tema="noche"]) .tkt-est.cancelada { background: #3a3440; }
+:where(html[data-tema="noche"]) .tkt-rank tr.yo td { background: #43153a; }
+:where(html[data-tema="noche"]) .tkt-pos-bn { color: #5fe38a; }
+:where(html[data-tema="noche"]) .tkt-neg { color: #ff8e8e; }
+:where(html[data-tema="noche"]) .tkt-pos-n { color: #5fe38a; }
+:where(html[data-tema="noche"]) .tkt-neg-n { color: #ff8e8e; }
+:where(html[data-tema="noche"]) .status.cerrado { background: #5a4a10; }
+:where(html[data-tema="noche"]) .status.resuelto { background: #1b4d2b; }
+:where(html[data-tema="noche"]) .status.cancelado { background: #3a3440; }
+:where(html[data-tema="noche"]) .status.abierto { background: #14506f; }
+:where(html[data-tema="noche"]) .tkt-lock { color: #1a0018; }
+:where(html[data-tema="noche"]) .tkt-lock.libre { background: #3a3440; }
+:where(html[data-tema="noche"]) .tkt-ap-nums { color: #bfaecb; }
+:where(html[data-tema="noche"]) .tkt-ap-nums span { border-right: 2px solid rgba(236,220,242,.18); border-bottom: 2px solid rgba(236,220,242,.18); }
+:where(html[data-tema="noche"]) .tkt-join input { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tkt-join button { color: #1a0018; }
+:where(html[data-tema="noche"]) .tkt-solo { background: #17435f; }
+:where(html[data-tema="noche"]) .tkt-compartir { background: #0b000a; }
+:where(html[data-tema="noche"]) .tkt-resguardo-bt button[data-r="close"] { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tkt-admin .scroll tr { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .tkt-admin .scroll td { border-bottom: 1px dashed rgba(236,220,242,.18); }
+:where(html[data-tema="noche"]) .tkt-admin .scroll td::before { color: #bfaecb; }
+:where(html[data-tema="noche"]) .tkt-cierre { border-top: 2px solid rgba(236,220,242,.14); }
+/* ---- Trofeos: se quedan dorados/azules (son premios), con tinta oscura por dentro ---- */
+html[data-tema="noche"] .trofeo { --black: #1a0018; color: #1a0018; }
+html[data-tema="noche"] .trofeo.en-juego { --black: #ecdcf2; color: #ecdcf2; }
+
+/* ---- Pequeños retoques ---- */
+html[data-tema="noche"] ::selection { background: #00a8e6; color: #1a0018; }
+html[data-tema="noche"] .tkt-msg.err { color: #ff8e8e !important; }
+html[data-tema="noche"] .tkt-msg.ok  { color: #5fe38a !important; }
+
+/* ---- Botón flotante de tema (lo crea tema.js) ---- */
+.tema-btn {
+  position: fixed; left: 14px; bottom: 14px; z-index: 50;
+  width: 46px; height: 46px; padding: 0;
+  display: grid; place-items: center;
+  font-size: 22px; line-height: 1; cursor: pointer;
+  color: #1a0018; background: #fff;
+  border: 3px solid #1a0018; border-radius: 50%;
+  box-shadow: 3px 3px 0 #1a0018;
+}
+.tema-btn:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #1a0018; }
+html[data-tema="noche"] .tema-btn { background: #241024; color: #ecdcf2; border-color: #ecdcf2; box-shadow: 3px 3px 0 #ecdcf2; }
+html[data-tema="noche"] .tema-btn:hover { box-shadow: 1px 1px 0 #ecdcf2; }
+@media print { .tema-btn { display: none; } }
