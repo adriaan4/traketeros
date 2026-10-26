@@ -169,17 +169,3 @@ html[data-tema="noche"] ::selection { background: #00a8e6; color: #1a0018; }
 html[data-tema="noche"] .tkt-msg.err { color: #ff8e8e !important; }
 html[data-tema="noche"] .tkt-msg.ok  { color: #5fe38a !important; }
 
-/* ---- Botón flotante de tema (lo crea tema.js) ---- */
-.tema-btn {
-  position: fixed; left: 14px; bottom: 14px; z-index: 50;
-  width: 46px; height: 46px; padding: 0;
-  display: grid; place-items: center;
-  font-size: 22px; line-height: 1; cursor: pointer;
-  color: #1a0018; background: #fff;
-  border: 3px solid #1a0018; border-radius: 50%;
-  box-shadow: 3px 3px 0 #1a0018;
-}
-.tema-btn:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #1a0018; }
-html[data-tema="noche"] .tema-btn { background: #241024; color: #ecdcf2; border-color: #ecdcf2; box-shadow: 3px 3px 0 #ecdcf2; }
-html[data-tema="noche"] .tema-btn:hover { box-shadow: 1px 1px 0 #ecdcf2; }
-@media print { .tema-btn { display: none; } }

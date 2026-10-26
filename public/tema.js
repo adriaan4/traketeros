@@ -2,10 +2,10 @@
    TEMA DÍA / NOCHE · Traketeros
    - Automático: de noche desde que se pone el sol en Zaragoza hasta que sale,
      calculado cada día (no hace falta internet ni cambiar nada en verano/invierno).
-   - Botón 🌗 / 🌙 / ☀️ (abajo a la izquierda) para forzar noche o día. Se recuerda en el móvil/PC.
+   - Forzar noche o día a mano solo se puede desde el panel de admin (/panel); en el resto
+     de la web no hay botón: los visitantes siempre ven el modo automático.
    - Si por lo que sea no se puede calcular el sol, usa de 22:00 a 07:00.
    Se carga en el <head> para que no parpadee: <script src="tema.js"></script>
-   (con data-boton="no" no pinta el botón flotante; lo usa el panel.)
    ============================================================ */
 (function () {
   'use strict';
@@ -13,8 +13,6 @@
   var LAT = 41.6488, LON = -0.8891;   // Zaragoza
   var CLAVE = 'traketeros-tema';      // en localStorage: 'noche' | 'dia' (si no hay nada = automático)
   var raiz = document.documentElement;
-  var script = document.currentScript;
-  var conBoton = !(script && script.getAttribute('data-boton') === 'no');
 
   // ---------- Hora de salida y puesta del sol (algoritmo del Almanaque Náutico) ----------
   function diaDelAnio(y, m, d) {
@@ -83,29 +81,16 @@
   }
 
   // ---------- Aplicar ----------
-  var boton = null;
-  var ICONOS = { auto: '🌗', noche: '🌙', dia: '☀️' };
-
   function estado() {
     var modo = leer();
     var noche = modo === 'noche' || (modo === 'auto' && esDeNoche(new Date()));
     return { modo: modo, noche: noche };
   }
 
-  function textoModo(e) {
-    if (e.modo === 'auto') return 'Tema: automático (ahora de ' + (e.noche ? 'noche' : 'día') + ') · pulsa para cambiar';
-    return 'Tema: siempre de ' + (e.modo === 'noche' ? 'noche' : 'día') + ' · pulsa para cambiar';
-  }
-
   function aplicar() {
     var e = estado();
     raiz.setAttribute('data-tema', e.noche ? 'noche' : 'dia');
     raiz.setAttribute('data-tema-modo', e.modo);
-    if (boton) {
-      boton.textContent = ICONOS[e.modo];
-      boton.title = textoModo(e);
-      boton.setAttribute('aria-label', textoModo(e));
-    }
     try { window.dispatchEvent(new CustomEvent('tema-cambio', { detail: e })); } catch (_) {}
     return e;
   }
@@ -125,18 +110,6 @@
   // Si cambias el tema en otra pestaña (o en el panel), se actualiza aquí también
   window.addEventListener('storage', function (ev) { if (ev.key === CLAVE || ev.key === null) aplicar(); });
 
-  function crearBoton() {
-    if (!conBoton || window.top !== window.self || boton || !document.body) return;
-    boton = document.createElement('button');
-    boton.type = 'button';
-    boton.className = 'tema-btn';
-    boton.addEventListener('click', ciclar);
-    document.body.appendChild(boton);
-    aplicar();
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', crearBoton);
-  else crearBoton();
-
-  // Para el panel de control (y para probarlo desde la consola)
+  // Lo usa el panel de control (/panel) para el botón de tema
   window.temaTraketeros = { estado: estado, ciclar: ciclar, esDeNoche: esDeNoche, _sol: momentoSol };
 })();
