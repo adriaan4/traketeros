@@ -169,3 +169,8 @@ html[data-tema="noche"] ::selection { background: #00a8e6; color: #1a0018; }
 html[data-tema="noche"] .tkt-msg.err { color: #ff8e8e !important; }
 html[data-tema="noche"] .tkt-msg.ok  { color: #5fe38a !important; }
 
+/* Próximo evento junto a San Roque */
+:where(html[data-tema="noche"]) .countdown-evento { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .cd-ev-kicker { color: #ff9bd0; }
+:where(html[data-tema="noche"]) .cd-ev-days { color: #ff72bd; }
+:where(html[data-tema="noche"]) .cd-ev-link { border-color: #ecdcf2; }

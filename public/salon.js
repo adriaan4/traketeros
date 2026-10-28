@@ -33,6 +33,55 @@ function tickCuentaAtras() {
 tickCuentaAtras();
 setInterval(tickCuentaAtras, 1000);
 
+// ---------- Próximo evento (publicado desde el admin) junto a San Roque ----------
+//   GET /api/community/overview → { events: [{ name, date: 'YYYY-MM-DD', time, place, source? }] }
+function hoyLocalISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+async function cargarEvento() {
+  const box = $('cdEvento');
+  if (!box) return;
+  try {
+    const r = await fetch('/api/community/overview');
+    if (!r.ok) throw new Error('sin datos');
+    const d = await r.json();
+    const hoy = hoyLocalISO();
+    // Solo los eventos publicados en el admin (los del Traketímetro llevan "source")
+    const futuros = (d.events || [])
+      .filter((e) => !e.source && e.date && String(e.date) >= hoy)
+      .sort((a, b) => (String(a.date) + (a.time || '')).localeCompare(String(b.date) + (b.time || '')));
+
+    if (!futuros.length) { box.hidden = true; $('cdSection').classList.remove('con-evento'); return; }
+
+    const ev = futuros[0];
+    const [y, m, dd] = String(ev.date).split('-').map(Number);
+    const f = new Date(y, m - 1, dd);
+    const t = new Date();
+    const dias = Math.round((f - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000);
+    const etiqueta = dias <= 0 ? '¡HOY!' : dias === 1 ? '¡MAÑANA!' : `En ${dias} días`;
+    const fecha = f.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+    const resto = futuros.length - 1;
+
+    box.innerHTML = `
+      <div class="cd-ev-kicker">📅 PRÓXIMO EVENTO</div>
+      <h3 class="cd-ev-name">${esc(ev.name)}</h3>
+      <div class="cd-ev-days">${etiqueta}</div>
+      <p class="cd-ev-date">${esc(fecha)}${ev.time ? ' · ' + esc(ev.time) : ''}</p>
+      ${ev.place ? `<p class="cd-ev-place">📍 ${esc(ev.place)}</p>` : ''}
+      <a class="cd-ev-link" href="calendario.html">Ver calendario${resto > 0 ? ` (+${resto} más)` : ''}</a>`;
+    box.hidden = false;
+    $('cdSection').classList.add('con-evento');
+  } catch (_) {
+    box.hidden = true;
+    $('cdSection').classList.remove('con-evento');
+  }
+}
+
+cargarEvento();
+setInterval(cargarEvento, 5 * 60 * 1000);
+
 // ---------- Salón ----------
 const fechaCorta = (s) => s.split('-').reverse().join('/');
 

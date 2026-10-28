@@ -1984,3 +1984,55 @@ td, th { font-variant-numeric: tabular-nums; }
 @media (min-width: 1500px) {
   main { width: min(1240px, 88%); }
 }
+
+/* ---------- Próximo evento junto a San Roque (móvil primero: apilado; en ancho, a dos columnas) ---------- */
+.countdown-main { min-width: 0; }
+.countdown-evento {
+  margin-top: 22px;
+  padding: 18px 14px;
+  background: white;
+  color: var(--black);
+  border: 3px solid var(--red);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.countdown-evento[hidden] { display: none; }
+.cd-ev-kicker { font-size: 12px; font-weight: 900; letter-spacing: 1px; color: #8d0059; }
+.cd-ev-name {
+  font-family: Bangers, Impact, sans-serif;
+  font-size: 32px;
+  line-height: 1.05;
+  margin: 8px 0 6px;
+  font-weight: 400;
+  letter-spacing: .5px;
+}
+.cd-ev-days { font-family: Bangers, Impact, sans-serif; font-size: 30px; line-height: 1; color: #c2007a; margin: 4px 0 10px; }
+.cd-ev-date { margin: 0; font-weight: 800; font-size: 16px; text-transform: capitalize; }
+.cd-ev-place { margin: 6px 0 0; font-weight: 700; font-size: 15px; }
+.cd-ev-link {
+  display: inline-block;
+  margin-top: 14px;
+  padding: 10px 14px;
+  min-height: 44px;
+  line-height: 24px;
+  font-weight: 900;
+  font-size: 14px;
+  color: white;
+  background: #e5007f;
+  border: 3px solid var(--black);
+  text-decoration: none;
+}
+@media (min-width: 860px) {
+  .countdown.con-evento {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 28px;
+    align-items: center;
+  }
+  .countdown.con-evento .countdown-evento { margin-top: 0; }
+  .cd-ev-name { font-size: 38px; }
+}
+@media (max-width: 500px) {
+  .cd-ev-name { font-size: 28px; }
+  .cd-ev-days { font-size: 26px; }
+}
