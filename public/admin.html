@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
   <link rel="stylesheet" href="styles.css?v=19">
   <link rel="stylesheet" href="noche.css?v=2">
+  <link rel="stylesheet" href="community.css?v=2">
   <script src="tema.js?v=2"></script>
 </head>
 <body>
@@ -68,8 +69,46 @@
       </table>
     </div>
   </section>
+
+  <section class="panel community-admin-panel" aria-labelledby="community-admin-title">
+    <div class="panel-head">
+      <h2 id="community-admin-title">📅 Calendario y avisos de la peña</h2>
+      <button class="mini" id="communityRefresh" type="button">Actualizar comunidad</button>
+    </div>
+    <p class="community-intro">Gestiona aquí los eventos y avisos sin salir del panel de administración.</p>
+    <div class="community-grid">
+      <article class="community-card">
+        <h3>➕ Nuevo evento</h3>
+        <form class="community-form" id="eventForm">
+          <label>Nombre<input name="name" maxlength="100" required placeholder="Quedada, cena, fiesta…"></label>
+          <label>Fecha<input name="date" type="date" required></label>
+          <label>Hora<input name="time" type="time"></label>
+          <label>Lugar<input name="place" maxlength="120" placeholder="Dónde quedamos"></label>
+          <label class="span2">Descripción<textarea name="description" maxlength="500"></textarea></label>
+          <div class="span2"><button class="mini" type="submit">Publicar evento</button></div>
+        </form>
+        <p class="community-message" id="eventMsg" role="status"></p>
+        <h4>Eventos publicados</h4>
+        <ul class="community-list" id="adminEvents"></ul>
+      </article>
+      <article class="community-card">
+        <h3>📢 Nuevo aviso</h3>
+        <form class="community-form" id="noticeForm">
+          <label class="span2">Título<input name="title" maxlength="120" required></label>
+          <label class="span2">Aviso<textarea name="body" maxlength="1500" required></textarea></label>
+          <label class="span2"><span><input name="pinned" type="checkbox" style="width:auto"> Marcar como destacado</span></label>
+          <div class="span2"><button class="mini" type="submit">Publicar aviso</button></div>
+        </form>
+        <p class="community-message" id="noticeMsg" role="status"></p>
+        <h4>Avisos publicados</h4>
+        <ul class="community-list" id="adminNotices"></ul>
+      </article>
+    </div>
+    <p class="community-message" id="authMsg" role="status"></p>
+  </section>
 </main>
 
 <script src="admin.js?v=4"></script>
+<script src="admin-community-panel.js?v=2"></script>
 </body>
 </html>
