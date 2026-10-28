@@ -121,7 +121,7 @@ function pintarRanking() {
   tbody.innerHTML = people.map((p, i) => `
     <tr>
       <td class="rk-pos">${medallas[i] || (i + 1)}</td>
-      <td class="rk-name">${escapeHtml(p.name)}</td>
+      <td class="rk-name"><a href="perfil.html?name=${encodeURIComponent(p.name)}" title="Ver perfil de ${escapeHtml(p.name)}">${escapeHtml(p.name)}</a></td>
       <td>${p.cervezas}</td>
       <td>${p.cubatas}</td>
       <td>${p.chupitos}</td>
@@ -150,7 +150,7 @@ function pintarTotales() {
   const suma = (k) => totales.reduce((s, p) => s + (p[k] || 0), 0);
   tbody.innerHTML = totales.map((p) => `
     <tr>
-      <td class="rk-name">${escapeHtml(p.name)}</td>
+      <td class="rk-name"><a href="perfil.html?name=${encodeURIComponent(p.name)}" title="Ver perfil de ${escapeHtml(p.name)}">${escapeHtml(p.name)}</a></td>
       <td>${p.cervezas}</td>
       <td>${p.cubatas}</td>
       <td>${p.chupitos}</td>

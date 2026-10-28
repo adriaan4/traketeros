@@ -1810,6 +1810,107 @@ app.post('/api/admin/traketimetro/ganador', adminAuth, (req, res) => {
 });
 
 // =========================
+// COMUNIDAD: calendario, avisos y dashboard/perfiles
+// =========================
+const COMMUNITY_FILE = path.join(TRAKE_DATA_DIR, 'community.json');
+const COMMUNITY_CLOUD_ID = 'traketeros_data/community';
+let communityData = { events: [], notices: [] };
+function communityNormalize(raw) {
+  return {
+    events: Array.isArray(raw?.events) ? raw.events : [],
+    notices: Array.isArray(raw?.notices) ? raw.notices : []
+  };
+}
+function communitySave() {
+  try {
+    fs.mkdirSync(TRAKE_DATA_DIR, { recursive: true });
+    fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(communityData), 'utf8');
+  } catch (e) { console.error('No se pudo guardar calendario/avisos:', e.message || e); }
+  if (CLOUDINARY_OK) {
+    const b64 = Buffer.from(JSON.stringify(communityData)).toString('base64');
+    cloudinary.uploader.upload(`data:application/json;base64,${b64}`, {
+      resource_type: 'raw', public_id: COMMUNITY_CLOUD_ID, overwrite: true, invalidate: true
+    }).catch((e) => console.error('No se pudo respaldar calendario/avisos:', e.message || e));
+  }
+}
+async function communityLoad() {
+  if (CLOUDINARY_OK) {
+    try {
+      const info = await cloudinary.api.resource(COMMUNITY_CLOUD_ID, { resource_type: 'raw' });
+      const resp = await fetch(info.secure_url, { cache: 'no-store' });
+      if (resp.ok) { communityData = communityNormalize(await resp.json()); communitySaveLocalOnly(); return; }
+    } catch (_) {}
+  }
+  try { communityData = communityNormalize(JSON.parse(fs.readFileSync(COMMUNITY_FILE, 'utf8'))); }
+  catch { communityData = communityNormalize(null); }
+}
+function communitySaveLocalOnly() {
+  try { fs.mkdirSync(TRAKE_DATA_DIR, { recursive: true }); fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(communityData), 'utf8'); } catch (_) {}
+}
+communityLoad();
+function trakeAggregate() {
+  const byName = new Map();
+  const add = (row) => {
+    const name = String(row?.name || '').trim(); if (!name) return;
+    const key = name.toLocaleLowerCase('es');
+    if (!byName.has(key)) byName.set(key, { name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0, puntos: 0, apuntes: 0, ultimaActividad: 0 });
+    const x = byName.get(key);
+    for (const tipo of TRAKE_TIPOS) x[tipo] += Math.max(0, Number(row?.[tipo]) || 0);
+    x.puntos = x.cervezas + x.cubatas * 3 + x.chupitos * 2 + x.porros * 3;
+  };
+  for (const mes of Object.values(trakeData.months || {})) for (const row of Object.values(mes || {})) add(row);
+  // Log is authoritative for activity/recent consumption, while monthly buckets provide lifetime totals.
+  for (const row of (trakeData.log || [])) {
+    const key = String(row.name || '').trim().toLocaleLowerCase('es');
+    if (!key) continue;
+    if (!byName.has(key)) add({ name: row.name });
+    const x = byName.get(key); x.apuntes += 1; x.ultimaActividad = Math.max(x.ultimaActividad, Number(row.ts) || 0);
+  }
+  return [...byName.values()].sort((a,b) => b.puntos-a.puntos || a.name.localeCompare(b.name, 'es'));
+}
+app.get('/api/community/overview', (req, res) => {
+  const people = trakeAggregate();
+  const upcoming = [...communityData.events, ...(trakeData.events || []).map(e => ({ ...e, source: 'traketimetro' }))]
+    .filter(e => e.date || e.start).sort((a,b) => String(a.date || a.start).localeCompare(String(b.date || b.start)));
+  const notices = [...communityData.notices].sort((a,b) => (Number(b.createdAt)||0)-(Number(a.createdAt)||0));
+  res.json({ people, totalRegistros: (trakeData.log || []).length, upcoming: upcoming.filter(e => String(e.date || e.start) >= new Date().toISOString().slice(0,10)).slice(0,5), notices: notices.slice(0,5), events: upcoming, lastActivity: [...(trakeData.log || [])].sort((a,b)=>(b.ts||0)-(a.ts||0))[0] || null });
+});
+app.get('/api/community/profile', (req, res) => {
+  const requested = String(req.query.name || '').trim();
+  if (!requested) return res.status(400).json({ error: 'Indica un nombre.' });
+  const people = trakeAggregate();
+  const person = people.find(p => p.name.toLocaleLowerCase('es') === requested.toLocaleLowerCase('es'));
+  if (!person) return res.status(404).json({ error: 'No existe ese nombre en el Traketímetro.' });
+  const key = person.name.toLocaleLowerCase('es');
+  const activity = (trakeData.log || []).filter(x => String(x.name||'').trim().toLocaleLowerCase('es') === key).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,50);
+  const recent = { cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
+  const cutoff = Date.now() - 30*24*60*60*1000;
+  for (const x of activity) if ((Number(x.ts)||0) >= cutoff && recent[x.tipo] !== undefined) recent[x.tipo] += Number(x.cantidad)||0;
+  res.json({ person, activity, recent });
+});
+app.get('/api/community/admin', adminAuth, (req, res) => res.json(communityData));
+app.post('/api/community/events', adminAuth, (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0,100);
+  const date = String(req.body?.date || '').slice(0,10);
+  if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Nombre y fecha válida son obligatorios.' });
+  const event = { id: crypto.randomUUID(), name, date, time: String(req.body?.time||'').slice(0,5), place: String(req.body?.place||'').trim().slice(0,120), description: String(req.body?.description||'').trim().slice(0,500), createdAt: Date.now() };
+  communityData.events.push(event); communitySave(); res.json({ ok: true, event, data: communityData });
+});
+app.delete('/api/community/events/:id', adminAuth, (req, res) => {
+  communityData.events = communityData.events.filter(e => e.id !== req.params.id); communitySave(); res.json({ ok: true, data: communityData });
+});
+app.post('/api/community/notices', adminAuth, (req, res) => {
+  const title = String(req.body?.title || '').trim().slice(0,120);
+  const body = String(req.body?.body || '').trim().slice(0,1500);
+  if (!title || !body) return res.status(400).json({ error: 'Título y aviso son obligatorios.' });
+  const notice = { id: crypto.randomUUID(), title, body, pinned: Boolean(req.body?.pinned), createdAt: Date.now() };
+  communityData.notices.unshift(notice); communityData.notices = communityData.notices.slice(0,100); communitySave(); res.json({ ok: true, notice, data: communityData });
+});
+app.delete('/api/community/notices/:id', adminAuth, (req, res) => {
+  communityData.notices = communityData.notices.filter(n => n.id !== req.params.id); communitySave(); res.json({ ok: true, data: communityData });
+});
+
+// =========================
 // TKT365: apuestas virtuales con puntos TKT (sin dinero real)
 // =========================
 // Los usuarios salen SIEMPRE del Trakímetro (ver tkt365.js). No se toca nada

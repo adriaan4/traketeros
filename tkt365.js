@@ -393,8 +393,30 @@ export function registerTkt365({
 
   function cuotasAuto(metrica, opts) {
     const users = trakeUsuarios(true); // los mercados automáticos solo usan gente del Traketímetro
+    const t = getTrake();
     const hist = estadisticaHistorica(metrica, opts?.antesDe);
-    let cand = [...users].map(([id, name]) => ({ id, name, stat: hist.get(id) || 0 }));
+    // Además del acumulado histórico, damos un peso adicional a los últimos 30 días.
+    // Todo sale exclusivamente del Traketímetro; no se usan apuestas, saldos ni datos externos.
+    // El consumo reciente ya forma parte del histórico, así que se añade como ponderación,
+    // no como sustitución de los totales guardados.
+    const reciente = new Map();
+    const desde = nowMs() - 30 * 24 * 60 * 60 * 1000;
+    const tipoValido = ['cervezas', 'cubatas', 'chupitos', 'porros'].includes(metrica);
+    if (tipoValido || metrica === 'puntos' || metrica === 'apuntes') {
+      for (const l of t.log || []) {
+        if ((Number(l.ts) || 0) < desde) continue;
+        const id = String(l.name || '').trim().toLowerCase();
+        if (!id) continue;
+        let valor = 1;
+        if (metrica === 'puntos') valor = (puntos[l.tipo] || 0) * (Number(l.cantidad) || 1);
+        else if (metrica !== 'apuntes') valor = l.tipo === metrica ? (Number(l.cantidad) || 1) : 0;
+        if (valor) reciente.set(id, (reciente.get(id) || 0) + valor);
+      }
+    }
+    let cand = [...users].map(([id, name]) => ({
+      id, name,
+      stat: (hist.get(id) || 0) + (reciente.get(id) || 0) * 1.5
+    }));
     cand.sort((a, b) => b.stat - a.stat || a.name.localeCompare(b.name, 'es'));
     const conDatos = cand.filter((c) => c.stat > 0).slice(0, opts?.todos ? 12 : 8);
     cand = conDatos.length >= 2 ? conDatos : cand.slice(0, Math.max(4, conDatos.length));
