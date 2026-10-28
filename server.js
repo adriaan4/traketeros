@@ -1220,9 +1220,14 @@ async function trakeSaveCloud() {
 
 // Guarda en ambos sitios: fichero local (rápido, por si Cloudinary tarda) y
 // Cloudinary (el que de verdad sobrevive a un redeploy).
+// TKT365 se engancha aquí: cada vez que cambian los datos del Traketímetro (nuevo
+// registro, deshacer, edición del admin...) se recalculan las cuotas de TKT365.
+let tkt365Api = null;
+
 function trakeSave() {
   trakeSaveLocal();
   trakeSaveCloud();
+  try { tkt365Api?.recalcularCuotas('registro'); } catch (e) { console.error('TKT365: no se pudieron recalcular las cuotas:', e.message || e); }
 }
 
 // Intenta cargar el respaldo desde Cloudinary; si no hay o falla, usa el
@@ -1809,7 +1814,7 @@ app.post('/api/admin/traketimetro/ganador', adminAuth, (req, res) => {
 // =========================
 // Los usuarios salen SIEMPRE del Trakímetro (ver tkt365.js). No se toca nada
 // del Trakímetro ni de la cuota: solo se leen sus datos.
-registerTkt365({
+tkt365Api = registerTkt365({
   app,
   adminAuth,
   getTrake: () => trakeData,

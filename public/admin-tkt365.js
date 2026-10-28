@@ -314,6 +314,20 @@ function mesSiguienteAdmin() {
   return { id: d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'), label: new Intl.DateTimeFormat('es-ES', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(d) };
 }
 
+$('recalcTodas').addEventListener('click', async () => {
+  if (!confirm('¿Recalcular ahora las cuotas de todos los mercados automáticos abiertos con las estadísticas del Traketímetro? Las apuestas ya hechas conservan su cuota.')) return;
+  const btn = $('recalcTodas');
+  btn.disabled = true;
+  try {
+    const r = await api('/api/tkt365/admin/recalc-all', 'POST', {});
+    alert(r.cambiados
+      ? `Cuotas recalculadas: ${r.cambiados} de ${r.revisados} mercados actualizados.`
+      : `Cuotas al día: ${r.revisados} mercados revisados, ninguno ha cambiado.`);
+    await load();
+  } catch (err) { alert(err.message); }
+  finally { btn.disabled = false; }
+});
+
 $('cubataOro').addEventListener('click', async () => {
   const mes = mesSiguienteAdmin();
   if (!confirm(`¿Recalcular las cuotas del Cubata de Oro de ${mes.label} con las estadísticas totales de la peña? Las apuestas ya hechas conservan su cuota.`)) return;

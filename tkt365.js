@@ -106,7 +106,8 @@ export function registerTkt365({
     bets: [],
     transactions: [],
     extras: Object.create(null),  // userId -> { name, ts }  (personas que solo apuestan: no están en el Traketímetro)
-    claims: Object.create(null)   // userId -> { hash, ts }  (quién ha elegido qué nombre; el token nunca se guarda en claro)
+    claims: Object.create(null),  // userId -> { hash, ts }  (quién ha elegido qué nombre; el token nunca se guarda en claro)
+    cuotas: { ts: 0, motivo: '', revisados: 0, cambiados: 0 } // último recálculo de cuotas automáticas
   });
   let st = vacio();
 
@@ -119,6 +120,7 @@ export function registerTkt365({
     if (Array.isArray(raw.transactions)) s.transactions = raw.transactions;
     if (raw.claims && typeof raw.claims === 'object') Object.assign(s.claims, raw.claims);
     if (raw.extras && typeof raw.extras === 'object') Object.assign(s.extras, raw.extras);
+    if (raw.cuotas && typeof raw.cuotas === 'object') Object.assign(s.cuotas, raw.cuotas);
     return s;
   }
 
@@ -879,7 +881,8 @@ export function registerTkt365({
       metricas: Object.entries(METRICAS).map(([id, d]) => ({ id, titulo: d.titulo })),
       transactions: [...st.transactions].reverse().slice(0, 300),
       resumen: { mercados: st.markets.length, abiertos: st.markets.filter((m) => m.estado === 'abierto').length, apuestas: st.bets.filter((b) => b.estado !== 'cancelada').length, totalApostado },
-      config: { apuestaMin: APUESTA_MIN, apuestaMax: APUESTA_MAX, cuotaMin: CUOTA_MIN, cuotaMax: CUOTA_MAX }
+      config: { apuestaMin: APUESTA_MIN, apuestaMax: APUESTA_MAX, cuotaMin: CUOTA_MIN, cuotaMax: CUOTA_MAX },
+      ultimoRecalculo: st.cuotas
     });
   });
 
@@ -986,8 +989,55 @@ export function registerTkt365({
     for (const o of m.options) {
       if (!nuevas.some((n) => n.id === o.id) && st.bets.some((bt) => bt.legs.some((l) => l.marketId === m.id && l.optionId === o.id))) nuevas.push(o);
     }
+    const firma = (os) => JSON.stringify(os.map((o) => [o.id, o.label, o.odds]));
+    if (firma(nuevas) === firma(m.options)) return false; // nada que cambiar
     m.options = nuevas;
     m.actualizado = nowMs();
+    m.cuotasTs = m.actualizado;
+    return true;
+  }
+
+  // Cuotas de un mercado automático calculadas SOLO con estadísticas del Traketímetro
+  // (cubatas, cervezas, chupitos, porros, puntos, apuntes...). El Cubata de Oro (puntos
+  // de un mes) usa las estadísticas totales de la peña, igual que su botón propio.
+  function opcionesAuto(m) {
+    const per = m.auto?.periodo;
+    const delMes = per?.tipo === 'mes' ? per.id : null;
+    const todos = m.auto?.metrica === 'puntos' && Boolean(delMes);
+    return cuotasAuto(m.auto.metrica, { antesDe: delMes, todos });
+  }
+
+  // Recalcula las cuotas de TODOS los mercados automáticos abiertos y lo guarda en el
+  // backend (fichero + Cloudinary). Las apuestas ya hechas conservan la cuota con la
+  // que se colocaron (la cuota va dentro de cada apuesta).
+  function recalcularCuotas(motivo = 'registro', { forzarGuardado = false } = {}) {
+    if (!arrancado) return { revisados: 0, cambiados: 0 };
+    let revisados = 0;
+    let cambiados = 0;
+    for (const m of st.markets) {
+      if (!m.auto || m.estado !== 'abierto') continue;
+      const nuevas = opcionesAuto(m);
+      if (!nuevas) continue;
+      revisados++;
+      if (aplicarCuotas(m, nuevas)) cambiados++;
+    }
+    if (cambiados > 0 || forzarGuardado) {
+      st.cuotas = { ts: nowMs(), motivo, revisados, cambiados };
+      save();
+    }
+    return { revisados, cambiados };
+  }
+
+  // Cada nuevo registro del Traketímetro llega aquí. Se agrupan registros seguidos
+  // (800 ms) para no recalcular de más.
+  let recalcTimer = null;
+  function programarRecalculo(motivo = 'registro') {
+    if (recalcTimer) clearTimeout(recalcTimer);
+    recalcTimer = setTimeout(() => {
+      recalcTimer = null;
+      try { recalcularCuotas(motivo); } catch (e) { console.error('TKT365: error al recalcular cuotas:', e.message || e); }
+    }, 800);
+    recalcTimer.unref?.();
   }
 
   adm.post('/markets/:id/recalc', (req, res) => {
@@ -995,12 +1045,16 @@ export function registerTkt365({
     if (!m) return;
     if (!m.auto) return res.status(400).json({ error: 'Solo los mercados automáticos se pueden recalcular.' });
     if (m.estado === 'resuelto' || m.estado === 'cancelado') return res.status(409).json({ error: 'Este mercado ya no está activo.' });
-    const delMes = m.auto.periodo?.tipo === 'mes' ? m.auto.periodo.id : null;
-    const nuevas = cuotasAuto(m.auto.metrica, { antesDe: delMes });
+    const nuevas = opcionesAuto(m);
     if (!nuevas) return res.status(400).json({ error: 'No hay datos suficientes.' });
-    aplicarCuotas(m, nuevas);
-    save();
+    if (aplicarCuotas(m, nuevas)) save();
     res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
+  });
+
+  // Botón 🔄 "Recalcular cuotas": todos los mercados automáticos abiertos de una vez
+  adm.post('/recalc-all', (req, res) => {
+    const r = recalcularCuotas('admin', { forzarGuardado: true });
+    res.json({ ok: true, ...r, ts: st.cuotas.ts });
   });
 
   // Cubata de Oro de un mes (el mercado "¿Quién sumará más puntos?" de ese mes):
@@ -1220,5 +1274,5 @@ export function registerTkt365({
   app.use('/api/tkt365/admin', express.json({ limit: '200kb' }), adm);
   app.use('/api/tkt365', express.json({ limit: '50kb' }), api);
 
-  return { tick };
+  return { tick, recalcularCuotas: programarRecalculo };
 }
