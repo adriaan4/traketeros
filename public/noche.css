@@ -174,3 +174,14 @@ html[data-tema="noche"] .tkt-msg.ok  { color: #5fe38a !important; }
 :where(html[data-tema="noche"]) .cd-ev-kicker { color: #ff9bd0; }
 :where(html[data-tema="noche"]) .cd-ev-days { color: #ff72bd; }
 :where(html[data-tema="noche"]) .cd-ev-link { border-color: #ecdcf2; }
+
+/* Inicio (El Local) */
+:where(html[data-tema="noche"]) .home-tile,
+:where(html[data-tema="noche"]) .home-notice,
+:where(html[data-tema="noche"]) .home-table-wrap { background: var(--noche-surf); }
+:where(html[data-tema="noche"]) .home-tile small,
+:where(html[data-tema="noche"]) .home-notice small { color: #cdb9d3; }
+:where(html[data-tema="noche"]) .home-table th { background: #43153a; color: #fff3fa; }
+:where(html[data-tema="noche"]) .home-table td { border-bottom-color: rgba(236, 220, 242, .18); }
+:where(html[data-tema="noche"]) .home-table td:nth-child(2) a { color: #ff9bd0; }
+:where(html[data-tema="noche"]) .cd-ev-flag { color: #ff72bd; }

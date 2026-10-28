@@ -33,54 +33,106 @@ function tickCuentaAtras() {
 tickCuentaAtras();
 setInterval(tickCuentaAtras, 1000);
 
-// ---------- Próximo evento (publicado desde el admin) junto a San Roque ----------
-//   GET /api/community/overview → { events: [{ name, date: 'YYYY-MM-DD', time, place, source? }] }
+// ---------- Comunidad: próximo evento (con cuenta atrás), avisos y líderes ----------
+//   GET /api/community/overview → { people, events: [{ name, date, time, place, source? }], notices }
+let evTarget = null;
+
 function hoyLocalISO() {
   const d = new Date();
   return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 }
 
-async function cargarEvento() {
+function tickEvento() {
+  const grid = $('ev-grid'), flag = $('ev-flag');
+  if (evTarget === null || !grid || !flag) return;
+  const diff = evTarget - Date.now();
+  if (diff <= 0) { grid.hidden = true; flag.hidden = false; return; }
+  grid.hidden = false; flag.hidden = true;
+  const s = Math.floor(diff / 1000);
+  $('ev-d').textContent = Math.floor(s / 86400);
+  $('ev-h').textContent = pad(Math.floor((s % 86400) / 3600));
+  $('ev-m').textContent = pad(Math.floor((s % 3600) / 60));
+  $('ev-s').textContent = pad(s % 60);
+}
+setInterval(tickEvento, 1000);
+
+function pintarEvento(events) {
   const box = $('cdEvento');
-  if (!box) return;
+  const hoy = hoyLocalISO();
+  // Solo los eventos publicados en el admin (los del Traketímetro llevan "source")
+  const futuros = events
+    .filter((e) => !e.source && e.date && String(e.date) >= hoy)
+    .sort((a, b) => (String(a.date) + (a.time || '')).localeCompare(String(b.date) + (b.time || '')));
+
+  if (!futuros.length) { evTarget = null; box.hidden = true; $('cdSection').classList.remove('con-evento'); return; }
+
+  const ev = futuros[0];
+  const [y, m, dd] = String(ev.date).split('-').map(Number);
+  let hh = 0, mm = 0;
+  if (/^\d{1,2}:\d{2}$/.test(ev.time || '')) [hh, mm] = ev.time.split(':').map(Number);
+  evTarget = new Date(y, m - 1, dd, hh, mm).getTime();
+  const fecha = new Date(y, m - 1, dd).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  const resto = futuros.length - 1;
+
+  box.innerHTML = `
+    <div class="cd-ev-kicker">📅 PRÓXIMO EVENTO</div>
+    <h3 class="cd-ev-name">${esc(ev.name)}</h3>
+    <p class="cd-ev-date">${esc(fecha)}${ev.time ? ' · ' + esc(ev.time) : ''}</p>
+    ${ev.place ? `<p class="cd-ev-place">📍 ${esc(ev.place)}</p>` : ''}
+    <div class="cd-ev-grid" id="ev-grid" role="timer" aria-live="off">
+      <div class="cd-box"><b id="ev-d">--</b><small>días</small></div>
+      <div class="cd-box"><b id="ev-h">--</b><small>horas</small></div>
+      <div class="cd-box"><b id="ev-m">--</b><small>min</small></div>
+      <div class="cd-box"><b id="ev-s">--</b><small>seg</small></div>
+    </div>
+    <div class="cd-ev-flag" id="ev-flag" hidden>¡ES HOY! 🎉🍻</div>
+    <a class="cd-ev-link" href="calendario.html">Ver calendario${resto > 0 ? ` (+${resto} más)` : ''}</a>`;
+  box.hidden = false;
+  $('cdSection').classList.add('con-evento');
+  tickEvento();
+}
+
+function pintarAvisos(notices) {
+  const lista = [...notices].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  $('notices').innerHTML = lista.map((n) => `
+    <li class="home-notice">
+      <b>${n.pinned ? '⭐ ' : ''}${esc(n.title)}</b>
+      <p>${esc(n.body)}</p>
+      <small>${esc(new Date(n.createdAt).toLocaleDateString('es-ES'))}</small>
+    </li>`).join('');
+  $('homeNotices').hidden = !lista.length;
+}
+
+function pintarLideres(people) {
+  const medallas = ['🥇', '🥈', '🥉'];
+  $('tilePeople').textContent = people.length ? `${people.length} traketeros en el marcador` : 'Apunta tu consumo';
+  $('leaders').innerHTML = people.slice(0, 8).map((p, i) => `
+    <tr>
+      <td>${medallas[i] || i + 1}</td>
+      <td><a href="perfil.html?name=${encodeURIComponent(p.name)}">${esc(p.name)}</a></td>
+      <td>${esc(p.cervezas)}</td><td>${esc(p.cubatas)}</td><td>${esc(p.chupitos)}</td><td>${esc(p.porros)}</td>
+      <td><b>${esc(p.puntos)}</b></td>
+    </tr>`).join('') || '<tr><td colspan="7">Todavía no hay estadísticas.</td></tr>';
+}
+
+async function cargarComunidad() {
   try {
     const r = await fetch('/api/community/overview');
     if (!r.ok) throw new Error('sin datos');
     const d = await r.json();
-    const hoy = hoyLocalISO();
-    // Solo los eventos publicados en el admin (los del Traketímetro llevan "source")
-    const futuros = (d.events || [])
-      .filter((e) => !e.source && e.date && String(e.date) >= hoy)
-      .sort((a, b) => (String(a.date) + (a.time || '')).localeCompare(String(b.date) + (b.time || '')));
-
-    if (!futuros.length) { box.hidden = true; $('cdSection').classList.remove('con-evento'); return; }
-
-    const ev = futuros[0];
-    const [y, m, dd] = String(ev.date).split('-').map(Number);
-    const f = new Date(y, m - 1, dd);
-    const t = new Date();
-    const dias = Math.round((f - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000);
-    const etiqueta = dias <= 0 ? '¡HOY!' : dias === 1 ? '¡MAÑANA!' : `En ${dias} días`;
-    const fecha = f.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-    const resto = futuros.length - 1;
-
-    box.innerHTML = `
-      <div class="cd-ev-kicker">📅 PRÓXIMO EVENTO</div>
-      <h3 class="cd-ev-name">${esc(ev.name)}</h3>
-      <div class="cd-ev-days">${etiqueta}</div>
-      <p class="cd-ev-date">${esc(fecha)}${ev.time ? ' · ' + esc(ev.time) : ''}</p>
-      ${ev.place ? `<p class="cd-ev-place">📍 ${esc(ev.place)}</p>` : ''}
-      <a class="cd-ev-link" href="calendario.html">Ver calendario${resto > 0 ? ` (+${resto} más)` : ''}</a>`;
-    box.hidden = false;
-    $('cdSection').classList.add('con-evento');
+    pintarEvento(d.events || []);
+    pintarAvisos(d.notices || []);
+    pintarLideres(d.people || []);
   } catch (_) {
-    box.hidden = true;
+    evTarget = null;
+    $('cdEvento').hidden = true;
     $('cdSection').classList.remove('con-evento');
+    $('leaders').innerHTML = '<tr><td colspan="7">No se pudieron cargar los datos.</td></tr>';
   }
 }
 
-cargarEvento();
-setInterval(cargarEvento, 5 * 60 * 1000);
+cargarComunidad();
+setInterval(cargarComunidad, 5 * 60 * 1000);
 
 // ---------- Salón ----------
 const fechaCorta = (s) => s.split('-').reverse().join('/');

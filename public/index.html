@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Cuota mensual de la peña Traketeros.">
+  <meta name="description" content="El local de la peña Traketeros: cuenta atrás, eventos, avisos, ranking y más.">
   <meta name="theme-color" content="#ff2596">
-  <title>Traketeros · La peña de los colegas</title>
+  <title>Traketeros · El Local</title>
   <link rel="icon" href="assets/traketeros.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=22">
-  <link rel="stylesheet" href="noche.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="noche.css?v=5">
   <script src="tema.js?v=2"></script>
 </head>
 <body>
@@ -35,8 +35,6 @@
     <a class="header-link" href="juegos.html">🎮 Juegos</a>
     <a class="header-link" href="traketimetro.html">🍻 Traketímetro</a>
     <a class="header-link" href="tkt365.html">🎰 TKT365</a>
-
-    <a class="header-link" href="dashboard.html">📊 Dashboard</a>
     <a class="header-link" href="salon-fama.html">🏆 Salón de la Fama</a>
     <a class="header-link" href="calendario.html">📅 Calendario</a>  </nav>
 </header>
@@ -44,7 +42,7 @@
 <main>
   <section class="hero">
     <div class="hero-text">
-      <div class="eyebrow">⚽ CUOTA DE LA PEÑA</div>
+      <div class="eyebrow">🏠 EL LOCAL DE LA PEÑA</div>
       <h1>Esto no es una<br><span>empresa.</span><br>Es nuestra peña.</h1>
       <p class="intro">
         Aquí no hay reuniones de 3 horas ni presentaciones de PowerPoint.
@@ -70,7 +68,8 @@
     </figure>
   </section>
 
-  <section class="countdown" id="cdSection" aria-label="Cuenta atrás para San Roque">
+  <section class="countdown" id="cdSection" aria-label="Cuentas atrás">
+    <aside class="countdown-evento" id="cdEvento" aria-label="Próximo evento" hidden></aside>
     <div class="countdown-main">
       <div class="eyebrow">⏳ CUENTA ATRÁS</div>
       <h2 class="countdown-title">San <span>Roque</span> 2027</h2>
@@ -82,13 +81,39 @@
       </div>
       <p class="countdown-note" id="cdNote">13 de agosto de 2027</p>
     </div>
-    <aside class="countdown-evento" id="cdEvento" aria-label="Próximo evento" hidden></aside>
+  </section>
+
+  <nav class="home-tiles" aria-label="Accesos rápidos">
+    <a class="home-tile" href="traketimetro.html"><span class="ht-ico" aria-hidden="true">🍻</span><b>Traketímetro</b><small id="tilePeople">Apunta tu consumo</small></a>
+    <a class="home-tile" href="tkt365.html"><span class="ht-ico" aria-hidden="true">🎰</span><b>TKT365</b><small>Cuotas automáticas</small></a>
+    <a class="home-tile" href="salon-fama.html"><span class="ht-ico" aria-hidden="true">🏆</span><b>Salón de la Fama</b><small>Rankings históricos</small></a>
+    <a class="home-tile" href="calendario.html"><span class="ht-ico" aria-hidden="true">📅</span><b>Calendario</b><small>Fechas de la peña</small></a>
+    <a class="home-tile" href="fotos.html"><span class="ht-ico" aria-hidden="true">📸</span><b>Fotos</b><small>El álbum de la peña</small></a>
+    <a class="home-tile" href="juegos.html"><span class="ht-ico" aria-hidden="true">🎮</span><b>Juegos</b><small>Para romper el hielo</small></a>
+  </nav>
+
+  <section class="salon home-notices" id="homeNotices" aria-label="Avisos" hidden>
+    <div class="eyebrow">📢 AVISOS</div>
+    <h2 class="salon-title">Últimos <span>avisos</span></h2>
+    <ul class="home-notice-list" id="notices"></ul>
   </section>
 
   <section class="clip-wrap" aria-label="Vídeo de la peña 2">
     <figure class="clip">
       <video muted playsinline autoplay preload="auto" disablepictureinpicture></video>
     </figure>
+  </section>
+
+  <section class="salon home-leaders" aria-label="Líderes históricos">
+    <div class="eyebrow">👑 LÍDERES</div>
+    <h2 class="salon-title">Líderes <span>históricos</span></h2>
+    <div class="home-table-wrap">
+      <table class="home-table">
+        <thead><tr><th>#</th><th>Traketero</th><th>🍺</th><th>🍹</th><th>🥃</th><th>🚬</th><th>Pts</th></tr></thead>
+        <tbody id="leaders"><tr><td colspan="7">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+    <a class="cd-ev-link" href="salon-fama.html">Ver Salón de la Fama →</a>
   </section>
 
   <section class="salon" aria-label="Salón del Cubata de Oro">
@@ -134,6 +159,6 @@
 </footer>
 
 <script src="clips.js?v=4"></script>
-<script src="salon.js?v=2"></script>
+<script src="salon.js?v=3"></script>
 </body>
 </html>
