@@ -22,7 +22,7 @@
 .community-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
 .community-link,.community-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;border-radius:12px;border:1.5px solid #cfc2cc;background:#fff;color:#1a0018!important;font-weight:800;text-decoration:none;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}
 .community-link:hover,.community-button:hover{transform:translate(-1px,-1px);box-shadow:2px 2px 0 #1a0018}
-.community-link.primary,.community-button.primary{background:#ff2596!important;border-color:#ff2596!important;color:#fff!important}
+.community-link.primary,.community-button.primary{background:#e5007f!important;border-color:#e5007f!important;color:#fff!important}
 .community-list{list-style:none;margin:0;padding:0;display:grid;gap:0}.community-list li{padding:12px 0;border-bottom:1px solid #e4d9e2}.community-list li:last-child{border-bottom:0}
 .community-list a{color:#8d0059!important;text-decoration:underline;text-underline-offset:2px}
 .community-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.community-row small{color:#554451!important}
@@ -33,8 +33,20 @@ html[data-tema="noche"] .community-card{background:#241024!important;color:#fff3
 html[data-tema="noche"] .community-card h2,html[data-tema="noche"] .community-card h3{color:#ff72bd!important}
 html[data-tema="noche"] .community-card p,html[data-tema="noche"] .community-empty,html[data-tema="noche"] .community-table th,html[data-tema="noche"] .community-table td{color:#ead9e8!important}
 html[data-tema="noche"] .community-link,html[data-tema="noche"] .community-button{background:#321b32;color:#fff!important;border-color:#ecdcf2}
-html[data-tema="noche"] .community-link.primary,html[data-tema="noche"] .community-button.primary{background:#ff2596!important;color:#fff!important;border-color:#ff2596!important}
+html[data-tema="noche"] .community-link.primary,html[data-tema="noche"] .community-button.primary{background:#e5007f!important;color:#fff!important;border-color:#ff72bd!important}
 html[data-tema="noche"] .community-list a,html[data-tema="noche"] .community-table a{color:#ff9bd0!important}
 html[data-tema="noche"] .community-hero{box-shadow:5px 5px 0 #ecdcf2;border-color:#ecdcf2}
+/* ---- MODO NOCHE (arreglos de contraste: antes había texto #1a0018 sobre fondo #150014/#241024) ---- */
+html[data-tema="noche"] .community-main{color:#ecdcf2!important}
+html[data-tema="noche"] .community-form label{color:#ecdcf2!important}
+html[data-tema="noche"] .community-form input,html[data-tema="noche"] .community-form textarea,html[data-tema="noche"] .community-form select{background:#321b32;color:#fff3fa;border-color:#6b4a6b}
+html[data-tema="noche"] .community-form input::placeholder,html[data-tema="noche"] .community-form textarea::placeholder{color:#b9a3bf}
+html[data-tema="noche"] .community-muted,html[data-tema="noche"] .community-row small{color:#cdb9d3!important}
+html[data-tema="noche"] .community-number,html[data-tema="noche"] .community-event-date{color:#ff72bd!important}
+html[data-tema="noche"] .community-table td:first-child,html[data-tema="noche"] .community-table td:last-child{color:#ff9bd0!important}
+html[data-tema="noche"] .community-list li,html[data-tema="noche"] .community-table th,html[data-tema="noche"] .community-table td{border-bottom-color:rgba(236,220,242,.18)}
+html[data-tema="noche"] .community-stat{background:#321b32;border-color:rgba(236,220,242,.25)}
+html[data-tema="noche"] .community-stat b{color:#fff3fa!important}
+html[data-tema="noche"] .community-stat span{color:#cdb9d3!important}
 @media(max-width:760px){.community-main{width:min(100% - 22px,1120px);margin-top:18px}.community-grid{gap:12px}.community-card,.community-card.wide{grid-column:1/-1;padding:16px}.community-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.community-form{grid-template-columns:1fr}.community-form .span2{grid-column:auto}.community-row{align-items:flex-start}.community-actions>*{flex:1 1 auto}}
 @media(prefers-reduced-motion:reduce){.community-link,.community-button{transition:none}}

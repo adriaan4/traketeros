@@ -44,13 +44,18 @@ function adminAuth(req, res, next) {
   const raw = Buffer.from(h.slice(6), 'base64').toString();
   const i = raw.indexOf(':');
 
-  const u = raw.slice(0, i);
-  const p = raw.slice(i + 1);
+  const u = i === -1 ? raw : raw.slice(0, i);
+  const p = i === -1 ? '' : raw.slice(i + 1);
 
-  if (
-    u !== process.env.ADMIN_USER ||
-    p !== process.env.ADMIN_PASSWORD
-  ) {
+  // Comparación en tiempo constante (evita adivinar la clave midiendo tiempos)
+  const igual = (a, b) => {
+    if (typeof b !== 'string' || !b.length) return false;
+    const ha = crypto.createHash('sha256').update(String(a)).digest();
+    const hb = crypto.createHash('sha256').update(b).digest();
+    return crypto.timingSafeEqual(ha, hb);
+  };
+
+  if (!igual(u, process.env.ADMIN_USER) || !igual(p, process.env.ADMIN_PASSWORD)) {
     return res
       .set('WWW-Authenticate', 'Basic realm="Admin"')
       .status(401)
