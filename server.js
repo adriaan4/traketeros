@@ -1125,7 +1125,7 @@ app.delete('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res)
 });
 
 // =========================
-// TRAKETÍMETRO (marcador de cervezas, cubatas, chupitos y porros)
+// TRAKETÍMETRO (marcador de cervezas, cubatas, chupitos, porros y cigarros)
 // =========================
 // Los datos se organizan por MESES: cada mes tiene su propio ranking y al
 // empezar un mes nuevo arranca de cero solo (el mes se calcula con la hora de
@@ -1135,7 +1135,7 @@ app.delete('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res)
 // mientras dura una fecha, lo que se apunta cuenta para el mes Y para esa fecha.
 //
 // Puntuación (oculta, solo sirve para ordenar): porro 3, cubata 3, chupito 2,
-// cerveza 1.
+// cerveza 1, cigarro 1 (los cigarros solo cuentan mientras estén activados).
 //
 // Se guarda en memoria, en un fichero local (data/traketimetro.json) como
 // caché rápida, y además se respalda en Cloudinary (como archivo "raw") cada
@@ -1145,8 +1145,14 @@ app.delete('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res)
 // primero desde ahí; el fichero local es solo un plan B si Cloudinary no
 // está configurado o falla justo en ese momento.
 
+// TRAKE_TIPOS es una lista "viva": 'cigarros' se añade o se quita EN SITIO (mismo array)
+// según esté activado o no (ver trakeSyncTipos), así TKT365 y el Higher or Lower, que
+// reciben esta misma lista, se enteran sin tocar nada más.
 const TRAKE_TIPOS = ['cervezas', 'cubatas', 'chupitos', 'porros'];
-const TRAKE_PUNTOS = { porros: 3, cubatas: 3, chupitos: 2, cervezas: 1 };
+const TRAKE_PUNTOS = { porros: 3, cubatas: 3, chupitos: 2, cervezas: 1, cigarros: 1 };
+// Los cigarros se activan solos a partir de esta fecha (hora de Madrid), salvo que el
+// admin los fuerce antes ("on") o los apague ("off") desde traketimetro.html?admin=1.
+const CIGARROS_DESDE = '2026-11-01';
 const TRAKE_DATA_DIR = path.join(__dirname, 'data');
 const TRAKE_FILE = path.join(TRAKE_DATA_DIR, 'traketimetro.json');
 const TRAKE_CLOUD_ID = 'traketeros_data/traketimetro'; // public_id del respaldo en Cloudinary
@@ -1159,12 +1165,13 @@ const MESES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio'
 //   events:    [ { id, name, start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' } ],
 //   eventData: { <id>: { <nombre en minúsculas>: {...} } },
 //   overrides: { 'm:YYYY-MM' | 'e:<id>': 'Nombre del ganador a mano' },
+//   settings:  { cigarros: 'auto' | 'on' | 'off' }   (auto = se activan solos el 2026-11-01)
 //   log:       [ { id, name, tipo, cantidad, ts, foto?: { id, publicId?, url? } } ]   (historial con fecha/hora y foto opcional)
 // }
 let trakeData = trakeEmpty();
 
 function trakeEmpty() {
-  return { version: 2, months: {}, events: [], eventData: {}, overrides: {}, log: [] };
+  return { version: 2, months: {}, events: [], eventData: {}, overrides: {}, settings: { cigarros: 'auto' }, log: [] };
 }
 
 // Los datos antiguos eran un único ranking sin fechas. Eran los de septiembre
@@ -1178,6 +1185,7 @@ function trakeNormalize(raw) {
       events: Array.isArray(raw.events) ? raw.events : [],
       eventData: raw.eventData || {},
       overrides: raw.overrides || {},
+      settings: { cigarros: ['auto', 'on', 'off'].includes(raw.settings?.cigarros) ? raw.settings.cigarros : 'auto' },
       // Datos anteriores no tienen historial: se queda vacío, sin tocar nada más
       log: Array.isArray(raw.log) ? raw.log : []
     };
@@ -1254,6 +1262,7 @@ async function trakeLoad() {
     }
   }
   if (!loaded) trakeLoadLocal();
+  trakeSyncTipos();
   if (trakeMigrated) {
     console.log('Traketímetro: datos antiguos pasados al mes 2026-09.');
     trakeSave();
@@ -1289,6 +1298,38 @@ function trakeEstadoEvento(ev, hoy) {
   return 'en_curso';
 }
 
+// ---------- Cigarros: activación ----------
+// modo 'auto': activos desde CIGARROS_DESDE (hora de Madrid) · 'on': activos ya · 'off': apagados.
+function trakeCigarrosModo() {
+  const m = trakeData.settings?.cigarros;
+  return m === 'on' || m === 'off' ? m : 'auto';
+}
+
+function trakeCigarrosActivos() {
+  const modo = trakeCigarrosModo();
+  if (modo === 'on') return true;
+  if (modo === 'off') return false;
+  return trakeHoy() >= CIGARROS_DESDE;
+}
+
+// Deja TRAKE_TIPOS (lista compartida con TKT365 y Higher or Lower) al día. Devuelve true si ha cambiado.
+function trakeSyncTipos() {
+  const quiere = trakeCigarrosActivos();
+  const i = TRAKE_TIPOS.indexOf('cigarros');
+  if (quiere && i === -1) { TRAKE_TIPOS.push('cigarros'); return true; }
+  if (!quiere && i !== -1) { TRAKE_TIPOS.splice(i, 1); return true; }
+  return false;
+}
+
+function trakeConfig() {
+  return { cigarros: { activo: trakeCigarrosActivos(), modo: trakeCigarrosModo(), desde: CIGARROS_DESDE } };
+}
+
+// Persona a cero con todos los tipos (los datos antiguos sin 'cigarros' se leen como 0)
+function trakePersonaVacia(name) {
+  return { name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0, cigarros: 0 };
+}
+
 // ---------- Puntos y ranking ----------
 function trakePuntos(p) {
   return TRAKE_TIPOS.reduce((s, t) => s + (p[t] || 0) * TRAKE_PUNTOS[t], 0);
@@ -1312,6 +1353,7 @@ function trakeListOf(bucket) {
       cubatas: p.cubatas || 0,
       chupitos: p.chupitos || 0,
       porros: p.porros || 0,
+      cigarros: p.cigarros || 0,
       total: trakeTotal(p),
       puntos: trakePuntos(p)
     }))
@@ -1397,7 +1439,7 @@ function trakeTotalesHistoricos() {
     for (const p of Object.values(bucket || {})) {
       const key = String(p.name || '').trim().toLowerCase();
       if (!key) continue;
-      const cur = acc.get(key) || { name: p.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
+      const cur = acc.get(key) || trakePersonaVacia(p.name);
       for (const t of TRAKE_TIPOS) cur[t] += p[t] || 0;
       acc.set(key, cur);
     }
@@ -1418,7 +1460,8 @@ function trakeRespuesta(periodo) {
     periodos: trakePeriodos(),
     salon: trakeSalon(),
     events: trakeData.events,
-    historial: trakeHistorial(p)
+    historial: trakeHistorial(p),
+    config: trakeConfig()
   };
 }
 
@@ -1456,6 +1499,7 @@ function trakeHistorial(periodo) {
   const out = [];
   for (let i = trakeData.log.length - 1; i >= 0 && out.length < TRAKE_LOG_VISIBLES; i--) {
     const l = trakeData.log[i];
+    if (!TRAKE_TIPOS.includes(l.tipo)) continue; // p. ej. cigarros mientras estén apagados
     const dia = trakeDiaFmt.format(new Date(l.ts));
     if (mes && dia.slice(0, 7) !== mes) continue;
     if (ev && !(ev.start <= dia && dia <= (ev.end || ev.start))) continue;
@@ -1511,11 +1555,25 @@ setInterval(() => {
 let trakeUltimoDia = trakeHoy();
 setInterval(() => {
   const hoy = trakeHoy();
-  if (hoy !== trakeUltimoDia) {
+  const cambioTipos = trakeSyncTipos(); // p. ej. los cigarros se activan solos el 1 de noviembre
+  if (cambioTipos) {
+    try { tkt365Api?.recalcularCuotas('cigarros'); } catch (e) { console.error('TKT365: no se pudieron recalcular las cuotas:', e.message || e); }
+  }
+  if (hoy !== trakeUltimoDia || cambioTipos) {
     trakeUltimoDia = hoy;
     broadcastTrakeChanged();
   }
 }, 30_000).unref();
+
+// Antes de atender cualquier petición de la API se deja al día la lista de tipos
+// (así los cigarros aparecen/desaparecen justo a tiempo, sin esperar al reloj de arriba).
+app.use('/api', (req, res, next) => {
+  if (trakeSyncTipos()) {
+    try { tkt365Api?.recalcularCuotas('cigarros'); } catch { /* se recalcula en el siguiente registro */ }
+    broadcastTrakeChanged();
+  }
+  next();
+});
 
 // ---------- API pública ----------
 // Ranking de un periodo (por defecto el mes actual) + salón + fechas
@@ -1527,7 +1585,7 @@ app.get('/api/traketimetro', (req, res) => {
 // Solo el salón (lo usa la pantalla principal)
 app.get('/api/traketimetro/salon', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ salon: trakeSalon(), events: trakeData.events, hoy: trakeHoy() });
+  res.json({ salon: trakeSalon(), events: trakeData.events, hoy: trakeHoy(), config: trakeConfig() });
 });
 
 function trakeValidate(req, res) {
@@ -1541,7 +1599,7 @@ function trakeValidate(req, res) {
     return null;
   }
   if (!TRAKE_TIPOS.includes(tipo)) {
-    res.status(400).json({ error: 'Tipo no válido.' });
+    res.status(400).json({ error: tipo === 'cigarros' ? 'Los cigarros todavía no están activados.' : 'Tipo no válido.' });
     return null;
   }
   return { name, tipo, cantidad };
@@ -1651,7 +1709,7 @@ app.post('/api/traketimetro/add', trakeAddUpload, async (req, res) => {
 
   const key = v.name.toLowerCase();
   for (const bucket of trakeBucketsActivos(true)) {
-    if (!bucket[key]) bucket[key] = { name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
+    if (!bucket[key]) bucket[key] = trakePersonaVacia(v.name);
     bucket[key][v.tipo] = (bucket[key][v.tipo] || 0) + v.cantidad;
   }
 
@@ -1741,7 +1799,9 @@ app.post('/api/traketimetro/set', adminAuth, (req, res) => {
     cervezas: clamp(req.body?.cervezas),
     cubatas: clamp(req.body?.cubatas),
     chupitos: clamp(req.body?.chupitos),
-    porros: clamp(req.body?.porros)
+    porros: clamp(req.body?.porros),
+    // Si la petición no trae cigarros (página antigua en caché) se respeta lo que ya había
+    cigarros: req.body?.cigarros === undefined ? (bucket[key].cigarros || 0) : clamp(req.body.cigarros)
   };
   trakeSave();
   broadcastTrakeChanged();
@@ -1797,6 +1857,18 @@ app.delete('/api/admin/traketimetro/fechas/:id', adminAuth, (req, res) => {
   delete trakeData.eventData[id];
   delete trakeData.overrides['e:' + id];
   trakeSave();
+  broadcastTrakeChanged();
+  res.json(trakeRespuesta(periodoDe(req)));
+});
+
+// Cigarros: 'auto' (se activan solos el 1 de noviembre), 'on' (activarlos ya) u 'off' (apagarlos).
+// Al apagarlos no se borra nada: los datos se quedan guardados y vuelven a verse al reactivarlos.
+app.post('/api/admin/traketimetro/cigarros', adminAuth, (req, res) => {
+  const modo = String(req.body?.modo || '');
+  if (!['auto', 'on', 'off'].includes(modo)) return res.status(400).json({ error: 'Modo no válido.' });
+  trakeData.settings = { ...(trakeData.settings || {}), cigarros: modo };
+  trakeSyncTipos();
+  trakeSave(); // también recalcula las cuotas de TKT365
   broadcastTrakeChanged();
   res.json(trakeRespuesta(periodoDe(req)));
 });
@@ -1859,10 +1931,10 @@ function trakeAggregate() {
   const add = (row) => {
     const name = String(row?.name || '').trim(); if (!name) return;
     const key = name.toLocaleLowerCase('es');
-    if (!byName.has(key)) byName.set(key, { name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0, puntos: 0, apuntes: 0, ultimaActividad: 0 });
+    if (!byName.has(key)) byName.set(key, { ...trakePersonaVacia(name), puntos: 0, apuntes: 0, ultimaActividad: 0 });
     const x = byName.get(key);
     for (const tipo of TRAKE_TIPOS) x[tipo] += Math.max(0, Number(row?.[tipo]) || 0);
-    x.puntos = x.cervezas + x.cubatas * 3 + x.chupitos * 2 + x.porros * 3;
+    x.puntos = trakePuntos(x);
   };
   for (const mes of Object.values(trakeData.months || {})) for (const row of Object.values(mes || {})) add(row);
   // Log is authoritative for activity/recent consumption, while monthly buckets provide lifetime totals.
@@ -1879,7 +1951,7 @@ app.get('/api/community/overview', (req, res) => {
   const upcoming = [...communityData.events, ...(trakeData.events || []).map(e => ({ ...e, source: 'traketimetro' }))]
     .filter(e => e.date || e.start).sort((a,b) => String(a.date || a.start).localeCompare(String(b.date || b.start)));
   const notices = [...communityData.notices].sort((a,b) => (Number(b.createdAt)||0)-(Number(a.createdAt)||0));
-  res.json({ people, totalRegistros: (trakeData.log || []).length, upcoming: upcoming.filter(e => String(e.date || e.start) >= new Date().toISOString().slice(0,10)).slice(0,5), notices: notices.slice(0,5), events: upcoming, lastActivity: [...(trakeData.log || [])].sort((a,b)=>(b.ts||0)-(a.ts||0))[0] || null });
+  res.json({ people, totalRegistros: (trakeData.log || []).length, upcoming: upcoming.filter(e => String(e.date || e.start) >= new Date().toISOString().slice(0,10)).slice(0,5), notices: notices.slice(0,5), events: upcoming, lastActivity: [...(trakeData.log || [])].sort((a,b)=>(b.ts||0)-(a.ts||0))[0] || null, config: trakeConfig() });
 });
 app.get('/api/community/profile', (req, res) => {
   const requested = String(req.query.name || '').trim();
@@ -1889,10 +1961,10 @@ app.get('/api/community/profile', (req, res) => {
   if (!person) return res.status(404).json({ error: 'No existe ese nombre en el Traketímetro.' });
   const key = person.name.toLocaleLowerCase('es');
   const activity = (trakeData.log || []).filter(x => String(x.name||'').trim().toLocaleLowerCase('es') === key).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,50);
-  const recent = { cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
+  const recent = { cervezas: 0, cubatas: 0, chupitos: 0, porros: 0, cigarros: 0 };
   const cutoff = Date.now() - 30*24*60*60*1000;
-  for (const x of activity) if ((Number(x.ts)||0) >= cutoff && recent[x.tipo] !== undefined) recent[x.tipo] += Number(x.cantidad)||0;
-  res.json({ person, activity, recent });
+  for (const x of activity) if ((Number(x.ts)||0) >= cutoff && recent[x.tipo] !== undefined && TRAKE_TIPOS.includes(x.tipo)) recent[x.tipo] += Number(x.cantidad)||0;
+  res.json({ person, activity: activity.filter(x => TRAKE_TIPOS.includes(x.tipo)), recent, config: trakeConfig() });
 });
 app.get('/api/community/admin', adminAuth, (req, res) => res.json(communityData));
 app.post('/api/community/events', adminAuth, (req, res) => {

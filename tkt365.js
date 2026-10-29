@@ -41,6 +41,7 @@ const METRICAS = {
   cubatas:  { titulo: 'Más cubatas',      desc: 'Gana quien más cubatas apunte en el Traketímetro' },
   chupitos: { titulo: 'Más chupitos',     desc: 'Gana quien más chupitos apunte en el Traketímetro' },
   porros:   { titulo: 'Más porros',       desc: 'Gana quien más porros apunte en el Traketímetro' },
+  cigarros: { titulo: 'Más cigarros',     desc: 'Gana quien más cigarros apunte en el Traketímetro' },
   apuntes:  { titulo: 'Más actividad',    desc: 'Gana quien más veces apunte algo en el Traketímetro' },
   primero:  { titulo: 'Primero en apuntar', desc: 'Gana quien apunte antes su primera consumición en el Traketímetro' },
   ultimo:   { titulo: 'Último en apuntar',  desc: 'Gana quien apunte más tarde su última consumición en el Traketímetro' }
@@ -441,6 +442,15 @@ export function registerTkt365({
     return m;
   }
 
+  // 'cigarros' solo existe como métrica mientras estén activados en el Traketímetro
+  // (tipos es la lista viva que mantiene server.js). Se pone justo antes de 'apuntes'.
+  const metricaActiva = (metrica) => metrica !== 'cigarros' || tipos.includes('cigarros');
+  function metricasAuto(base) {
+    if (!tipos.includes('cigarros')) return base;
+    const i = base.indexOf('apuntes');
+    return i === -1 ? [...base, 'cigarros'] : [...base.slice(0, i), 'cigarros', ...base.slice(i)];
+  }
+
   // Genera los mercados que tienen sentido con los datos de Traketímetro.
   // Es idempotente: cada mercado automático tiene una clave y no se repite.
   function generarAutomaticos() {
@@ -455,7 +465,7 @@ export function registerTkt365({
       if (ev.start < hoyStr) continue;
       const cierra = madridMs(ev.start, CIERRE_HORA_EVENTO, 0);
       if (cierra <= ahora) continue;
-      for (const metrica of ['puntos', 'cervezas', 'cubatas', 'chupitos', 'apuntes', 'primero', 'ultimo']) {
+      for (const metrica of metricasAuto(['puntos', 'cervezas', 'cubatas', 'chupitos', 'apuntes', 'primero', 'ultimo'])) {
         const key = `auto:e:${ev.id}:${metrica}`;
         if (existe(key)) continue;
         if (crearMercadoAuto({ metrica, periodo: { tipo: 'evento', id: ev.id }, cierra, key })) creados++;
@@ -464,7 +474,7 @@ export function registerTkt365({
 
     // Mes siguiente
     const mesSig = mesSiguiente(hoyStr.slice(0, 7));
-    for (const metrica of ['puntos', 'cervezas', 'cubatas', 'chupitos', 'apuntes']) {
+    for (const metrica of metricasAuto(['puntos', 'cervezas', 'cubatas', 'chupitos', 'apuntes'])) {
       const key = `auto:m:${mesSig}:${metrica}`;
       if (existe(key)) continue;
       if (crearMercadoAuto({ metrica, periodo: { tipo: 'mes', id: mesSig }, cierra: madridMs(mesSig + '-01'), key })) creados++;
@@ -884,7 +894,7 @@ export function registerTkt365({
       users: ranking().map((u) => ({ ...u, reclamado: st.claims[u.id] ? st.claims[u.id].ts : null, soloApuestas: Boolean(st.extras[u.id]) && !trakeUsuarios(true).has(u.id) })),
       bets: [...st.bets].sort((a, b) => b.ts - a.ts).slice(0, 500).map((b) => ({ ...apuestaPublica(b), usuario: b.name, userId: b.userId })),
       events: (t.events || []).map((e) => ({ id: e.id, name: e.name, start: e.start, end: e.end || e.start })),
-      metricas: Object.entries(METRICAS).map(([id, d]) => ({ id, titulo: d.titulo })),
+      metricas: Object.entries(METRICAS).filter(([id]) => metricaActiva(id)).map(([id, d]) => ({ id, titulo: d.titulo })),
       transactions: [...st.transactions].reverse().slice(0, 300),
       resumen: { mercados: st.markets.length, abiertos: st.markets.filter((m) => m.estado === 'abierto').length, apuestas: st.bets.filter((b) => b.estado !== 'cancelada').length, totalApostado },
       config: { apuestaMin: APUESTA_MIN, apuestaMax: APUESTA_MAX, cuotaMin: CUOTA_MIN, cuotaMax: CUOTA_MAX },
@@ -922,7 +932,7 @@ export function registerTkt365({
   // Mercado automático con datos reales del Traketímetro, elegido a mano
   adm.post('/auto', (req, res) => {
     const metrica = String(req.body?.metrica || '');
-    if (!METRICAS[metrica]) return res.status(400).json({ error: 'Métrica no válida.' });
+    if (!METRICAS[metrica] || !metricaActiva(metrica)) return res.status(400).json({ error: 'Métrica no válida.' });
     const tipo = String(req.body?.periodoTipo || '');
     let periodo;
     if (tipo === 'evento') periodo = { tipo, id: String(req.body?.periodoId || '') };

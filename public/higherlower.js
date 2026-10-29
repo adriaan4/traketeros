@@ -41,8 +41,13 @@
     cervezas: { emoji: '🍺', nombre: 'cervezas' },
     cubatas: { emoji: '🍹', nombre: 'cubatas' },
     chupitos: { emoji: '🥃', nombre: 'chupitos' },
-    porros: { emoji: '🚬', nombre: 'porros' }
+    porros: { emoji: '🌿', nombre: 'porros' },
+    cigarros: { emoji: '🚬', nombre: 'cigarros' }
   };
+  // Tipos que cuentan ahora mismo (el servidor añade 'cigarros' cuando están activados)
+  const tiposActivos = () => ((S.reglas && S.reglas.tipos) || ['cervezas', 'cubatas', 'chupitos', 'porros']).filter((k) => TIPOS[k]);
+  const listaTipos = (sep) => tiposActivos().map((k) => `${TIPOS[k].emoji} ${TIPOS[k].nombre}`).join(sep);
+  const listaNombres = () => { const n = tiposActivos().map((k) => TIPOS[k].nombre); return n.length > 1 ? `${n.slice(0, -1).join(', ')} o ${n[n.length - 1]}` : n.join(''); };
   const MODO_LABEL = { mes: 'Este mes', total: 'Histórico' };
   const reducirMovimiento = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -186,7 +191,7 @@
     st.innerHTML =
       `<p class="hl-intro">Te enseño a un traketero con su cifra y a otro a oscuras. ¿Tiene <b>más o menos</b>? ` +
       `Encadena aciertos, sube la racha y cobra <b>TKT</b>.` +
-      `<small>Con datos reales del Traketímetro: 🍺 cervezas · 🍹 cubatas · 🥃 chupitos · 🚬 porros</small></p>` +
+      `<small>Con datos reales del Traketímetro: ${listaTipos(' · ')}</small></p>` +
       `<div class="hl-modos" role="group" aria-label="Datos del juego">` +
       ['total', 'mes'].map((m) =>
         `<button class="hl-chip${S.modo === m ? ' active' : ''}" type="button" data-modo="${m}"${S.disponible[m] ? '' : ' disabled title="Aún no hay datos suficientes"'}>` +
@@ -459,7 +464,7 @@
     if (!r) return;
     $('hlReglasCuerpo').innerHTML =
       `<ul>` +
-      `<li>Se compara una cifra real del Traketímetro (cervezas, cubatas, chupitos o porros). Nunca hay empates.</li>` +
+      `<li>Se compara una cifra real del Traketímetro (${listaNombres()}). Nunca hay empates.</li>` +
       `<li>Aciertas → el traketero oculto pasa a ser el visible y sigues. Fallas → se acaba la racha.</li>` +
       `<li>Cada acierto da puntos (10 el primero y más cuanto mayor es la racha).</li>` +
       `<li>Premio en TKT según tu racha. Si <b>fallas</b> cobras el ${Math.round(r.porcentajeSiFallas * 100)} %; si te <b>plantas</b>, el 100 %.</li>` +

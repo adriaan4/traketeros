@@ -270,7 +270,8 @@ export function registerHigherLower({ app, getTrake, tipos, hoy = hoyMadrid, rea
       porcentajeSiFallas: PORCENTAJE_SI_FALLAS,
       topeDia: TOPE_DIA,
       premiosMes: PREMIOS_MES,
-      minRachaMes: MIN_RACHA_MES
+      minRachaMes: MIN_RACHA_MES,
+      tipos: [...tipos] // lista viva del Traketímetro (incluye 'cigarros' solo si están activados)
     };
   }
 

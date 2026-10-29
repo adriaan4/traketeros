@@ -103,16 +103,19 @@ function pintarAvisos(notices) {
   $('homeNotices').hidden = !lista.length;
 }
 
-function pintarLideres(people) {
+function pintarLideres(people, config) {
+  const conCigarros = Boolean(config && config.cigarros && config.cigarros.activo);
+  document.querySelectorAll('[data-cigarros]').forEach((el) => { el.style.display = conCigarros ? '' : 'none'; });
+  const columnas = conCigarros ? 8 : 7;
   const medallas = ['🥇', '🥈', '🥉'];
   $('tilePeople').textContent = people.length ? `${people.length} traketeros en el marcador` : 'Apunta tu consumo';
   $('leaders').innerHTML = people.slice(0, 8).map((p, i) => `
     <tr>
       <td>${medallas[i] || i + 1}</td>
       <td><a href="perfil.html?name=${encodeURIComponent(p.name)}">${esc(p.name)}</a></td>
-      <td>${esc(p.cervezas)}</td><td>${esc(p.cubatas)}</td><td>${esc(p.chupitos)}</td><td>${esc(p.porros)}</td>
+      <td>${esc(p.cervezas)}</td><td>${esc(p.cubatas)}</td><td>${esc(p.chupitos)}</td><td>${esc(p.porros)}</td>${conCigarros ? `<td>${esc(p.cigarros)}</td>` : ''}
       <td><b>${esc(p.puntos)}</b></td>
-    </tr>`).join('') || '<tr><td colspan="7">Todavía no hay estadísticas.</td></tr>';
+    </tr>`).join('') || `<tr><td colspan="${columnas}">Todavía no hay estadísticas.</td></tr>`;
 }
 
 async function cargarComunidad() {
@@ -122,7 +125,7 @@ async function cargarComunidad() {
     const d = await r.json();
     pintarEvento(d.events || []);
     pintarAvisos(d.notices || []);
-    pintarLideres(d.people || []);
+    pintarLideres(d.people || [], d.config);
   } catch (_) {
     evTarget = null;
     $('cdEvento').hidden = true;
