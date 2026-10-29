@@ -1280,5 +1280,29 @@ export function registerTkt365({
   app.use('/api/tkt365/admin', express.json({ limit: '200kb' }), adm);
   app.use('/api/tkt365', express.json({ limit: '50kb' }), api);
 
-  return { tick, recalcularCuotas: programarRecalculo };
+  // ---------- API interna para minijuegos (higherlower.js) ----------
+  // Los juegos NO tienen usuarios propios: usan la misma identidad que TKT365
+  // (token de dispositivo -> nombre del Traketímetro) y cobran/pagan en TKT.
+  const juegos = {
+    listo,
+    duenoDe: (token) => duenoDe(token),
+    nombreDe: (id) => trakeUsuarios().get(id) || st.balances[id]?.name || null,
+    usuarios: () => [...trakeUsuarios()]
+      .map(([id, name]) => ({ id, name, taken: Boolean(st.claims[id]), soloApuestas: !trakeUsuarios(true).has(id) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    saldo: (id) => (st.balances[id] ? st.balances[id].balance : null),
+    // Suma TKT al saldo (queda en los movimientos como tipo "juego"). Devuelve el saldo nuevo o null.
+    acreditar(id, cantidad, motivo) {
+      const n = Math.floor(Number(cantidad));
+      const bal = st.balances[id];
+      if (!bal || !Number.isFinite(n) || n <= 0) return null;
+      const antes = bal.balance;
+      bal.balance += n;
+      movimiento(id, 'juego', n, antes, bal.balance, { motivo: clean(motivo, 120) || 'Minijuego' });
+      save();
+      return bal.balance;
+    }
+  };
+
+  return { tick, recalcularCuotas: programarRecalculo, juegos };
 }

@@ -9,6 +9,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import sharp from 'sharp';
 import { fileURLToPath } from 'url';
 import { registerTkt365 } from './tkt365.js';
+import { registerHigherLower } from './higherlower.js';
 
 const app = express();
 
@@ -1928,6 +1929,19 @@ tkt365Api = registerTkt365({
   puntos: TRAKE_PUNTOS,
   hoy: trakeHoy,
   ready: trakeReady,
+  cloudinary,
+  cloudinaryOk: CLOUDINARY_OK,
+  dataDir: TRAKE_DATA_DIR
+});
+
+// Higher or Lower (Juegos): mismos jugadores que TKT365/Traketímetro, premios en TKT.
+registerHigherLower({
+  app,
+  getTrake: () => trakeData,
+  tipos: TRAKE_TIPOS,
+  hoy: trakeHoy,
+  ready: trakeReady,
+  tkt: tkt365Api.juegos,
   cloudinary,
   cloudinaryOk: CLOUDINARY_OK,
   dataDir: TRAKE_DATA_DIR
