@@ -75,6 +75,7 @@ function render() {
       if (m.auto) acc.push(`<button class="mini" data-a="recalc" data-id="${esc(m.id)}">Recalcular cuotas</button>`);
       acc.push(`<button class="mini danger" data-a="cancel" data-id="${esc(m.id)}">Cancelar</button>`);
     }
+    acc.push(`<button class="mini danger" data-a="borrar" data-id="${esc(m.id)}">Borrar</button>`);
     const ganadores = m.estado === 'resuelto'
       ? '<br><small>Ganador: ' + esc(m.options.filter((o) => m.ganadores.includes(o.id)).map((o) => o.label).join(', ')) + (m.resolucion?.por === 'auto' ? ' (auto)' : '') + '</small>' : '';
     return `<tr><td style="white-space:normal;min-width:220px"><b>${esc(m.titulo)}</b><br><small>${esc(m.evento || '—')}</small>${ganadores}</td>` +
@@ -186,7 +187,18 @@ function pintarFormUsuarios(markets) {
     return `<div class="tkt-adm-opt" data-u="${esc(u.id)}"><input type="checkbox"${p.on ? ' checked' : ''} aria-label="${esc(u.name)}">` +
       `<span>${esc(u.name)}</span><input type="number" step="0.01" min="1.01" max="1000" placeholder="x3.00" value="${esc(p.odds ?? '')}"></div>`;
   }).join('') || '<small>No hay personas en el Traketímetro todavía.</small>';
+  aplicarAuto();
 }
+
+function aplicarAuto() {
+  const on = $('fCuotasAuto').checked;
+  $('fAutoHint').hidden = !on;
+  for (const inp of document.querySelectorAll('#fUsuarios [type=number], #fLibres [data-o]')) {
+    inp.disabled = on;
+    inp.placeholder = on ? 'auto' : (inp.matches('[data-o]') ? 'x2.00' : 'x3.00');
+  }
+}
+$('fCuotasAuto').addEventListener('change', aplicarAuto);
 
 function filaLibre(label = '', odds = '', id = '') {
   const d = document.createElement('div');
@@ -198,6 +210,7 @@ function filaLibre(label = '', odds = '', id = '') {
   d.querySelector('[data-o]').value = odds;
   $('fLibres').appendChild(d);
   $('fLibres').hidden = false;
+  aplicarAuto();
 }
 $('addLibre').addEventListener('click', () => filaLibre());
 $('fLibres').addEventListener('click', (e) => {
@@ -237,6 +250,7 @@ function resetForm() {
   $('fGuardar').textContent = 'Crear mercado';
   $('formReset').hidden = true;
   if (data) pintarFormUsuarios();
+  aplicarAuto();
 }
 $('formReset').addEventListener('click', () => { resetForm(); msg('fMsg', ''); });
 
@@ -245,7 +259,7 @@ $('form').addEventListener('submit', async (e) => {
   const body = {
     titulo: $('fTitulo').value, descripcion: $('fDesc').value, categoria: $('fCategoria').value,
     evento: $('fEvento').value, eventoId: $('fEventoId').value || null,
-    cierra: $('fCierra').value, options: leerOpciones()
+    cierra: $('fCierra').value, options: leerOpciones(), cuotasAuto: $('fCuotasAuto').checked
   };
   try {
     if (editando) await api('/api/tkt365/admin/markets/' + encodeURIComponent(editando), 'PUT', body);
@@ -270,6 +284,7 @@ function editar(m) {
   $('fEvento').value = m.eventoId ? '' : (m.evento || '');
   $('fEventoId').value = m.eventoId || '';
   $('fCierra').value = toLocalInput(m.cierra);
+  $('fCuotasAuto').checked = Boolean(m.cuotasManual);
   pintarFormUsuarios();
   for (const row of document.querySelectorAll('#fUsuarios .tkt-adm-opt')) {
     const o = m.options.find((x) => x.id === 'u:' + row.dataset.u);
@@ -279,6 +294,7 @@ function editar(m) {
   $('fLibres').innerHTML = '';
   $('fLibres').hidden = true;
   for (const o of m.options) if (!o.id.startsWith('u:')) filaLibre(o.label, o.odds, o.id);
+  aplicarAuto();
   msg('fMsg', 'Editando «' + m.titulo + '». Las apuestas ya hechas conservan su cuota.', '');
   $('form').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -385,8 +401,12 @@ async function accion(a, id) {
       if (!confirm('Recalcular las cuotas con el historial actual del Traketímetro? Las apuestas ya hechas conservan su cuota.')) return;
       await api(base + '/recalc', 'POST', {});
     } else if (a === 'borrar') {
-      if (!confirm(`¿Borrar «${m.titulo}»? Desaparece del panel; las apuestas ya liquidadas conservan su historial.`)) return;
-      await api(base, 'DELETE');
+      const activo = m.estado === 'abierto' || m.estado === 'cerrado' || m.stats.apuestas > 0 && m.estado !== 'resuelto' && m.estado !== 'cancelado';
+      const aviso = activo
+        ? `¿Borrar «${m.titulo}»? Sigue activo: se cancelará, se devolverán los TKT de las apuestas pendientes y desaparecerá del panel.`
+        : `¿Borrar «${m.titulo}»? Desaparece del panel; las apuestas ya liquidadas conservan su historial.`;
+      if (!confirm(aviso)) return;
+      await api(base + '?devolver=1', 'DELETE');
     } else if (a === 'cancel') {
       if (!confirm(`¿Cancelar «${m.titulo}»? Se devolverán los TKT de las apuestas (en una combinada, esa selección cuenta como x1).`)) return;
       await api(base + '/cancel', 'POST', {});

@@ -104,6 +104,7 @@ export function registerTkt365({
     version: 1,
     balances: Object.create(null), // userId -> { name, balance, since, active }
     markets: [],
+    borrados: [],                  // claves de mercados automáticos borrados a mano: no se vuelven a crear
     bets: [],
     transactions: [],
     extras: Object.create(null),  // userId -> { name, ts }  (personas que solo apuestan: no están en el Traketímetro)
@@ -118,6 +119,7 @@ export function registerTkt365({
     if (raw.balances && typeof raw.balances === 'object') Object.assign(s.balances, raw.balances);
     if (Array.isArray(raw.markets)) s.markets = raw.markets;
     if (Array.isArray(raw.bets)) s.bets = raw.bets;
+    if (Array.isArray(raw.borrados)) s.borrados = raw.borrados.slice(-2000);
     if (Array.isArray(raw.transactions)) s.transactions = raw.transactions;
     if (raw.claims && typeof raw.claims === 'object') Object.assign(s.claims, raw.claims);
     if (raw.extras && typeof raw.extras === 'object') Object.assign(s.extras, raw.extras);
@@ -457,7 +459,7 @@ export function registerTkt365({
     const t = getTrake();
     const ahora = nowMs();
     const hoyStr = hoy();
-    const existe = (key) => st.markets.some((m) => m.auto?.key === key);
+    const existe = (key) => st.markets.some((m) => m.auto?.key === key) || st.borrados.includes(key);
     let creados = 0;
 
     // Fechas especiales que aún no han empezado (o empiezan hoy y todavía hay tiempo)
@@ -488,6 +490,29 @@ export function registerTkt365({
       if (crearMercadoAuto({ metrica, periodo: { tipo: 'semana', start: lunes }, cierra: madridMs(lunes), key })) creados++;
     }
     return creados;
+  }
+
+  // Mercados manuales con cuotas automáticas: la cuota de cada opción sale de lo apostado.
+  // Cada opción parte de un "peso" inicial y suma los TKT apostados a ella; cuanto más
+  // se apuesta a una opción, más baja su cuota. Las apuestas ya hechas conservan la suya.
+  const PESO_INICIAL = 10;
+  function recalcManual(m) {
+    if (!m?.cuotasManual || !Array.isArray(m.options) || !m.options.length) return false;
+    const { porOpcion } = statsMercado(m);
+    const pesos = m.options.map((o) => PESO_INICIAL + (porOpcion[o.id] || 0));
+    const total = pesos.reduce((a, b) => a + b, 0);
+    let cambio = false;
+    m.options.forEach((o, i) => {
+      const nueva = round2(Math.min(40, Math.max(1.1, MARGEN * total / pesos[i])));
+      if (nueva !== o.odds) { o.odds = nueva; cambio = true; }
+    });
+    if (cambio) m.actualizado = nowMs();
+    return cambio;
+  }
+
+  // Si un mercado automático se borra a mano, se recuerda su clave para que el reloj no lo recree
+  function olvidarAuto(m) {
+    if (m?.auto?.key && !st.borrados.includes(m.auto.key)) st.borrados.push(m.auto.key);
   }
 
   // ---------- Apuestas: liquidación ----------
@@ -709,6 +734,7 @@ export function registerTkt365({
     const bet = { id: nuevoId(), userId, name: bal.name, ts: ahora, stake, totalOdds, potential, legs, estado: 'pendiente', premio: 0 };
     st.bets.push(bet);
     movimiento(userId, 'apuesta', -stake, antes, bal.balance, { betId: bet.id, motivo: legs.length > 1 ? 'Combinada' : 'Apuesta simple' });
+    for (const l of legs) recalcManual(mercado(l.marketId));
     save();
     res.json({ ok: true, bet: apuestaPublica(bet), balance: bal.balance });
   }
@@ -839,7 +865,7 @@ export function registerTkt365({
   }
 
   function mercadoAdmin(m, ahora) {
-    return { ...mercadoPublico(m, ahora), auto: m.auto || null, stats: statsMercado(m) };
+    return { ...mercadoPublico(m, ahora), auto: m.auto || null, cuotasManual: Boolean(m.cuotasManual), stats: statsMercado(m) };
   }
 
   function parseCierre(v) {
@@ -852,14 +878,15 @@ export function registerTkt365({
 
   // Valida y construye la lista de opciones. Las opciones de usuario salen
   // SIEMPRE de Traketímetro (el nombre no se escribe a mano).
-  function construirOpciones(raw, previas = []) {
+  function construirOpciones(raw, previas = [], cuotasAutomaticas = false) {
     if (!Array.isArray(raw) || raw.length < 2) return { error: 'Hacen falta al menos 2 opciones.' };
     if (raw.length > 30) return { error: 'Demasiadas opciones (máximo 30).' };
     const users = trakeUsuarios();
     const out = [];
     const vistos = new Set();
     for (const o of raw) {
-      const odds = round2(Number(o?.odds));
+      // Con cuotas automáticas no se pide cuota: se pone una provisional y se recalcula
+      const odds = cuotasAutomaticas ? 2 : round2(Number(o?.odds));
       if (!Number.isFinite(odds) || odds < CUOTA_MIN || odds > CUOTA_MAX) {
         return { error: `Cada cuota tiene que estar entre ${CUOTA_MIN} y ${CUOTA_MAX}.` };
       }
@@ -907,7 +934,8 @@ export function registerTkt365({
     if (!titulo) return res.status(400).json({ error: 'Falta el título.' });
     const cierra = parseCierre(req.body?.cierra);
     if (!Number.isFinite(cierra) || cierra <= nowMs()) return res.status(400).json({ error: 'La hora de cierre tiene que ser futura.' });
-    const r = construirOpciones(req.body?.options);
+    const cuotasManual = Boolean(req.body?.cuotasAuto);
+    const r = construirOpciones(req.body?.options, [], cuotasManual);
     if (r.error) return res.status(400).json({ error: r.error });
 
     const t = getTrake();
@@ -922,8 +950,9 @@ export function registerTkt365({
       evento: ev ? ev.name : clean(req.body?.evento, 80),
       eventoId: ev ? ev.id : null,
       cierra, estado: 'abierto', fuente: 'manual', options: r.options, ganadores: [],
-      creado: nowMs(), actualizado: nowMs(), auto: null
+      creado: nowMs(), actualizado: nowMs(), auto: null, cuotasManual
     };
+    recalcManual(m);
     st.markets.push(m);
     save();
     res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
@@ -982,8 +1011,9 @@ export function registerTkt365({
       if (!Number.isFinite(c)) return res.status(400).json({ error: 'Hora de cierre no válida.' });
       m.cierra = c;
     }
+    if (b.cuotasAuto !== undefined && !m.auto) m.cuotasManual = Boolean(b.cuotasAuto);
     if (b.options !== undefined) {
-      const r = construirOpciones(b.options, m.options);
+      const r = construirOpciones(b.options, m.options, Boolean(m.cuotasManual));
       if (r.error) return res.status(400).json({ error: r.error });
       // No se puede quitar una opción sobre la que ya hay apuestas
       for (const o of m.options) {
@@ -995,6 +1025,7 @@ export function registerTkt365({
       // Las cuotas nuevas valen para apuestas futuras; las antiguas conservan la suya
       m.options = r.options;
     }
+    recalcManual(m);
     m.actualizado = nowMs();
     save();
     res.json({ ok: true, market: mercadoAdmin(m, nowMs()) });
@@ -1098,17 +1129,25 @@ export function registerTkt365({
     const conservados = st.markets.filter((m) => finales.includes(m.estado) && tienePendientes(m.id)).length;
     if (quitar.length) {
       const ids = new Set(quitar.map((m) => m.id));
+      quitar.forEach(olvidarAuto);
       st.markets = st.markets.filter((m) => !ids.has(m.id));
       save();
     }
     res.json({ ok: true, borrados: quitar.length, conservados });
   });
 
+  // Borrar un mercado. Si está abierto o tiene apuestas pendientes, hace falta ?devolver=1:
+  // entonces se cancela primero (se devuelven los TKT) y después se borra.
   adm.delete('/markets/:id', (req, res) => {
     const m = mercadoDeRuta(req, res);
     if (!m) return;
-    if (m.estado === 'abierto') return res.status(409).json({ error: 'Cierra el mercado antes de borrarlo.' });
-    if (tienePendientes(m.id)) return res.status(409).json({ error: 'Tiene apuestas pendientes: resuélvelo o cancélalo primero.' });
+    const devolver = String(req.query?.devolver || '') === '1';
+    const abierto = m.estado === 'abierto' || m.estado === 'cerrado';
+    if ((abierto || tienePendientes(m.id)) && !devolver) {
+      return res.status(409).json({ error: 'El mercado sigue activo o tiene apuestas pendientes: confirma que quieres devolver los TKT y borrarlo.' });
+    }
+    if (m.estado !== 'resuelto' && m.estado !== 'cancelado') cancelarMercado(m, 'Mercado borrado por el administrador');
+    olvidarAuto(m);
     st.markets = st.markets.filter((x) => x.id !== m.id);
     save();
     res.json({ ok: true });

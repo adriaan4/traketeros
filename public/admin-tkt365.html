@@ -75,6 +75,10 @@
         <label>Evento (texto libre)<input id="fEvento" maxlength="80" placeholder="Fiesta sábado"></label>
       </div>
       <label>Descripción<textarea id="fDesc" rows="2" maxlength="300" placeholder="Apuesta quién crees que será el último en abandonar la fiesta."></textarea></label>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:800">
+        <input type="checkbox" id="fCuotasAuto" style="width:auto"> 🤖 Calcular las cuotas solas (según lo que se vaya apostando)
+      </label>
+      <small class="hint" id="fAutoHint" hidden>No hace falta poner cuotas: empiezan igualadas y se ajustan con cada apuesta. Las apuestas ya hechas conservan la suya.</small>
       <div>
         <b style="font-size:12px">OPCIONES: marca a las personas del Traketímetro y pon su cuota</b>
         <div class="tkt-adm-opts" id="fUsuarios"></div>
