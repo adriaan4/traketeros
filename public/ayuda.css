@@ -23,7 +23,7 @@
 .ayuda-hero { text-align: center; margin: 8px 0 22px; }
 .ayuda-hero .hint { max-width: 560px; margin: 10px auto 0; font-weight: 700; }
 .ayuda-block {
-  background: #fff;
+  background: var(--noche-surf, #fff); /* en modo noche usa el fondo oscuro de las tarjetas */
   border: 4px solid var(--black);
   border-radius: 18px;
   box-shadow: 8px 8px 0 var(--black);
@@ -33,7 +33,15 @@
 }
 .ayuda-block h2 { margin: 0 0 10px; font-family: Bangers, Impact, sans-serif; font-size: 34px; letter-spacing: .5px; color: var(--black); }
 .ayuda-block h2 span { color: var(--red); }
-.ayuda-block img { display: block; width: 100%; height: auto; border-radius: 10px; }
+.ayuda-block img { display: block; width: 100%; height: auto; border-radius: 10px; background: #fff; } /* la infografía es de fondo blanco: se queda como está */
+
+/* Modo noche: texto claro sobre tarjeta oscura y sombra suave */
+html[data-tema="noche"] .ayuda-block { --black: #d9c4e3; }
+html[data-tema="noche"] .ayuda-block h2,
+html[data-tema="noche"] .ayuda-insulto { color: #f3e6f8; }
+html[data-tema="noche"] .ayuda-block h2 span { color: #ff5db1; }
+html[data-tema="noche"] .ayuda-hero .hint,
+html[data-tema="noche"] .ayuda-final { color: #ecdcf2; }
 .ayuda-insulto {
   margin: 12px 2px 2px;
   font-weight: 800;
