@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Juegos para la peña Traketeros: Yo nunca, Quién es más probable, Bebe el que y el Impostor.">
+  <meta name="description" content="Juegos para la peña Traketeros: Yo nunca, Quién es más probable, Bebe el que, el Impostor y Higher or Lower.">
   <meta name="theme-color" content="#ff2596">
   <title>Traketeros · Juegos</title>
   <link rel="icon" href="assets/traketeros.png">
@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
   <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="higherlower.css?v=1">
   <link rel="stylesheet" href="noche.css?v=5">
   <script src="tema.js?v=2"></script>
 </head>
@@ -42,6 +43,7 @@
     <button class="tab" data-modo="mas_probable" type="button">👉 Más probable</button>
     <button class="tab" data-modo="bebe_el_que" type="button">🍺 Bebe el que</button>
     <button class="tab" data-modo="impostor" type="button">🕵️ Impostor</button>
+    <button class="tab-hl" id="tabHL" type="button">📊 Higher or Lower</button>
   </div>
 
   <section class="game-card" id="carta" role="button" tabindex="0" aria-label="Toca para ver la siguiente pregunta">
@@ -106,6 +108,24 @@
     </div>
 
   </section>
+
+  <section class="hl" id="higherlower" hidden aria-label="Higher or Lower">
+    <div class="hl-hud" id="hlHud" hidden></div>
+
+    <div class="hl-stage" id="hlStage"><p class="hl-intro">Cargando…</p></div>
+
+    <div class="hl-bloque">
+      <h2>🏆 Clasificación <span>Higher or Lower</span></h2>
+      <div id="hlRanking"><p class="hl-vacio">Cargando…</p></div>
+    </div>
+
+    <div class="hl-bloque">
+      <details class="hl-reglas" id="hlReglas">
+        <summary>📜 Reglas y premios</summary>
+        <div id="hlReglasCuerpo"></div>
+      </details>
+    </div>
+  </section>
 </main>
 
 <footer>
@@ -113,5 +133,6 @@
 </footer>
 
 <script src="juegos.js?v=6"></script>
+<script src="higherlower.js?v=1"></script>
 </body>
 </html>
