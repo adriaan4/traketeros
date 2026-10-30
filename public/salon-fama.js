@@ -1,10 +1,13 @@
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const TIPOS_BASE=['cervezas','cubatas','chupitos','porros'];
+function cartaHTML(p,meta,activas){
+  return `<a class="trake-carta tc-clicable" href="perfil.html?name=${encodeURIComponent(p.name)}"><div class="tc-inner"><div class="tc-rank">${p.puesto}<small>TKT</small></div><div class="tc-foto-wrap">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">👤</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-linea"></div><div class="tc-stats">${activas.map(k=>`<div class="tc-stat"><span class="tc-emoji">${meta[k].emoji}</span>${p[k]||0}</div>`).join('')}</div><div class="tc-escudo"><img src="assets/traketeros.png" alt="Traketeros"></div></div></a>`;
+}
 function pintarCartas(d){
   const meta=d.config&&d.config.cardStatMeta||{};
   const activas=(d.config&&d.config.cardStats||[]).filter(k=>meta[k]);
   const top=[...(d.people||[])].slice(0,12);
-  document.getElementById('cartas').innerHTML=top.map(p=>`<a class="trake-carta tc-clicable" href="perfil.html?name=${encodeURIComponent(p.name)}"><img class="tc-frame" src="assets/carta-fama.png" alt=""><div class="tc-media">${p.media}</div><div class="tc-puesto">#${p.puesto}</div><div class="tc-foto-wrap">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">🙂</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-escudo"><img src="assets/traketeros.png" alt="Traketeros"></div><div class="tc-stats">${activas.map(k=>`<span class="tc-stat">${meta[k].emoji} <b>${p[k]||0}</b></span>`).join('')}</div></a>`).join('')||'<p class="community-empty">Todavía no hay cartas: apunta algo en el Traketímetro.</p>';
+  document.getElementById('cartas').innerHTML=top.map(p=>cartaHTML(p,meta,activas)).join('')||'<p class="community-empty">Todavía no hay cartas: apunta algo en el Traketímetro.</p>';
 }
 fetch('/api/community/overview').then(r=>r.json()).then(d=>{
   pintarCartas(d);

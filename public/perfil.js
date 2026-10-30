@@ -4,10 +4,22 @@ const labels={cervezas:'🍺 Cervezas',cubatas:'🍹 Cubatas',chupitos:'🥃 Chu
 const params=new URLSearchParams(location.search);
 const requested=params.get('name')||'';
 const fmt=ts=>ts?new Date(ts).toLocaleString('es-ES'):'Fecha desconocida';
+// Mismo token de dispositivo que usa TKT365 (localStorage: "tkt-token"): así la identidad
+// ("quién soy") es una sola para toda la web, igual que para apostar.
+function tokenDispositivo(){
+  let t='';
+  try{t=localStorage.getItem('tkt-token')||'';}catch{}
+  if(!/^[a-f0-9]{32}$/.test(t)){
+    const b=new Uint8Array(16);crypto.getRandomValues(b);
+    t=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');
+    try{localStorage.setItem('tkt-token',t);}catch{}
+  }
+  return t;
+}
+const TOKEN=tokenDispositivo();
 function pintarCarta(p,meta,activas){
-  $('carta').innerHTML=`<img class="tc-frame" src="assets/carta-fama.png" alt=""><div class="tc-media">${p.media}</div><div class="tc-puesto">#${p.puesto}</div><div class="tc-foto-wrap">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">🙂</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-escudo"><img src="assets/traketeros.png" alt="Traketeros"></div><div class="tc-stats">${activas.map(k=>`<span class="tc-stat">${meta[k].emoji} <b>${p[k]||0}</b></span>`).join('')}</div>`;
+  $('carta').innerHTML=`<div class="tc-inner"><div class="tc-rank">${p.puesto}<small>TKT</small></div><div class="tc-foto-wrap">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">👤</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-linea"></div><div class="tc-stats">${activas.map(k=>`<div class="tc-stat"><span class="tc-emoji">${meta[k].emoji}</span>${p[k]||0}</div>`).join('')}</div><div class="tc-escudo"><img src="assets/traketeros.png" alt="Traketeros"></div></div>`;
   $('cardWrap').style.display='';
-  $('fotoNombre').value=p.name;
 }
 if(!requested){
   $('name').textContent='Perfil no seleccionado';
@@ -16,7 +28,7 @@ if(!requested){
   const d=await r.json();
   if(!r.ok)throw Error(d.error||'No se pudo cargar el perfil');
   return d;
-}).then(d=>{
+}).then(async d=>{
   const p=d.person;
   if(d.config&&d.config.cigarros&&d.config.cigarros.activo)labels.cigarros='🚬 Cigarros';
   $('name').textContent=p.name;
@@ -27,15 +39,28 @@ if(!requested){
   const meta=(d.config&&d.config.cardStatMeta)||{};
   const activas=((d.config&&d.config.cardStats)||[]).filter(k=>meta[k]);
   pintarCarta(p,meta,activas);
+  // ¿Es ESTE dispositivo el dueño de este nombre? (misma identidad que en TKT365)
+  try{
+    const quien=await (await fetch('/api/community/quien-soy?token='+TOKEN)).json();
+    const soyYo=quien.id===p.name.toLocaleLowerCase('es');
+    if(soyYo){
+      $('fotoBox').style.display='';
+    }else{
+      $('fotoBox').style.display='';
+      $('fotoBox').innerHTML=quien.id
+        ?`<p class="community-muted">Esta carta es de ${esc(p.name)}. Solo su dispositivo puede cambiar su foto (como en TKT365).</p>`
+        :`<p class="community-muted">Para subir tu foto primero tienes que elegir tu nombre en <a href="tkt365.html">TKT365</a> (igual que para apostar). Luego vuelve a tu perfil.</p>`;
+    }
+  }catch{ $('fotoBox').innerHTML=''; }
 }).catch(e=>{
   $('name').textContent='Perfil no encontrado';
   $('msg').textContent=e.message;
 });
 $('fotoForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  const form=e.currentTarget;
-  const fd=new FormData(form);
+  const fd=new FormData(e.currentTarget);
   fd.set('name',requested);
+  fd.set('token',TOKEN);
   $('fotoMsg').textContent='Subiendo…';
   try{
     const r=await fetch('/api/community/card-photo',{method:'POST',body:fd});

@@ -1914,7 +1914,6 @@ function communityNormalize(raw) {
         name: String(v.name || key).slice(0, 80),
         url: String(v.url),
         publicId: v.publicId ? String(v.publicId) : undefined,
-        pinHash: v.pinHash ? String(v.pinHash) : undefined,
         updatedAt: Number(v.updatedAt) || Date.now()
       };
     }
@@ -2012,16 +2011,14 @@ app.get('/api/community/profile', (req, res) => {
   for (const x of activity) if ((Number(x.ts)||0) >= cutoff && recent[x.tipo] !== undefined && TRAKE_TIPOS.includes(x.tipo)) recent[x.tipo] += Number(x.cantidad)||0;
   res.json({ person, activity: activity.filter(x => TRAKE_TIPOS.includes(x.tipo)), recent, config: { ...trakeConfig(), ...cardConfig() } });
 });
-// ---------- Foto de la Carta: cada uno sube/cambia la suya con un PIN que elige la primera vez ----------
-// (el mismo PIN hace falta para volver a cambiarla; el admin puede cambiar cualquiera sin PIN)
+// ---------- Foto de la Carta: MISMA identidad que TKT365 (token del dispositivo -> nombre) ----------
+// Un dispositivo solo puede subir la foto del nombre que ya tiene elegido en TKT365 (api.post('/claim')).
+// Así nadie puede tocar la foto de otro, igual que nadie puede apostar en nombre de otro.
 const cardUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024, files: 1, fields: 4, fieldSize: 200 },
   fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp|heic|heif)$/i.test(file.mimetype))
 });
-function cardPinHash(key, pin) {
-  return crypto.createHash('sha256').update(`${key}::${pin}`).digest('hex');
-}
 async function cardGuardarFoto(buffer) {
   const jpeg = await sharp(buffer, { failOn: 'error' })
     .rotate()
@@ -2033,22 +2030,26 @@ async function cardGuardarFoto(buffer) {
   const r = await sendToCloudinary(jpeg, { public_id: publicId, resource_type: 'image', overwrite: true });
   return { url: r.secure_url, publicId: r.public_id };
 }
+// Dice a un dispositivo quién es (según lo que ya haya elegido en TKT365), igual que usa el Higher or Lower.
+app.get('/api/community/quien-soy', (req, res) => {
+  const id = tkt365Api?.juegos?.duenoDe(req.query.token) || null;
+  const name = id ? tkt365Api.juegos.nombreDe(id) : null;
+  res.json({ id, name });
+});
 app.post('/api/community/card-photo', uploadLimiter, (req, res) => {
   cardUpload.single('foto')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'La foto pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.' });
     try {
       const name = String(req.body?.name || '').trim().slice(0, 80);
-      const pin = String(req.body?.pin || '').trim();
-      if (!name) return res.status(400).json({ error: 'Indica tu nombre (el mismo que usas en el Traketímetro).' });
+      if (!name) return res.status(400).json({ error: 'Indica tu nombre.' });
       if (!req.file) return res.status(400).json({ error: 'Falta la foto.' });
-      if (pin.length < 4) return res.status(400).json({ error: 'El PIN debe tener al menos 4 caracteres. Elige uno y acuérdate de él: lo necesitarás para volver a cambiar tu foto.' });
       const key = name.toLocaleLowerCase('es');
-      const actual = communityData.cardPhotos[key];
-      if (actual && actual.pinHash && actual.pinHash !== cardPinHash(key, pin)) {
-        return res.status(403).json({ error: 'Esa foto ya tiene dueño. Hace falta el PIN que se usó la primera vez (o pídeselo al admin).' });
+      const yo = tkt365Api?.juegos?.duenoDe(req.body?.token);
+      if (!yo || yo !== key) {
+        return res.status(403).json({ error: 'Esta carta es de otra persona. Para subir tu foto, entra en tu propio perfil (hace falta tener tu nombre elegido en TKT365, igual que para apostar).' });
       }
       const foto = await cardGuardarFoto(req.file.buffer);
-      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, pinHash: cardPinHash(key, pin), updatedAt: Date.now() };
+      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, updatedAt: Date.now() };
       communitySave();
       res.json({ ok: true, url: foto.url });
     } catch (e) {
@@ -2057,8 +2058,7 @@ app.post('/api/community/card-photo', uploadLimiter, (req, res) => {
     }
   });
 });
-// El admin puede poner/cambiar la foto de cualquiera sin PIN (y de paso resetea el PIN: a partir
-// de ahí, quien quiera volver a cambiarla tiene que elegir un PIN nuevo con esa primera subida).
+// El admin puede poner/cambiar la foto de cualquiera (sin necesitar el token de su dispositivo).
 app.post('/api/admin/community/card-photo', adminAuth, (req, res) => {
   cardUpload.single('foto')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: 'No se ha podido leer la foto.' });
@@ -2068,7 +2068,7 @@ app.post('/api/admin/community/card-photo', adminAuth, (req, res) => {
       if (!req.file) return res.status(400).json({ error: 'Falta la foto.' });
       const key = name.toLocaleLowerCase('es');
       const foto = await cardGuardarFoto(req.file.buffer);
-      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, pinHash: undefined, updatedAt: Date.now() };
+      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, updatedAt: Date.now() };
       communitySave();
       res.json({ ok: true, url: foto.url });
     } catch (e) {
