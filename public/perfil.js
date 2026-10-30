@@ -20,11 +20,18 @@ async function habilitarFrase(p){
       let foto=$('fotoInput').files[0];
       if(!foto){$('fotoMsg').textContent='Elige una foto primero.';return;}
       const boton=$('fotoForm').querySelector('button');boton.disabled=true;
-      $('fotoMsg').textContent='Quitando el fondo… (la primera vez tarda un poco)';
-      try{
-        foto=await window.quitarFondo(foto,pct=>{$('fotoMsg').textContent='Quitando el fondo… '+pct+'%';});
-      }catch{
-        $('fotoMsg').textContent='No se pudo quitar el fondo: se sube la foto tal cual…';
+      if(/^video\//i.test(foto.type)){
+        // Vídeo -> GIF animado, conservando el fondo
+        try{
+          foto=await window.videoAGif(foto,pct=>{$('fotoMsg').textContent='Creando el GIF… '+pct+'%';});
+        }catch(err){$('fotoMsg').textContent=err.message||'No se pudo convertir el vídeo.';boton.disabled=false;return;}
+      }else if(!/^image\/gif$/i.test(foto.type)){
+        $('fotoMsg').textContent='Quitando el fondo… (la primera vez tarda un poco)';
+        try{
+          foto=await window.quitarFondo(foto,pct=>{$('fotoMsg').textContent='Quitando el fondo… '+pct+'%';});
+        }catch{
+          $('fotoMsg').textContent='No se pudo quitar el fondo: se sube la foto tal cual…';
+        }
       }
       const fd=new FormData();fd.set('name',p.name);fd.set('token',token);fd.set('foto',foto,foto.name);
       $('fotoMsg').textContent='Subiendo…';

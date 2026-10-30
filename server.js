@@ -2059,9 +2059,15 @@ app.get('/api/community/profile', (req, res) => {
 const cardUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024, files: 1, fields: 4, fieldSize: 200 },
-  fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp|heic|heif)$/i.test(file.mimetype))
+  fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp|heic|heif|gif)$/i.test(file.mimetype))
 });
 async function cardGuardarFoto(buffer) {
+  // GIF animado (el navegador convierte los vídeos a GIF): se guarda tal cual, con su fondo y su animación.
+  if (buffer.length > 6 && /^GIF8[79]a$/.test(buffer.subarray(0, 6).toString('latin1'))) {
+    const gifId = `traketeros_cartas/${crypto.randomUUID()}`;
+    const g = await sendToCloudinary(buffer, { public_id: gifId, resource_type: 'image', overwrite: true });
+    return { url: g.secure_url, publicId: g.public_id, sinFondo: false };
+  }
   // ¿Viene ya recortada (sin fondo)? El navegador quita el fondo antes de subirla y manda un PNG/WebP con transparencia.
   let sinFondo = false;
   try {

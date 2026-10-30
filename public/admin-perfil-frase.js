@@ -38,8 +38,15 @@
     e.preventDefault();e.stopImmediatePropagation();
     const msg=document.getElementById('adminFotoMsg');
     try{
-      msg.textContent='Quitando el fondo… (la primera vez tarda un poco)';
-      const f=await window.quitarFondo(input.files[0],p=>{msg.textContent='Quitando el fondo… '+p+'%';});
+      const orig=input.files[0];let f;
+      if(/^video\//i.test(orig.type)){
+        msg.textContent='Creando el GIF…';
+        f=await window.videoAGif(orig,p=>{msg.textContent='Creando el GIF… '+p+'%';});
+      }else if(/^image\/gif$/i.test(orig.type)){f=orig;}
+      else{
+        msg.textContent='Quitando el fondo… (la primera vez tarda un poco)';
+        f=await window.quitarFondo(orig,p=>{msg.textContent='Quitando el fondo… '+p+'%';});
+      }
       const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;
     }catch(err){msg.textContent='No se pudo quitar el fondo: se sube tal cual…';}
     form.dataset.sinFondo='1';
