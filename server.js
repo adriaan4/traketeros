@@ -204,7 +204,12 @@ app.get(['/panel', '/panel/'], adminAuth, (req, res) => {
 // Archivos de la web
 // Splash con el logo de la peña: se añade solo a todas las páginas (menos las de admin),
 // sin tener que editar cada HTML. Es un <script> que se coloca justo al abrir <head>.
-const SPLASH_TAG = '<script src="/splash.js?v=1"></script>';
+const PWA_TAGS = '<link rel="manifest" href="/manifest.webmanifest">'
+  + '<meta name="mobile-web-app-capable" content="yes">'
+  + '<meta name="apple-mobile-web-app-capable" content="yes">'
+  + '<link rel="apple-touch-icon" href="/assets/icon-192.png">'
+  + '<script>if("serviceWorker"in navigator)addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){})})</script>';
+const SPLASH_TAG = '<script src="/splash.js?v=1"></script>' + PWA_TAGS;
 app.use((req, res, next) => {
   if (req.method !== 'GET') return next();
   let p;
