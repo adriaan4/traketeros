@@ -12,6 +12,20 @@ async function habilitarFrase(p){
     if(!q.id||q.id!==p.name.toLocaleLowerCase('es'))return;
     $('fraseInput').value=$('frase').textContent;
     $('fraseForm').hidden=false;
+    // Foto de la carta: solo la ve y la puede cambiar el dueño del perfil
+    $('fotoForm').hidden=false;
+    $('fotoInput').addEventListener('change',()=>{$('fotoNombre').textContent=$('fotoInput').files[0]?.name||'';});
+    $('fotoForm').addEventListener('submit',async e=>{
+      e.preventDefault();
+      if(!$('fotoInput').files[0]){$('fotoMsg').textContent='Elige una foto primero.';return;}
+      const fd=new FormData();fd.set('name',p.name);fd.set('token',token);fd.set('foto',$('fotoInput').files[0]);
+      $('fotoMsg').textContent='Subiendo…';
+      try{
+        const r=await fetch('/api/community/card-photo',{method:'POST',body:fd});
+        const d=await r.json();if(!r.ok)throw Error(d.error||'No se pudo subir la foto.');
+        $('fotoMsg').textContent='¡Foto guardada!';location.reload();
+      }catch(err){$('fotoMsg').textContent=err.message;}
+    });
     $('fraseForm').addEventListener('submit',async e=>{
       e.preventDefault();$('fraseMsg').textContent='Guardando…';
       try{

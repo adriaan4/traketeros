@@ -202,6 +202,26 @@ app.get(['/panel', '/panel/'], adminAuth, (req, res) => {
 });
 
 // Archivos de la web
+// Splash con el logo de la peña: se añade solo a todas las páginas (menos las de admin),
+// sin tener que editar cada HTML. Es un <script> que se coloca justo al abrir <head>.
+const SPLASH_TAG = '<script src="/splash.js?v=1"></script>';
+app.use((req, res, next) => {
+  if (req.method !== 'GET') return next();
+  let p;
+  try { p = decodeURIComponent(req.path); } catch { return next(); }
+  if (p.endsWith('/')) p += 'index.html';
+  if (!p.endsWith('.html') || /^\/admin/i.test(p)) return next();
+  const base = path.join(__dirname, 'public');
+  const file = path.join(base, p);
+  if (!file.startsWith(base + path.sep)) return next();
+  fs.readFile(file, 'utf8', (err, html) => {
+    if (err) return next();
+    if (!html.includes('/splash.js')) html = html.replace(/<head[^>]*>/i, (m) => m + SPLASH_TAG);
+    res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+    res.send(html);
+  });
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // =========================
