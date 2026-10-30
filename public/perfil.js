@@ -4,19 +4,6 @@ const labels={cervezas:'🍺 Cervezas',cubatas:'🍹 Cubatas',chupitos:'🥃 Chu
 const params=new URLSearchParams(location.search);
 const requested=params.get('name')||'';
 const fmt=ts=>ts?new Date(ts).toLocaleString('es-ES'):'Fecha desconocida';
-// Mismo token de dispositivo que usa TKT365 (localStorage: "tkt-token"): así la identidad
-// ("quién soy") es una sola para toda la web, igual que para apostar.
-function tokenDispositivo(){
-  let t='';
-  try{t=localStorage.getItem('tkt-token')||'';}catch{}
-  if(!/^[a-f0-9]{32}$/.test(t)){
-    const b=new Uint8Array(16);crypto.getRandomValues(b);
-    t=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');
-    try{localStorage.setItem('tkt-token',t);}catch{}
-  }
-  return t;
-}
-const TOKEN=tokenDispositivo();
 function cartaInner(p,meta,activas){
   const r=p.rating||{};
   const huecos=Array.from({length:Math.max(5,activas.length)},(_,i)=>activas[i]);
@@ -25,7 +12,6 @@ function cartaInner(p,meta,activas){
 function pintarCarta(p,meta,activas){
   $('carta').hidden=false;
   $('carta').innerHTML=cartaInner(p,meta,activas);
-  $('cardWrap').style.display='';
 }
 if(!requested){
   $('name').textContent='Perfil no seleccionado';
@@ -45,36 +31,7 @@ if(!requested){
   const meta=(d.config&&d.config.cardStatMeta)||{};
   const activas=((d.config&&d.config.cardStats)||[]).filter(k=>meta[k]);
   pintarCarta(p,meta,activas);
-  // ¿Es ESTE dispositivo el dueño de este nombre? (misma identidad que en TKT365)
-  try{
-    const quien=await (await fetch('/api/community/quien-soy?token='+TOKEN)).json();
-    const soyYo=quien.id===p.name.toLocaleLowerCase('es');
-    if(soyYo){
-      $('fotoBox').style.display='';
-    }else{
-      $('fotoBox').style.display='';
-      $('fotoBox').innerHTML=quien.id
-        ?`<p class="community-muted">Esta carta es de ${esc(p.name)}. Solo su dispositivo puede cambiar su foto (como en TKT365).</p>`
-        :`<p class="community-muted">Para subir tu foto primero tienes que elegir tu nombre en <a href="tkt365.html">TKT365</a> (igual que para apostar). Luego vuelve a tu perfil.</p>`;
-    }
-  }catch{ $('fotoBox').innerHTML=''; }
 }).catch(e=>{
   $('name').textContent='Perfil no encontrado';
   $('msg').textContent=e.message;
-});
-$('fotoForm').addEventListener('submit',async e=>{
-  e.preventDefault();
-  const fd=new FormData(e.currentTarget);
-  fd.set('name',requested);
-  fd.set('token',TOKEN);
-  $('fotoMsg').textContent='Subiendo…';
-  try{
-    const r=await fetch('/api/community/card-photo',{method:'POST',body:fd});
-    const d=await r.json();
-    if(!r.ok)throw Error(d.error||'No se pudo subir la foto.');
-    $('fotoMsg').textContent='¡Foto guardada!';
-    location.reload();
-  }catch(err){
-    $('fotoMsg').textContent=err.message;
-  }
 });
