@@ -27,40 +27,56 @@ $('cardStatsBox').addEventListener('click',async e=>{
 setTimeout(()=>{if(window.precargarQuitarFondo)window.precargarQuitarFondo();},1500);
 
 // Foto de alguien: se prepara en el navegador (vídeo -> GIF, o se quita el fondo) y se sube UNA sola vez.
+let barraAdmin=null;
 $('adminFotoForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const form=e.currentTarget,msg=$('adminFotoMsg'),btn=form.querySelector('button[type=submit]');
   const name=$('fotoPersona').value,orig=form.elements.foto.files[0];
   if(!name||!orig){msg.textContent='Elige una persona y una foto.';return;}
   btn.disabled=true;
+  if(!barraAdmin)barraAdmin=window.barraSubida(msg);
+  barraAdmin.quitar();
   const tipoDe=f=>{const t=(f.type||'').toLowerCase();if(t)return t;const x=(f.name||'').split('.').pop().toLowerCase();return x==='gif'?'image/gif':/^(mp4|mov|m4v|webm|3gp|avi|mkv)$/.test(x)?'video/'+x:'image/'+x;};
-  let f=orig;
+  let f=orig,desde=0;
   try{
     const tipo=tipoDe(orig);
     if(/^video\//i.test(tipo)){
-      msg.textContent='Creando el GIF…';
-      try{f=await window.videoAGif(orig,p=>{msg.textContent='Creando el GIF… '+p+'%';});}
-      catch(err){msg.textContent=err.message||'No se pudo convertir el vídeo.';btn.disabled=false;return;}
+      desde=50;barraAdmin.set(0,'Creando el GIF… 0%');
+      try{f=await window.videoAGif(orig,barraAdmin.tramo(0,50,'Creando el GIF…'));}
+      catch(err){barraAdmin.quitar();msg.textContent=err.message||'No se pudo convertir el vídeo.';btn.disabled=false;return;}
     }else if(!/^image\/gif$/i.test(tipo)){
-      msg.textContent='Quitando el fondo… (la primera vez tarda un poco)';
-      try{f=await window.quitarFondo(orig,p=>{msg.textContent='Quitando el fondo… '+p+'%';});}
+      desde=50;barraAdmin.set(0,'Quitando el fondo… 0% (la primera vez tarda un poco)');
+      try{f=await window.quitarFondo(orig,barraAdmin.tramo(0,50,'Quitando el fondo…'));}
       catch{
         // Sin recorte: se sube reducida (más rápido que mandar el original de varios MB)
         msg.textContent='No se pudo quitar el fondo: se sube la foto tal cual…';
         try{f=await window.reducirFoto(orig);}catch{f=orig;}
       }
     }
-    msg.textContent='Subiendo…';
+    barraAdmin.set(desde,'Subiendo… '+desde+'%');
     const fd=new FormData();fd.set('name',name);fd.set('foto',f,f.name);
-    const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),120000);
-    try{await request('/api/admin/community/card-photo',{method:'POST',body:fd,signal:ctl.signal});}
-    finally{clearTimeout(t);}
-    msg.textContent='Foto guardada para '+name+'.';
+    // La subida va por XHR para poder mostrar el porcentaje; si el servidor pide login (401) se pregunta y se reintenta
+    const enviar=()=>window.subirConProgreso('/api/admin/community/card-photo',fd,{
+      headers:auth?{Authorization:'Basic '+auth}:{},
+      onProgreso:pct=>barraAdmin.set(desde+(100-desde)*Math.min(pct,99)/100,'Subiendo… '+Math.round(pct)+'%'),
+      onEnviado:()=>barraAdmin.esperando('Guardando la foto…')
+    });
+    try{await enviar();}
+    catch(e1){
+      if(e1.status===401&&!auth){
+        const u=prompt('Usuario de administrador');if(u===null)throw Error('Acceso cancelado');
+        const pw=prompt('Contraseña de administrador');if(pw===null)throw Error('Acceso cancelado');
+        auth=btoa(unescape(encodeURIComponent(u+':'+pw)));
+        barraAdmin.set(desde,'Subiendo… '+desde+'%');
+        await enviar();
+      }else throw e1;
+    }
+    barraAdmin.fin('Foto guardada para '+name+'.');
     form.reset();
     const opt=[...$('fotoPersona').options].find(o=>o.value===name);if(opt&&!opt.textContent.includes('📷'))opt.textContent+=' 📷';
     $('fotoPersona').value=name;
   }catch(err){
-    msg.textContent=err.name==='AbortError'?'Tardó demasiado en subir. Prueba con una foto más ligera.':(err.message==='Failed to fetch'?'Sin conexión con el servidor. Inténtalo de nuevo.':err.message);
+    barraAdmin.quitar();msg.textContent=err.name==='AbortError'?'Tardó demasiado en subir. Prueba con una foto más ligera.':(err.message==='Failed to fetch'?'Sin conexión con el servidor. Inténtalo de nuevo.':err.message);
   }finally{btn.disabled=false;}
 });
 loadCardStats();

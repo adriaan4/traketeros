@@ -15,32 +15,41 @@ async function habilitarFrase(p){
     // Foto de la carta: solo la ve y la puede cambiar el dueño del perfil
     $('fotoForm').hidden=false;setTimeout(()=>{if(window.precargarQuitarFondo)window.precargarQuitarFondo();},1500);
     $('fotoInput').addEventListener('change',()=>{$('fotoNombre').textContent=$('fotoInput').files[0]?.name||'';});
+    let barra=null;
     $('fotoForm').addEventListener('submit',async e=>{
       e.preventDefault();
       let foto=$('fotoInput').files[0];
       if(!foto){$('fotoMsg').textContent='Elige una foto primero.';return;}
-      const boton=$('fotoForm').querySelector('button');boton.disabled=true;
+      const boton=$('fotoForm').querySelector('button[type=submit]')||$('fotoForm').querySelector('button');boton.disabled=true;
+      const msg=$('fotoMsg');
+      if(!barra)barra=window.barraSubida(msg);
+      barra.quitar();
       const tipoDe=f=>{const t=(f.type||'').toLowerCase();if(t)return t;const e=(f.name||'').split('.').pop().toLowerCase();return e==='gif'?'image/gif':/^(mp4|mov|m4v|webm|3gp|avi|mkv)$/.test(e)?'video/'+e:'image/'+e;};
+      // La barra va de 0 a 100: si hay que preparar la foto (GIF o quitar fondo) ocupa la primera mitad y la subida la segunda
+      let desde=0;
       if(/^video\//i.test(tipoDe(foto))){
         // Vídeo -> GIF animado, conservando el fondo
+        desde=50;barra.set(0,'Creando el GIF… 0%');
         try{
-          foto=await window.videoAGif(foto,pct=>{$('fotoMsg').textContent='Creando el GIF… '+pct+'%';});
-        }catch(err){$('fotoMsg').textContent=err.message||'No se pudo convertir el vídeo.';boton.disabled=false;return;}
+          foto=await window.videoAGif(foto,barra.tramo(0,50,'Creando el GIF…'));
+        }catch(err){barra.quitar();msg.textContent=err.message||'No se pudo convertir el vídeo.';boton.disabled=false;return;}
       }else if(!/^image\/gif$/i.test(tipoDe(foto))){
-        $('fotoMsg').textContent='Quitando el fondo… (la primera vez tarda un poco)';
+        desde=50;barra.set(0,'Quitando el fondo… 0% (la primera vez tarda un poco)');
         try{
-          foto=await window.quitarFondo(foto,pct=>{$('fotoMsg').textContent='Quitando el fondo… '+pct+'%';});
+          foto=await window.quitarFondo(foto,barra.tramo(0,50,'Quitando el fondo…'));
         }catch{
-          $('fotoMsg').textContent='No se pudo quitar el fondo: se sube la foto tal cual…';
+          msg.textContent='No se pudo quitar el fondo: se sube la foto tal cual…';
         }
       }
       const fd=new FormData();fd.set('name',p.name);fd.set('token',token);fd.set('foto',foto,foto.name);
-      $('fotoMsg').textContent='Subiendo…';
+      barra.set(desde,'Subiendo… '+desde+'%');
       try{
-        const r=await fetch('/api/community/card-photo',{method:'POST',body:fd});
-        const d=await r.json();if(!r.ok)throw Error(d.error||'No se pudo subir la foto.');
-        $('fotoMsg').textContent='¡Foto guardada!';location.reload();
-      }catch(err){$('fotoMsg').textContent=err.message;boton.disabled=false;}
+        await window.subirConProgreso('/api/community/card-photo',fd,{
+          onProgreso:pct=>barra.set(desde+(100-desde)*Math.min(pct,99)/100,'Subiendo… '+Math.round(pct)+'%'),
+          onEnviado:()=>barra.esperando('Guardando tu foto…')
+        });
+        barra.fin('¡Foto guardada!');location.reload();
+      }catch(err){barra.quitar();msg.textContent=err.name==='AbortError'?'Tardó demasiado en subir. Prueba con una foto más ligera.':(err.message==='Failed to fetch'?'Sin conexión con el servidor. Inténtalo de nuevo.':err.message);boton.disabled=false;}
     });
     $('fraseForm').addEventListener('submit',async e=>{
       e.preventDefault();$('fraseMsg').textContent='Guardando…';

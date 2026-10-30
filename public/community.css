@@ -88,3 +88,17 @@ html[data-tema="noche"] .community-stat span{color:#cdb9d3!important}
 .trake-carta .tc-media,.trake-carta .tc-escudo{z-index:2}
 .trake-carta .tc-foto-wrap.recorte{-webkit-mask-image:none;mask-image:none;align-items:flex-end}
 .trake-carta .tc-foto-wrap.recorte img{object-fit:contain;object-position:center bottom;filter:drop-shadow(0 2px 3px rgba(43,28,0,.35))}
+
+/* Barra de carga al subir la foto de la carta */
+.subida-barra{display:flex;align-items:center;gap:10px;width:100%;flex:1 1 100%;margin-top:4px}
+.subida-barra[hidden]{display:none}
+.subida-pista{flex:1;height:14px;border-radius:999px;background:#eadbe6;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.18)}
+.subida-relleno{height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#ff2596,#ff7a3d);transition:width .25s ease}
+.subida-pct{min-width:3ch;text-align:right;font-weight:900;font-size:.85rem;color:#1a0018}
+.subida-barra.espera .subida-relleno{background:repeating-linear-gradient(45deg,#ff2596 0 12px,#ff7a3d 12px 24px);background-size:34px 34px;animation:subida-rayas .8s linear infinite}
+@keyframes subida-rayas{to{background-position:34px 0}}
+.frase-form .subida-pista{background:rgba(255,255,255,.35)}
+.frase-form .subida-relleno{background:#fff}
+.frase-form .subida-barra.espera .subida-relleno{background:repeating-linear-gradient(45deg,#fff 0 12px,rgba(255,255,255,.55) 12px 24px);background-size:34px 34px}
+.frase-form .subida-pct{color:#fff}
+@media (prefers-reduced-motion:reduce){.subida-relleno{transition:none}.subida-barra.espera .subida-relleno{animation:none}}
