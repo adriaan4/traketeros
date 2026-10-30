@@ -27,3 +27,23 @@
   $('fraseForm').addEventListener('submit',e=>{e.preventDefault();guardar($('frasePersona').value,$('fraseInput').value);});
   $('fraseLista').addEventListener('click',e=>{const b=e.target.closest('button[data-q]');if(b)guardar(b.dataset.q,'');});
 })();
+
+// Foto de alguien desde el admin: también se le quita el fondo antes de enviarla (se intercepta el envío del formulario existente).
+(function(){
+  document.addEventListener('submit',async function(e){
+    const form=e.target;
+    if(!form||form.id!=='adminFotoForm'||form.dataset.sinFondo==='1'||!window.quitarFondo)return;
+    const input=form.querySelector('input[type=file]');
+    if(!input||!input.files[0])return;
+    e.preventDefault();e.stopImmediatePropagation();
+    const msg=document.getElementById('adminFotoMsg');
+    try{
+      msg.textContent='Quitando el fondo… (la primera vez tarda un poco)';
+      const f=await window.quitarFondo(input.files[0],p=>{msg.textContent='Quitando el fondo… '+p+'%';});
+      const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;
+    }catch(err){msg.textContent='No se pudo quitar el fondo: se sube tal cual…';}
+    form.dataset.sinFondo='1';
+    form.requestSubmit();
+    setTimeout(()=>{delete form.dataset.sinFondo;},1500);
+  },true);
+})();

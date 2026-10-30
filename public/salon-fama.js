@@ -3,7 +3,7 @@ const TIPOS_BASE=['cervezas','cubatas','chupitos','porros'];
 function cartaInner(p,meta,activas){
   const cant=n=>{n=Number(n)||0;return n>=1000?(n/1000).toFixed(1).replace('.0','')+'k':n;};
   const huecos=Array.from({length:Math.max(5,activas.length)},(_,i)=>activas[i]);
-  return `<div class="tc-inner"><div class="tc-media">${p.media||0}<small>#${p.puesto}</small></div><div class="tc-escudo"><img src="assets/carta-logo-oso.png" alt="Traketeros"></div><div class="tc-foto-wrap">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">👤</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-stats">${huecos.map(k=>k?`<div class="tc-stat" title="${esc(meta[k].label)}: ${p[k]||0} en total"><i>${esc(meta[k].emoji)}</i><b>${cant(p[k])}</b></div>`:'<div class="tc-stat"></div>').join('')}</div></div>`;
+  return `<div class="tc-inner"><div class="tc-media">${p.media||0}<small>#${p.puesto}</small></div><div class="tc-escudo"><img src="assets/carta-logo-oso.png" alt="Traketeros"></div><div class="tc-foto-wrap${p.foto&&p.foto.sinFondo?' recorte':''}">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">👤</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-stats">${huecos.map(k=>k?`<div class="tc-stat" title="${esc(meta[k].label)}: ${p[k]||0} en total"><i>${esc(meta[k].emoji)}</i><b>${cant(p[k])}</b></div>`:'<div class="tc-stat"></div>').join('')}</div></div>`;
 }
 function cartaHTML(p,meta,activas){
   return `<a class="trake-carta tc-clicable" href="perfil.html?name=${encodeURIComponent(p.name)}">${cartaInner(p,meta,activas)}</a>`;

@@ -17,14 +17,22 @@ async function habilitarFrase(p){
     $('fotoInput').addEventListener('change',()=>{$('fotoNombre').textContent=$('fotoInput').files[0]?.name||'';});
     $('fotoForm').addEventListener('submit',async e=>{
       e.preventDefault();
-      if(!$('fotoInput').files[0]){$('fotoMsg').textContent='Elige una foto primero.';return;}
-      const fd=new FormData();fd.set('name',p.name);fd.set('token',token);fd.set('foto',$('fotoInput').files[0]);
+      let foto=$('fotoInput').files[0];
+      if(!foto){$('fotoMsg').textContent='Elige una foto primero.';return;}
+      const boton=$('fotoForm').querySelector('button');boton.disabled=true;
+      $('fotoMsg').textContent='Quitando el fondo… (la primera vez tarda un poco)';
+      try{
+        foto=await window.quitarFondo(foto,pct=>{$('fotoMsg').textContent='Quitando el fondo… '+pct+'%';});
+      }catch{
+        $('fotoMsg').textContent='No se pudo quitar el fondo: se sube la foto tal cual…';
+      }
+      const fd=new FormData();fd.set('name',p.name);fd.set('token',token);fd.set('foto',foto,foto.name);
       $('fotoMsg').textContent='Subiendo…';
       try{
         const r=await fetch('/api/community/card-photo',{method:'POST',body:fd});
         const d=await r.json();if(!r.ok)throw Error(d.error||'No se pudo subir la foto.');
         $('fotoMsg').textContent='¡Foto guardada!';location.reload();
-      }catch(err){$('fotoMsg').textContent=err.message;}
+      }catch(err){$('fotoMsg').textContent=err.message;boton.disabled=false;}
     });
     $('fraseForm').addEventListener('submit',async e=>{
       e.preventDefault();$('fraseMsg').textContent='Guardando…';
@@ -41,7 +49,7 @@ const fmt=ts=>ts?new Date(ts).toLocaleString('es-ES'):'Fecha desconocida';
 function cartaInner(p,meta,activas){
   const cant=n=>{n=Number(n)||0;return n>=1000?(n/1000).toFixed(1).replace('.0','')+'k':n;};
   const huecos=Array.from({length:Math.max(5,activas.length)},(_,i)=>activas[i]);
-  return `<div class="tc-inner"><div class="tc-media">${p.media||0}<small>#${p.puesto}</small></div><div class="tc-escudo"><img src="assets/carta-logo-oso.png" alt="Traketeros"></div><div class="tc-foto-wrap">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">👤</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-stats">${huecos.map(k=>k?`<div class="tc-stat" title="${esc(meta[k].label)}: ${p[k]||0} en total"><i>${esc(meta[k].emoji)}</i><b>${cant(p[k])}</b></div>`:'<div class="tc-stat"></div>').join('')}</div></div>`;
+  return `<div class="tc-inner"><div class="tc-media">${p.media||0}<small>#${p.puesto}</small></div><div class="tc-escudo"><img src="assets/carta-logo-oso.png" alt="Traketeros"></div><div class="tc-foto-wrap${p.foto&&p.foto.sinFondo?' recorte':''}">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">👤</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-stats">${huecos.map(k=>k?`<div class="tc-stat" title="${esc(meta[k].label)}: ${p[k]||0} en total"><i>${esc(meta[k].emoji)}</i><b>${cant(p[k])}</b></div>`:'<div class="tc-stat"></div>').join('')}</div></div>`;
 }
 function pintarCarta(p,meta,activas){
   $('carta').hidden=false;

@@ -1934,6 +1934,7 @@ function communityNormalize(raw) {
         name: String(v.name || key).slice(0, 80),
         url: String(v.url),
         publicId: v.publicId ? String(v.publicId) : undefined,
+        sinFondo: Boolean(v.sinFondo),
         updatedAt: Number(v.updatedAt) || Date.now()
       };
     }
@@ -2014,7 +2015,7 @@ function trakeAggregate() {
   list.forEach((p, i) => {
     const key = p.name.toLocaleLowerCase('es');
     const foto = communityData.cardPhotos[key];
-    p.foto = foto ? { url: foto.url, updatedAt: foto.updatedAt } : null;
+    p.foto = foto ? { url: foto.url, updatedAt: foto.updatedAt, sinFondo: Boolean(foto.sinFondo) } : null;
     p.tieneFotoPropia = Boolean(foto);
     p.puesto = i + 1;
     p.media = nota(p.puntos, maxPuntos);
@@ -2061,15 +2062,37 @@ const cardUpload = multer({
   fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp|heic|heif)$/i.test(file.mimetype))
 });
 async function cardGuardarFoto(buffer) {
-  const jpeg = await sharp(buffer, { failOn: 'error' })
-    .rotate()
-    .flatten({ background: '#ffffff' })
-    .resize({ width: 600, height: 600, fit: 'cover' })
-    .jpeg({ quality: 85 })
-    .toBuffer();
+  // ¿Viene ya recortada (sin fondo)? El navegador quita el fondo antes de subirla y manda un PNG/WebP con transparencia.
+  let sinFondo = false;
+  try {
+    const meta = await sharp(buffer).metadata();
+    if (meta.hasAlpha) {
+      const alfa = (await sharp(buffer).stats()).channels[3];
+      sinFondo = Boolean(alfa && alfa.min < 250);
+    }
+  } catch { /* se trata como foto normal */ }
+
+  let img, extra;
+  if (sinFondo) {
+    // Se conserva la transparencia: WebP con alfa (sin aplanar a blanco)
+    img = await sharp(buffer, { failOn: 'error' })
+      .rotate()
+      .resize({ width: 600, height: 800, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 90, alphaQuality: 95 })
+      .toBuffer();
+    extra = { format: 'webp' };
+  } else {
+    img = await sharp(buffer, { failOn: 'error' })
+      .rotate()
+      .flatten({ background: '#ffffff' })
+      .resize({ width: 600, height: 600, fit: 'cover' })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    extra = {};
+  }
   const publicId = `traketeros_cartas/${crypto.randomUUID()}`;
-  const r = await sendToCloudinary(jpeg, { public_id: publicId, resource_type: 'image', overwrite: true });
-  return { url: r.secure_url, publicId: r.public_id };
+  const r = await sendToCloudinary(img, { public_id: publicId, resource_type: 'image', overwrite: true, ...extra });
+  return { url: r.secure_url, publicId: r.public_id, sinFondo };
 }
 // Dice a un dispositivo quién es (según lo que ya haya elegido en TKT365), igual que usa el Higher or Lower.
 app.get('/api/community/quien-soy', (req, res) => {
@@ -2090,7 +2113,7 @@ app.post('/api/community/card-photo', uploadLimiter, (req, res) => {
         return res.status(403).json({ error: 'Esta carta es de otra persona. Para subir tu foto, entra en tu propio perfil (hace falta tener tu nombre elegido en TKT365, igual que para apostar).' });
       }
       const foto = await cardGuardarFoto(req.file.buffer);
-      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, updatedAt: Date.now() };
+      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, sinFondo: foto.sinFondo, updatedAt: Date.now() };
       communitySave();
       res.json({ ok: true, url: foto.url });
     } catch (e) {
@@ -2109,7 +2132,7 @@ app.post('/api/admin/community/card-photo', adminAuth, (req, res) => {
       if (!req.file) return res.status(400).json({ error: 'Falta la foto.' });
       const key = name.toLocaleLowerCase('es');
       const foto = await cardGuardarFoto(req.file.buffer);
-      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, updatedAt: Date.now() };
+      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, sinFondo: foto.sinFondo, updatedAt: Date.now() };
       communitySave();
       res.json({ ok: true, url: foto.url });
     } catch (e) {
