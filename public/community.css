@@ -81,3 +81,5 @@ html[data-tema="noche"] .community-stat span{color:#cdb9d3!important}
 .perfil-hero .trake-carta{margin:0;width:min(280px,42vw)}
 @media(max-width:760px){.perfil-hero{grid-template-columns:1fr;justify-items:start}.perfil-hero .trake-carta{width:min(280px,78vw);margin:6px auto 0}}
 .trake-foto-form{display:grid;gap:10px;max-width:360px}
+
+.frase-form{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px;max-width:560px}.frase-form input{flex:1 1 240px;min-width:0;border:1px solid #d9cbd6;border-radius:10px;padding:10px 12px;font:inherit;background:#fff;color:#1a0018}.frase-form .community-message{color:#fff!important}.frase-form[hidden]{display:none}

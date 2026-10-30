@@ -2,6 +2,26 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const labels={cervezas:'🍺 Cervezas',cubatas:'🍹 Cubatas',chupitos:'🥃 Chupitos',porros:'🌿 Porros'};
 const params=new URLSearchParams(location.search);
+function pintarFrase(t){$('frase').textContent=t||'';$('frase').hidden=!t;}
+// Solo el dueño del perfil (mismo dispositivo/nombre que en TKT365) ve el cuadro para cambiar su frase
+async function habilitarFrase(p){
+  let token='';try{token=localStorage.getItem('tkt-token')||'';}catch{}
+  if(!token)return;
+  try{
+    const q=await (await fetch('/api/community/quien-soy?token='+encodeURIComponent(token))).json();
+    if(!q.id||q.id!==p.name.toLocaleLowerCase('es'))return;
+    $('fraseInput').value=$('frase').textContent;
+    $('fraseForm').hidden=false;
+    $('fraseForm').addEventListener('submit',async e=>{
+      e.preventDefault();$('fraseMsg').textContent='Guardando…';
+      try{
+        const r=await fetch('/api/community/frase',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:p.name,token,texto:$('fraseInput').value})});
+        const d=await r.json();if(!r.ok)throw Error(d.error||'No se pudo guardar.');
+        pintarFrase(d.frase);$('fraseInput').value=d.frase;$('fraseMsg').textContent=d.frase?'¡Guardada!':'Frase quitada.';
+      }catch(err){$('fraseMsg').textContent=err.message;}
+    });
+  }catch{}
+}
 const requested=params.get('name')||'';
 const fmt=ts=>ts?new Date(ts).toLocaleString('es-ES'):'Fecha desconocida';
 function cartaInner(p,meta,activas){
@@ -24,7 +44,7 @@ if(!requested){
   const p=d.person;
   if(d.config&&d.config.cigarros&&d.config.cigarros.activo)labels.cigarros='🚬 Cigarros';
   $('name').textContent=p.name;
-  if(d.frase){$('frase').textContent=d.frase;$('frase').hidden=false;}
+  pintarFrase(d.frase);
   document.title='Traketeros · '+p.name;
   $('totals').innerHTML=Object.entries(labels).map(([k,v])=>`<div class="community-stat"><span>${v}</span><b>${p[k]||0}</b></div>`).join('')+`<div class="community-stat"><span>⭐ Puntos</span><b>${p.puntos||0}</b></div><div class="community-stat"><span>📝 Registros</span><b>${p.apuntes||0}</b></div>`;
   $('recent').innerHTML=Object.entries(labels).map(([k,v])=>`<div class="community-stat"><span>${v}</span><b>${d.recent[k]||0}</b></div>`).join('');
@@ -32,6 +52,7 @@ if(!requested){
   const meta=(d.config&&d.config.cardStatMeta)||{};
   const activas=((d.config&&d.config.cardStats)||[]).filter(k=>meta[k]);
   pintarCarta(p,meta,activas);
+  habilitarFrase(p);
 }).catch(e=>{
   $('name').textContent='Perfil no encontrado';
   $('msg').textContent=e.message;
