@@ -15,14 +15,52 @@ $('cardStatsBox').addEventListener('click',async e=>{
     loadCardStats();
   }catch(err){$('authMsg').textContent=err.message;}
 });
+// Lista de personas (la misma que en las frases) para elegir a quién se le pone la foto
+(async function cargarPersonasFoto(){
+  const sel=$('fotoPersona');
+  try{
+    const o=await (await fetch('/api/community/overview')).json();
+    const gente=(o.people||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,'es'));
+    sel.innerHTML=gente.map(p=>`<option value="${esc(p.name)}">${esc(p.name)}${p.foto?' 📷':''}</option>`).join('');
+  }catch(e){$('adminFotoMsg').textContent='No se pudieron cargar las personas.';}
+})();
+setTimeout(()=>{if(window.precargarQuitarFondo)window.precargarQuitarFondo();},1500);
+
+// Foto de alguien: se prepara en el navegador (vídeo -> GIF, o se quita el fondo) y se sube UNA sola vez.
 $('adminFotoForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  const fd=new FormData(e.currentTarget);
-  $('adminFotoMsg').textContent='Subiendo…';
+  const form=e.currentTarget,msg=$('adminFotoMsg'),btn=form.querySelector('button[type=submit]');
+  const name=$('fotoPersona').value,orig=form.elements.foto.files[0];
+  if(!name||!orig){msg.textContent='Elige una persona y una foto.';return;}
+  btn.disabled=true;
+  const tipoDe=f=>{const t=(f.type||'').toLowerCase();if(t)return t;const x=(f.name||'').split('.').pop().toLowerCase();return x==='gif'?'image/gif':/^(mp4|mov|m4v|webm|3gp|avi|mkv)$/.test(x)?'video/'+x:'image/'+x;};
+  let f=orig;
   try{
-    const d=await request('/api/admin/community/card-photo',{method:'POST',body:fd});
-    $('adminFotoMsg').textContent='Foto guardada para '+fd.get('name')+'.';
-    e.currentTarget.reset();
-  }catch(err){$('adminFotoMsg').textContent=err.message;}
+    const tipo=tipoDe(orig);
+    if(/^video\//i.test(tipo)){
+      msg.textContent='Creando el GIF…';
+      try{f=await window.videoAGif(orig,p=>{msg.textContent='Creando el GIF… '+p+'%';});}
+      catch(err){msg.textContent=err.message||'No se pudo convertir el vídeo.';btn.disabled=false;return;}
+    }else if(!/^image\/gif$/i.test(tipo)){
+      msg.textContent='Quitando el fondo… (la primera vez tarda un poco)';
+      try{f=await window.quitarFondo(orig,p=>{msg.textContent='Quitando el fondo… '+p+'%';});}
+      catch{
+        // Sin recorte: se sube reducida (más rápido que mandar el original de varios MB)
+        msg.textContent='No se pudo quitar el fondo: se sube la foto tal cual…';
+        try{f=await window.reducirFoto(orig);}catch{f=orig;}
+      }
+    }
+    msg.textContent='Subiendo…';
+    const fd=new FormData();fd.set('name',name);fd.set('foto',f,f.name);
+    const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),120000);
+    try{await request('/api/admin/community/card-photo',{method:'POST',body:fd,signal:ctl.signal});}
+    finally{clearTimeout(t);}
+    msg.textContent='Foto guardada para '+name+'.';
+    form.reset();
+    const opt=[...$('fotoPersona').options].find(o=>o.value===name);if(opt&&!opt.textContent.includes('📷'))opt.textContent+=' 📷';
+    $('fotoPersona').value=name;
+  }catch(err){
+    msg.textContent=err.name==='AbortError'?'Tardó demasiado en subir. Prueba con una foto más ligera.':(err.message==='Failed to fetch'?'Sin conexión con el servidor. Inténtalo de nuevo.':err.message);
+  }finally{btn.disabled=false;}
 });
 loadCardStats();

@@ -13,7 +13,7 @@ async function habilitarFrase(p){
     $('fraseInput').value=$('frase').textContent;
     $('fraseForm').hidden=false;
     // Foto de la carta: solo la ve y la puede cambiar el dueño del perfil
-    $('fotoForm').hidden=false;
+    $('fotoForm').hidden=false;setTimeout(()=>{if(window.precargarQuitarFondo)window.precargarQuitarFondo();},1500);
     $('fotoInput').addEventListener('change',()=>{$('fotoNombre').textContent=$('fotoInput').files[0]?.name||'';});
     $('fotoForm').addEventListener('submit',async e=>{
       e.preventDefault();

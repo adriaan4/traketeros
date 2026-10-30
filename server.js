@@ -2132,7 +2132,10 @@ app.post('/api/community/card-photo', uploadLimiter, (req, res) => {
 // El admin puede poner/cambiar la foto de cualquiera (sin necesitar el token de su dispositivo).
 app.post('/api/admin/community/card-photo', adminAuth, (req, res) => {
   cardUpload.single('foto')(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: 'No se ha podido leer la foto.' });
+    if (err) {
+      console.error('Admin carta: error leyendo la foto:', err.code || err.message || err);
+      return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'El archivo pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.' });
+    }
     try {
       const name = String(req.body?.name || '').trim().slice(0, 80);
       if (!name) return res.status(400).json({ error: 'Indica el nombre.' });
@@ -2143,7 +2146,9 @@ app.post('/api/admin/community/card-photo', adminAuth, (req, res) => {
       communitySave();
       res.json({ ok: true, url: foto.url });
     } catch (e) {
-      res.status(500).json({ error: 'No se pudo guardar la foto.' });
+      console.error('Admin carta: no se pudo guardar la foto:', e.message || e);
+      const formato = /unsupported|corrupt|invalid|Input buffer|heif|bad seek/i.test(String(e.message || e));
+      res.status(formato ? 415 : 500).json({ error: formato ? 'No se pudo procesar esa imagen (formato no soportado). Prueba con JPG o PNG.' : 'No se pudo guardar la foto (' + String(e.message || 'error del servidor').slice(0, 120) + ').' });
     }
   });
 });
