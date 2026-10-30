@@ -11,7 +11,7 @@ function cartaHTML(p,meta,activas){
 function pintarCartas(d){
   const meta=d.config&&d.config.cardStatMeta||{};
   const activas=(d.config&&d.config.cardStats||[]).filter(k=>meta[k]);
-  const top=[...(d.people||[])].slice(0,12);
+  const top=[...(d.people||[])].slice(0,25);
   document.getElementById('cartas').innerHTML=top.map(p=>cartaHTML(p,meta,activas)).join('')||'<p class="community-empty">Todavía no hay cartas: apunta algo en el Traketímetro.</p>';
 }
 fetch('/api/community/overview').then(r=>r.json()).then(d=>{
