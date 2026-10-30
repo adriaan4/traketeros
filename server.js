@@ -1892,7 +1892,7 @@ app.post('/api/admin/traketimetro/ganador', adminAuth, (req, res) => {
 // =========================
 const COMMUNITY_FILE = path.join(TRAKE_DATA_DIR, 'community.json');
 const COMMUNITY_CLOUD_ID = 'traketeros_data/community';
-let communityData = { events: [], notices: [], cardPhotos: {}, cardStats: ['cervezas', 'cubatas', 'chupitos', 'porros'] };
+let communityData = { events: [], notices: [], cardPhotos: {}, cardStats: ['cervezas', 'cubatas', 'chupitos', 'porros'], perfilFrase: '' };
 // Categorías de estadísticas que puede mostrar la Carta del Salón de la Fama.
 // El admin decide cuáles se ven (botón "añadir"/"borrar" en admin-comunidad.html).
 const CARD_STAT_META = {
@@ -1922,7 +1922,8 @@ function communityNormalize(raw) {
     events: Array.isArray(raw?.events) ? raw.events : [],
     notices: Array.isArray(raw?.notices) ? raw.notices : [],
     cardStats,
-    cardPhotos
+    cardPhotos,
+    perfilFrase: String(raw?.perfilFrase || '').trim().slice(0, 200)
   };
 }
 function communitySave() {
@@ -1997,6 +1998,8 @@ function trakeAggregate() {
 function cardConfig() {
   const disponibles = TRAKE_TIPOS.slice(); // ya incluye 'cigarros' si está activo (ver trakeSyncTipos)
   const activas = communityData.cardStats.filter((k) => disponibles.includes(k));
+  // Los cigarros salen solos en la carta en cuanto están activados en el Traketímetro
+  if (disponibles.includes('cigarros') && !activas.includes('cigarros')) activas.push('cigarros');
   return { cardStats: activas, cardStatsDisponibles: disponibles, cardStatMeta: CARD_STAT_META };
 }
 app.get('/api/community/overview', (req, res) => {
@@ -2017,7 +2020,7 @@ app.get('/api/community/profile', (req, res) => {
   const recent = { cervezas: 0, cubatas: 0, chupitos: 0, porros: 0, cigarros: 0 };
   const cutoff = Date.now() - 30*24*60*60*1000;
   for (const x of activity) if ((Number(x.ts)||0) >= cutoff && recent[x.tipo] !== undefined && TRAKE_TIPOS.includes(x.tipo)) recent[x.tipo] += Number(x.cantidad)||0;
-  res.json({ person, activity: activity.filter(x => TRAKE_TIPOS.includes(x.tipo)), recent, config: { ...trakeConfig(), ...cardConfig() } });
+  res.json({ person, activity: activity.filter(x => TRAKE_TIPOS.includes(x.tipo)), recent, frase: communityData.perfilFrase || '', config: { ...trakeConfig(), ...cardConfig() } });
 });
 // ---------- Foto de la Carta: MISMA identidad que TKT365 (token del dispositivo -> nombre) ----------
 // Un dispositivo solo puede subir la foto del nombre que ya tiene elegido en TKT365 (api.post('/claim')).
@@ -2102,6 +2105,12 @@ app.delete('/api/admin/community/card-stats/:key', adminAuth, (req, res) => {
   communityData.cardStats = communityData.cardStats.filter((k) => k !== req.params.key);
   communitySave();
   res.json({ ok: true, cardStats: communityData.cardStats });
+});
+// Frase que sale bajo el nombre en todos los perfiles (la escribe el admin; vacía = no se muestra nada)
+app.post('/api/admin/community/perfil-frase', adminAuth, (req, res) => {
+  communityData.perfilFrase = String(req.body?.texto || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  communitySave();
+  res.json({ ok: true, perfilFrase: communityData.perfilFrase });
 });
 app.get('/api/community/admin', adminAuth, (req, res) => res.json(communityData));
 app.post('/api/community/events', adminAuth, (req, res) => {

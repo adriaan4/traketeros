@@ -5,9 +5,9 @@ const params=new URLSearchParams(location.search);
 const requested=params.get('name')||'';
 const fmt=ts=>ts?new Date(ts).toLocaleString('es-ES'):'Fecha desconocida';
 function cartaInner(p,meta,activas){
-  const r=p.rating||{};
+  const cant=n=>{n=Number(n)||0;return n>=1000?(n/1000).toFixed(1).replace('.0','')+'k':n;};
   const huecos=Array.from({length:Math.max(5,activas.length)},(_,i)=>activas[i]);
-  return `<div class="tc-inner"><div class="tc-media">${p.media||0}<small>#${p.puesto}</small></div><div class="tc-escudo"><img src="assets/carta-logo-oso.png" alt="Traketeros"></div><div class="tc-foto-wrap">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">👤</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-stats">${huecos.map(k=>k?`<div class="tc-stat" title="${esc(meta[k].label)}: ${p[k]||0} en total"><i>${esc(meta[k].emoji)}</i><b>${r[k]||0}</b></div>`:'<div class="tc-stat"></div>').join('')}</div></div>`;
+  return `<div class="tc-inner"><div class="tc-media">${p.media||0}<small>#${p.puesto}</small></div><div class="tc-escudo"><img src="assets/carta-logo-oso.png" alt="Traketeros"></div><div class="tc-foto-wrap">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">👤</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-stats">${huecos.map(k=>k?`<div class="tc-stat" title="${esc(meta[k].label)}: ${p[k]||0} en total"><i>${esc(meta[k].emoji)}</i><b>${cant(p[k])}</b></div>`:'<div class="tc-stat"></div>').join('')}</div></div>`;
 }
 function pintarCarta(p,meta,activas){
   $('carta').hidden=false;
@@ -24,6 +24,7 @@ if(!requested){
   const p=d.person;
   if(d.config&&d.config.cigarros&&d.config.cigarros.activo)labels.cigarros='🚬 Cigarros';
   $('name').textContent=p.name;
+  if(d.frase){$('frase').textContent=d.frase;$('frase').hidden=false;}
   document.title='Traketeros · '+p.name;
   $('totals').innerHTML=Object.entries(labels).map(([k,v])=>`<div class="community-stat"><span>${v}</span><b>${p[k]||0}</b></div>`).join('')+`<div class="community-stat"><span>⭐ Puntos</span><b>${p.puntos||0}</b></div><div class="community-stat"><span>📝 Registros</span><b>${p.apuntes||0}</b></div>`;
   $('recent').innerHTML=Object.entries(labels).map(([k,v])=>`<div class="community-stat"><span>${v}</span><b>${d.recent[k]||0}</b></div>`).join('');
