@@ -1653,7 +1653,7 @@ function trakeAddUpload(req, res, next) {
   trakeUpload.single('foto')(req, res, (err) => {
     if (err) {
       return res.status(400).json({
-        error: err.code === 'LIMIT_FILE_SIZE' ? 'La foto pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.'
+        error: err.code === 'LIMIT_FILE_SIZE' ? 'El archivo pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.'
       });
     }
     next();
@@ -2059,7 +2059,8 @@ app.get('/api/community/profile', (req, res) => {
 const cardUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024, files: 1, fields: 4, fieldSize: 200 },
-  fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp|heic|heif|gif)$/i.test(file.mimetype))
+  // Se acepta cualquier imagen (o tipo vacío/genérico, como mandan algunos móviles para .gif); luego se comprueba el contenido real.
+  fileFilter: (req, file, cb) => cb(null, /^(image\/|application\/octet-stream$|$)/i.test(file.mimetype || ''))
 });
 async function cardGuardarFoto(buffer) {
   // GIF animado (el navegador convierte los vídeos a GIF): se guarda tal cual, con su fondo y su animación.
@@ -2108,11 +2109,11 @@ app.get('/api/community/quien-soy', (req, res) => {
 });
 app.post('/api/community/card-photo', uploadLimiter, (req, res) => {
   cardUpload.single('foto')(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'La foto pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.' });
+    if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'El archivo pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.' });
     try {
       const name = String(req.body?.name || '').trim().slice(0, 80);
       if (!name) return res.status(400).json({ error: 'Indica tu nombre.' });
-      if (!req.file) return res.status(400).json({ error: 'Falta la foto.' });
+      if (!req.file) return res.status(400).json({ error: 'Formato no válido. Sube una foto, un GIF o un vídeo.' });
       const key = name.toLocaleLowerCase('es');
       const yo = tkt365Api?.juegos?.duenoDe(req.body?.token);
       if (!yo || yo !== key) {
@@ -2135,7 +2136,7 @@ app.post('/api/admin/community/card-photo', adminAuth, (req, res) => {
     try {
       const name = String(req.body?.name || '').trim().slice(0, 80);
       if (!name) return res.status(400).json({ error: 'Indica el nombre.' });
-      if (!req.file) return res.status(400).json({ error: 'Falta la foto.' });
+      if (!req.file) return res.status(400).json({ error: 'Formato no válido. Sube una foto, un GIF o un vídeo.' });
       const key = name.toLocaleLowerCase('es');
       const foto = await cardGuardarFoto(req.file.buffer);
       communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, sinFondo: foto.sinFondo, updatedAt: Date.now() };

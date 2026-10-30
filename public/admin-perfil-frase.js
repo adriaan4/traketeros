@@ -38,11 +38,11 @@
     e.preventDefault();e.stopImmediatePropagation();
     const msg=document.getElementById('adminFotoMsg');
     try{
-      const orig=input.files[0];let f;
-      if(/^video\//i.test(orig.type)){
+      const orig=input.files[0];let f;const tipoDe=f=>{const t=(f.type||'').toLowerCase();if(t)return t;const e=(f.name||'').split('.').pop().toLowerCase();return e==='gif'?'image/gif':/^(mp4|mov|m4v|webm|3gp|avi|mkv)$/.test(e)?'video/'+e:'image/'+e;};
+      if(/^video\//i.test(tipoDe(orig))){
         msg.textContent='Creando el GIF…';
         f=await window.videoAGif(orig,p=>{msg.textContent='Creando el GIF… '+p+'%';});
-      }else if(/^image\/gif$/i.test(orig.type)){f=orig;}
+      }else if(/^image\/gif$/i.test(tipoDe(orig))){f=orig;}
       else{
         msg.textContent='Quitando el fondo… (la primera vez tarda un poco)';
         f=await window.quitarFondo(orig,p=>{msg.textContent='Quitando el fondo… '+p+'%';});

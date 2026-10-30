@@ -20,12 +20,13 @@ async function habilitarFrase(p){
       let foto=$('fotoInput').files[0];
       if(!foto){$('fotoMsg').textContent='Elige una foto primero.';return;}
       const boton=$('fotoForm').querySelector('button');boton.disabled=true;
-      if(/^video\//i.test(foto.type)){
+      const tipoDe=f=>{const t=(f.type||'').toLowerCase();if(t)return t;const e=(f.name||'').split('.').pop().toLowerCase();return e==='gif'?'image/gif':/^(mp4|mov|m4v|webm|3gp|avi|mkv)$/.test(e)?'video/'+e:'image/'+e;};
+      if(/^video\//i.test(tipoDe(foto))){
         // Vídeo -> GIF animado, conservando el fondo
         try{
           foto=await window.videoAGif(foto,pct=>{$('fotoMsg').textContent='Creando el GIF… '+pct+'%';});
         }catch(err){$('fotoMsg').textContent=err.message||'No se pudo convertir el vídeo.';boton.disabled=false;return;}
-      }else if(!/^image\/gif$/i.test(foto.type)){
+      }else if(!/^image\/gif$/i.test(tipoDe(foto))){
         $('fotoMsg').textContent='Quitando el fondo… (la primera vez tarda un poco)';
         try{
           foto=await window.quitarFondo(foto,pct=>{$('fotoMsg').textContent='Quitando el fondo… '+pct+'%';});
