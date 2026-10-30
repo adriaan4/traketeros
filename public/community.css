@@ -50,24 +50,36 @@ html[data-tema="noche"] .community-stat b{color:#fff3fa!important}
 html[data-tema="noche"] .community-stat span{color:#cdb9d3!important}
 @media(max-width:760px){.community-main{width:min(100% - 22px,1120px);margin-top:18px}.community-grid{gap:12px}.community-card,.community-card.wide{grid-column:1/-1;padding:16px}.community-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.community-form{grid-template-columns:1fr}.community-form .span2{grid-column:auto}.community-row{align-items:flex-start}.community-actions>*{flex:1 1 auto}}
 @media(prefers-reduced-motion:reduce){.community-link,.community-button{transition:none}}
-/* ---- Carta del Salón de la Fama (estilo neón rosa/azul, escudo con pico arriba) ---- */
+/* ---- Carta del Salón de la Fama (plantilla dorada tipo FC, con el oso de Traketeros) ----
+   Todo se mide en "cqw" (% del ancho de la carta) para que se vea igual en pequeña y en grande. */
 .trake-cartas{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:20px}
-.trake-carta{--tc-clip:polygon(8% 9%,31% 9%,50% 0%,69% 9%,92% 9%,100% 23%,100% 70%,50% 100%,0% 70%,0% 23%);position:relative;width:100%;max-width:230px;margin:0 auto;aspect-ratio:3/4.3;clip-path:var(--tc-clip);background:linear-gradient(150deg,#ff2596,#39c6ff 52%,#ff2596);box-shadow:0 0 16px rgba(255,37,150,.5),0 0 9px rgba(0,183,255,.4);display:block;text-decoration:none}
-.trake-carta-grande{max-width:300px}
-.trake-carta.tc-clicable{cursor:pointer;transition:transform .15s ease}
-.trake-carta.tc-clicable:hover{transform:translateY(-3px)}
-.trake-carta .tc-inner{position:absolute;inset:3px;clip-path:var(--tc-clip);overflow:hidden;background:#0a0016;background-image:repeating-linear-gradient(135deg,transparent 0 55px,rgba(255,37,150,.32) 55px 66px,transparent 66px 150px,rgba(0,183,255,.28) 150px 161px,transparent 161px 240px)}
-.trake-carta .tc-rank{position:absolute;top:6%;left:10%;font:1.8rem/1 Bangers,cursive;color:#ff2596!important;text-shadow:0 0 6px rgba(0,183,255,.8),1px 1px 0 #000}
-.trake-carta .tc-rank small{display:block;font:.72rem/1 Bangers,cursive;color:#39c6ff!important;letter-spacing:.06em;margin-top:2px}
-.trake-carta .tc-foto-wrap{position:absolute;top:0;left:0;right:0;height:52%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 30%,rgba(255,37,150,.18),transparent 70%)}
+.trake-carta{position:relative;display:block;width:100%;max-width:230px;margin:0 auto;aspect-ratio:516/716;container-type:inline-size;background:url(assets/carta-oro.webp) center/100% 100% no-repeat;filter:drop-shadow(0 6px 8px rgba(26,0,24,.35));text-decoration:none;color:#2b1c00}
+.trake-carta-grande{max-width:320px}
+.trake-carta.tc-clicable{cursor:pointer;transition:transform .15s ease,filter .15s ease}
+.trake-carta.tc-clicable:hover{transform:translateY(-4px);filter:drop-shadow(0 10px 12px rgba(26,0,24,.45))}
+.trake-carta .tc-inner{position:absolute;inset:0;overflow:hidden}
+/* nota media (el número grande de arriba) */
+.trake-carta .tc-media{position:absolute;left:13%;top:15%;width:20%;text-align:center;font:19cqw/0.9 Bangers,cursive;color:#2b1c00!important;text-shadow:0 1px 0 rgba(255,244,170,.7)}
+.trake-carta .tc-media small{display:block;margin-top:2cqw;font:5.6cqw/1 Bangers,cursive;letter-spacing:.06em;color:#5a3d00!important}
+/* logo del oso, en el sitio del escudo del club */
+.trake-carta .tc-escudo{position:absolute;left:13.5%;top:36%;width:19%;aspect-ratio:1;border-radius:22%;overflow:hidden;background:#0a0212;box-shadow:0 0 0 .6cqw rgba(90,61,0,.55)}
+.trake-carta .tc-escudo img{width:100%;height:100%;object-fit:cover;display:block}
+/* foto */
+.trake-carta .tc-foto-wrap{position:absolute;left:33%;top:13%;width:60%;height:49%;display:flex;align-items:center;justify-content:center;-webkit-mask-image:radial-gradient(ellipse 62% 58% at 50% 46%,#000 62%,transparent 100%);mask-image:radial-gradient(ellipse 62% 58% at 50% 46%,#000 62%,transparent 100%)}
 .trake-carta .tc-foto-wrap img{width:100%;height:100%;object-fit:cover;object-position:top}
-.trake-carta .tc-foto-vacia{font-size:3.2rem;opacity:.5;color:#39c6ff!important}
-.trake-carta .tc-nombre{position:absolute;top:53%;left:0;right:0;text-align:center;font:1.3rem/1.1 Bangers,cursive;color:#ff2596!important;text-shadow:1px 1px 0 #000;padding:0 8%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.trake-carta .tc-linea{position:absolute;left:8%;right:8%;top:62%;height:1px;background:linear-gradient(90deg,transparent,#ff2596,#39c6ff,transparent)}
-.trake-carta .tc-stats{position:absolute;top:65%;left:6%;right:6%;height:17%;display:flex;align-items:stretch;justify-content:space-around}
-.trake-carta .tc-stat{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-left:1px solid rgba(57,198,255,.4);font:1rem Bangers,cursive;color:#fff!important}
-.trake-carta .tc-stat:first-child{border-left:none}
-.trake-carta .tc-stat .tc-emoji{font-size:1.05rem;line-height:1}
-.trake-carta .tc-escudo{position:absolute;bottom:4%;left:50%;transform:translateX(-50%);width:17%}
-.trake-carta .tc-escudo img{width:100%;display:block;filter:drop-shadow(0 0 4px rgba(57,198,255,.7))}
+.trake-carta .tc-foto-vacia{font-size:26cqw;line-height:1;opacity:.35;color:#2b1c00!important}
+/* nombre + notas por categoría */
+.trake-carta .tc-nombre{position:absolute;left:14%;right:14%;top:63.5%;text-align:center;text-transform:uppercase;font:9.4cqw/1.05 Bangers,cursive;letter-spacing:.03em;color:#2b1c00!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trake-carta .tc-nombre::after{content:"";display:block;height:.5cqw;margin:2cqw auto 0;width:78%;background:linear-gradient(90deg,transparent,rgba(90,61,0,.75),transparent)}
+.trake-carta .tc-stats{position:absolute;left:19%;right:19%;top:73.5%;display:grid;grid-template-columns:repeat(var(--cols,2),1fr);gap:1.4cqw 0}
+.trake-carta .tc-stat{display:flex;align-items:baseline;justify-content:center;gap:2.2cqw;font-family:Bangers,cursive;color:#2b1c00!important;border-left:.5cqw solid rgba(90,61,0,.35)}
+.trake-carta:not([data-cols="3"]) .tc-stat:nth-child(odd){border-left:0}
+.trake-carta[data-cols="3"] .tc-stat{border-left:.5cqw solid rgba(90,61,0,.35)}
+.trake-carta[data-cols="3"] .tc-stat:nth-child(3n+1){border-left:0}
+.trake-carta[data-cols="3"] .tc-stats{left:15%;right:15%}
+.trake-carta[data-cols="3"] .tc-stat{gap:1cqw}
+.trake-carta[data-cols="3"] .tc-stat b{font-size:6.8cqw}
+.trake-carta[data-cols="3"] .tc-stat span{font-size:4.4cqw}
+.trake-carta .tc-stat b{font-size:8cqw;line-height:1}
+.trake-carta .tc-stat span{font-size:5.4cqw;letter-spacing:.05em;color:#5a3d00!important}
 .trake-foto-form{display:grid;gap:10px;max-width:360px}

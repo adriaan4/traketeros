@@ -17,8 +17,14 @@ function tokenDispositivo(){
   return t;
 }
 const TOKEN=tokenDispositivo();
+function cartaInner(p,meta,activas){
+  const r=p.rating||{};
+  const abre=k=>String(meta[k].label||k).slice(0,3).toUpperCase();
+  return `<div class="tc-inner"><div class="tc-media">${p.media||0}<small>#${p.puesto}</small></div><div class="tc-escudo"><img src="assets/carta-logo.png" alt="Traketeros"></div><div class="tc-foto-wrap">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">👤</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-stats" style="--cols:${activas.length<=4?2:3}">${activas.map(k=>`<div class="tc-stat" title="${esc(meta[k].label)}: ${p[k]||0} consumidos"><b>${r[k]||0}</b><span>${abre(k)}</span></div>`).join('')}</div></div>`;
+}
 function pintarCarta(p,meta,activas){
-  $('carta').innerHTML=`<div class="tc-inner"><div class="tc-rank">${p.puesto}<small>TKT</small></div><div class="tc-foto-wrap">${p.foto?`<img src="${esc(p.foto.url)}" alt="">`:'<span class="tc-foto-vacia">👤</span>'}</div><div class="tc-nombre">${esc(p.name)}</div><div class="tc-linea"></div><div class="tc-stats">${activas.map(k=>`<div class="tc-stat"><span class="tc-emoji">${meta[k].emoji}</span>${p[k]||0}</div>`).join('')}</div><div class="tc-escudo"><img src="assets/traketeros.png" alt="Traketeros"></div></div>`;
+  $('carta').dataset.cols=activas.length<=4?2:3;
+  $('carta').innerHTML=cartaInner(p,meta,activas);
   $('cardWrap').style.display='';
 }
 if(!requested){

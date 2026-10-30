@@ -1971,16 +1971,23 @@ function trakeAggregate() {
     const x = byName.get(key); x.apuntes += 1; x.ultimaActividad = Math.max(x.ultimaActividad, Number(row.ts) || 0);
   }
   const list = [...byName.values()].sort((a,b) => b.puntos-a.puntos || a.name.localeCompare(b.name, 'es'));
-  // ---------- Carta del Salón de la Fama: foto (si tiene) + "media" según el puesto ----------
-  const n = list.length;
+  // ---------- Carta del Salón de la Fama: foto (si tiene) + notas tipo FC ----------
+  // Todas las notas (1-99) son PROPORCIONALES a lo consumido respecto al que más ha consumido:
+  //  - cada categoría (cervezas, cubatas...): 99 para quien más lleva; el resto, en proporción (0 si no ha consumido)
+  //  - media (el número grande de arriba): lo mismo con los puntos totales del Traketímetro
+  const nota = (v, max) => (max > 0 && v > 0 ? Math.min(99, Math.max(1, Math.round((99 * v) / max))) : 0);
+  const maxPuntos = list.reduce((m, p) => Math.max(m, p.puntos), 0);
+  const maxPorTipo = {};
+  for (const k of Object.keys(CARD_STAT_META)) maxPorTipo[k] = list.reduce((m, p) => Math.max(m, Number(p[k]) || 0), 0);
   list.forEach((p, i) => {
     const key = p.name.toLocaleLowerCase('es');
     const foto = communityData.cardPhotos[key];
     p.foto = foto ? { url: foto.url, updatedAt: foto.updatedAt } : null;
     p.tieneFotoPropia = Boolean(foto);
     p.puesto = i + 1;
-    // 99 para el 1º, 60 para el último (o 80 fijo si solo hay una persona)
-    p.media = n > 1 ? Math.round(99 - (i * 39) / (n - 1)) : 80;
+    p.media = nota(p.puntos, maxPuntos);
+    p.rating = {};
+    for (const k of Object.keys(CARD_STAT_META)) p.rating[k] = nota(Number(p[k]) || 0, maxPorTipo[k]);
   });
   return list;
 }
