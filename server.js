@@ -1892,11 +1892,38 @@ app.post('/api/admin/traketimetro/ganador', adminAuth, (req, res) => {
 // =========================
 const COMMUNITY_FILE = path.join(TRAKE_DATA_DIR, 'community.json');
 const COMMUNITY_CLOUD_ID = 'traketeros_data/community';
-let communityData = { events: [], notices: [] };
+let communityData = { events: [], notices: [], cardPhotos: {}, cardStats: ['cervezas', 'cubatas', 'chupitos', 'porros'] };
+// Categorías de estadísticas que puede mostrar la Carta del Salón de la Fama.
+// El admin decide cuáles se ven (botón "añadir"/"borrar" en admin-comunidad.html).
+const CARD_STAT_META = {
+  cervezas: { emoji: '🍺', label: 'Cervezas' },
+  cubatas: { emoji: '🍹', label: 'Cubatas' },
+  chupitos: { emoji: '🥃', label: 'Chupitos' },
+  porros: { emoji: '🌿', label: 'Porros' },
+  cigarros: { emoji: '🚬', label: 'Cigarros' }
+};
 function communityNormalize(raw) {
+  const cardStats = Array.isArray(raw?.cardStats)
+    ? raw.cardStats.filter((k) => CARD_STAT_META[k])
+    : ['cervezas', 'cubatas', 'chupitos', 'porros'];
+  const cardPhotos = {};
+  if (raw?.cardPhotos && typeof raw.cardPhotos === 'object') {
+    for (const [key, v] of Object.entries(raw.cardPhotos)) {
+      if (!v || !v.url) continue;
+      cardPhotos[key] = {
+        name: String(v.name || key).slice(0, 80),
+        url: String(v.url),
+        publicId: v.publicId ? String(v.publicId) : undefined,
+        pinHash: v.pinHash ? String(v.pinHash) : undefined,
+        updatedAt: Number(v.updatedAt) || Date.now()
+      };
+    }
+  }
   return {
     events: Array.isArray(raw?.events) ? raw.events : [],
-    notices: Array.isArray(raw?.notices) ? raw.notices : []
+    notices: Array.isArray(raw?.notices) ? raw.notices : [],
+    cardStats,
+    cardPhotos
   };
 }
 function communitySave() {
@@ -1944,14 +1971,33 @@ function trakeAggregate() {
     if (!byName.has(key)) add({ name: row.name });
     const x = byName.get(key); x.apuntes += 1; x.ultimaActividad = Math.max(x.ultimaActividad, Number(row.ts) || 0);
   }
-  return [...byName.values()].sort((a,b) => b.puntos-a.puntos || a.name.localeCompare(b.name, 'es'));
+  const list = [...byName.values()].sort((a,b) => b.puntos-a.puntos || a.name.localeCompare(b.name, 'es'));
+  // ---------- Carta del Salón de la Fama: foto (si tiene) + "media" según el puesto ----------
+  const n = list.length;
+  list.forEach((p, i) => {
+    const key = p.name.toLocaleLowerCase('es');
+    const foto = communityData.cardPhotos[key];
+    p.foto = foto ? { url: foto.url, updatedAt: foto.updatedAt } : null;
+    p.tieneFotoPropia = Boolean(foto);
+    p.puesto = i + 1;
+    // 99 para el 1º, 60 para el último (o 80 fijo si solo hay una persona)
+    p.media = n > 1 ? Math.round(99 - (i * 39) / (n - 1)) : 80;
+  });
+  return list;
+}
+// Categorías que se ven en la Carta: lo que el admin tiene activado, pero los
+// cigarros solo cuentan mientras estén encendidos (igual que en el resto de la web).
+function cardConfig() {
+  const disponibles = TRAKE_TIPOS.slice(); // ya incluye 'cigarros' si está activo (ver trakeSyncTipos)
+  const activas = communityData.cardStats.filter((k) => disponibles.includes(k));
+  return { cardStats: activas, cardStatsDisponibles: disponibles, cardStatMeta: CARD_STAT_META };
 }
 app.get('/api/community/overview', (req, res) => {
   const people = trakeAggregate();
   const upcoming = [...communityData.events, ...(trakeData.events || []).map(e => ({ ...e, source: 'traketimetro' }))]
     .filter(e => e.date || e.start).sort((a,b) => String(a.date || a.start).localeCompare(String(b.date || b.start)));
   const notices = [...communityData.notices].sort((a,b) => (Number(b.createdAt)||0)-(Number(a.createdAt)||0));
-  res.json({ people, totalRegistros: (trakeData.log || []).length, upcoming: upcoming.filter(e => String(e.date || e.start) >= new Date().toISOString().slice(0,10)).slice(0,5), notices: notices.slice(0,5), events: upcoming, lastActivity: [...(trakeData.log || [])].sort((a,b)=>(b.ts||0)-(a.ts||0))[0] || null, config: trakeConfig() });
+  res.json({ people, totalRegistros: (trakeData.log || []).length, upcoming: upcoming.filter(e => String(e.date || e.start) >= new Date().toISOString().slice(0,10)).slice(0,5), notices: notices.slice(0,5), events: upcoming, lastActivity: [...(trakeData.log || [])].sort((a,b)=>(b.ts||0)-(a.ts||0))[0] || null, config: { ...trakeConfig(), ...cardConfig() } });
 });
 app.get('/api/community/profile', (req, res) => {
   const requested = String(req.query.name || '').trim();
@@ -1964,7 +2010,90 @@ app.get('/api/community/profile', (req, res) => {
   const recent = { cervezas: 0, cubatas: 0, chupitos: 0, porros: 0, cigarros: 0 };
   const cutoff = Date.now() - 30*24*60*60*1000;
   for (const x of activity) if ((Number(x.ts)||0) >= cutoff && recent[x.tipo] !== undefined && TRAKE_TIPOS.includes(x.tipo)) recent[x.tipo] += Number(x.cantidad)||0;
-  res.json({ person, activity: activity.filter(x => TRAKE_TIPOS.includes(x.tipo)), recent, config: trakeConfig() });
+  res.json({ person, activity: activity.filter(x => TRAKE_TIPOS.includes(x.tipo)), recent, config: { ...trakeConfig(), ...cardConfig() } });
+});
+// ---------- Foto de la Carta: cada uno sube/cambia la suya con un PIN que elige la primera vez ----------
+// (el mismo PIN hace falta para volver a cambiarla; el admin puede cambiar cualquiera sin PIN)
+const cardUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024, files: 1, fields: 4, fieldSize: 200 },
+  fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp|heic|heif)$/i.test(file.mimetype))
+});
+function cardPinHash(key, pin) {
+  return crypto.createHash('sha256').update(`${key}::${pin}`).digest('hex');
+}
+async function cardGuardarFoto(buffer) {
+  const jpeg = await sharp(buffer, { failOn: 'error' })
+    .rotate()
+    .flatten({ background: '#ffffff' })
+    .resize({ width: 600, height: 600, fit: 'cover' })
+    .jpeg({ quality: 85 })
+    .toBuffer();
+  const publicId = `traketeros_cartas/${crypto.randomUUID()}`;
+  const r = await sendToCloudinary(jpeg, { public_id: publicId, resource_type: 'image', overwrite: true });
+  return { url: r.secure_url, publicId: r.public_id };
+}
+app.post('/api/community/card-photo', uploadLimiter, (req, res) => {
+  cardUpload.single('foto')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'La foto pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.' });
+    try {
+      const name = String(req.body?.name || '').trim().slice(0, 80);
+      const pin = String(req.body?.pin || '').trim();
+      if (!name) return res.status(400).json({ error: 'Indica tu nombre (el mismo que usas en el Traketímetro).' });
+      if (!req.file) return res.status(400).json({ error: 'Falta la foto.' });
+      if (pin.length < 4) return res.status(400).json({ error: 'El PIN debe tener al menos 4 caracteres. Elige uno y acuérdate de él: lo necesitarás para volver a cambiar tu foto.' });
+      const key = name.toLocaleLowerCase('es');
+      const actual = communityData.cardPhotos[key];
+      if (actual && actual.pinHash && actual.pinHash !== cardPinHash(key, pin)) {
+        return res.status(403).json({ error: 'Esa foto ya tiene dueño. Hace falta el PIN que se usó la primera vez (o pídeselo al admin).' });
+      }
+      const foto = await cardGuardarFoto(req.file.buffer);
+      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, pinHash: cardPinHash(key, pin), updatedAt: Date.now() };
+      communitySave();
+      res.json({ ok: true, url: foto.url });
+    } catch (e) {
+      console.error('Carta: no se pudo guardar la foto:', e.message || e);
+      res.status(500).json({ error: 'No se pudo guardar la foto. Inténtalo de nuevo.' });
+    }
+  });
+});
+// El admin puede poner/cambiar la foto de cualquiera sin PIN (y de paso resetea el PIN: a partir
+// de ahí, quien quiera volver a cambiarla tiene que elegir un PIN nuevo con esa primera subida).
+app.post('/api/admin/community/card-photo', adminAuth, (req, res) => {
+  cardUpload.single('foto')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: 'No se ha podido leer la foto.' });
+    try {
+      const name = String(req.body?.name || '').trim().slice(0, 80);
+      if (!name) return res.status(400).json({ error: 'Indica el nombre.' });
+      if (!req.file) return res.status(400).json({ error: 'Falta la foto.' });
+      const key = name.toLocaleLowerCase('es');
+      const foto = await cardGuardarFoto(req.file.buffer);
+      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, pinHash: undefined, updatedAt: Date.now() };
+      communitySave();
+      res.json({ ok: true, url: foto.url });
+    } catch (e) {
+      res.status(500).json({ error: 'No se pudo guardar la foto.' });
+    }
+  });
+});
+app.delete('/api/admin/community/card-photo/:name', adminAuth, (req, res) => {
+  const key = String(req.params.name || '').trim().toLocaleLowerCase('es');
+  delete communityData.cardPhotos[key];
+  communitySave();
+  res.json({ ok: true });
+});
+// Categorías de estadísticas que se ven en la Carta (el admin añade/quita)
+app.post('/api/admin/community/card-stats', adminAuth, (req, res) => {
+  const key = String(req.body?.key || '').trim();
+  if (!CARD_STAT_META[key]) return res.status(400).json({ error: 'Categoría no válida.' });
+  if (!communityData.cardStats.includes(key)) communityData.cardStats.push(key);
+  communitySave();
+  res.json({ ok: true, cardStats: communityData.cardStats });
+});
+app.delete('/api/admin/community/card-stats/:key', adminAuth, (req, res) => {
+  communityData.cardStats = communityData.cardStats.filter((k) => k !== req.params.key);
+  communitySave();
+  res.json({ ok: true, cardStats: communityData.cardStats });
 });
 app.get('/api/community/admin', adminAuth, (req, res) => res.json(communityData));
 app.post('/api/community/events', adminAuth, (req, res) => {
