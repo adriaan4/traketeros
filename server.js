@@ -1972,10 +1972,11 @@ function trakeAggregate() {
   }
   const list = [...byName.values()].sort((a,b) => b.puntos-a.puntos || a.name.localeCompare(b.name, 'es'));
   // ---------- Carta del Salón de la Fama: foto (si tiene) + notas tipo FC ----------
-  // Todas las notas (1-99) son PROPORCIONALES a lo consumido respecto al que más ha consumido:
-  //  - cada categoría (cervezas, cubatas...): 99 para quien más lleva; el resto, en proporción (0 si no ha consumido)
-  //  - media (el número grande de arriba): lo mismo con los puntos totales del Traketímetro
-  const nota = (v, max) => (max > 0 && v > 0 ? Math.min(99, Math.max(1, Math.round((99 * v) / max))) : 0);
+  // Todas las notas van de 60 a 99 y son PROPORCIONALES al consumo TOTAL (histórico, no mensual) del Traketímetro:
+  //  - cada categoría (cervezas, cubatas...): 99 para quien más lleva; el resto, en proporción (60 si no ha consumido)
+  //  - media (el número grande de arriba): lo mismo con los puntos totales
+  const NOTA_MIN = 60, NOTA_MAX = 99;
+  const nota = (v, max) => (max > 0 && v > 0 ? Math.round(NOTA_MIN + ((NOTA_MAX - NOTA_MIN) * Math.min(v, max)) / max) : NOTA_MIN);
   const maxPuntos = list.reduce((m, p) => Math.max(m, p.puntos), 0);
   const maxPorTipo = {};
   for (const k of Object.keys(CARD_STAT_META)) maxPorTipo[k] = list.reduce((m, p) => Math.max(m, Number(p[k]) || 0), 0);
