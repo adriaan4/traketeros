@@ -10,6 +10,7 @@ import sharp from 'sharp';
 import { fileURLToPath } from 'url';
 import { registerTkt365 } from './tkt365.js';
 import { registerHigherLower } from './higherlower.js';
+import { registerTidal } from './tidal.js';
 
 const app = express();
 
@@ -2251,6 +2252,16 @@ registerHigherLower({
   hoy: trakeHoy,
   ready: trakeReady,
   tkt: tkt365Api.juegos,
+  cloudinary,
+  cloudinaryOk: CLOUDINARY_OK,
+  dataDir: TRAKE_DATA_DIR
+});
+
+// 🎧 Playlist TKT: búsqueda y alta de canciones en la playlist compartida de TIDAL
+// (API oficial, OAuth con PKCE; credenciales y tokens solo en el servidor). Ver tidal.js.
+registerTidal({
+  app,
+  adminAuth,
   cloudinary,
   cloudinaryOk: CLOUDINARY_OK,
   dataDir: TRAKE_DATA_DIR

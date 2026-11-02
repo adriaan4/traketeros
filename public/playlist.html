@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="La playlist de la peña en TIDAL: busca canciones y añádelas desde aquí.">
+  <meta name="theme-color" content="#ff2596">
+  <title>Traketeros · Playlist TKT</title>
+  <link rel="icon" href="assets/traketeros.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="playlist.css?v=1">
+  <link rel="stylesheet" href="noche.css?v=5">
+  <script src="tema.js?v=2"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Traketeros">
+    <img src="assets/traketeros.png" width="64" height="64" alt="Logo Traketeros">
+  </a>
+  <div class="header-copy">
+    <strong>TRAKETEROS</strong>
+    <small>LA PEÑA DE LOS TRAKETOS 🍻</small>
+  </div>
+  <nav class="nav-links">
+    <a class="header-link" href="/">🏠 El Local</a>
+    <a class="header-link" href="traketimetro.html">🍻 Traketímetro</a>
+    <a class="header-link" href="fotos.html">📸 Fotos</a>
+    <a class="header-link" href="juegos.html">🎮 Juegos</a>
+    <a class="header-link" href="tkt365.html">🎰 TKT365</a>
+    <a class="header-link" href="calendario.html">📅 Calendario</a>
+  </nav>
+</header>
+
+<main class="trake-main">
+  <div class="eyebrow">🎧 LA BANDA SONORA DE LA PEÑA</div>
+  <h1 class="section-title">Playlist <span>TKT.</span></h1>
+  <p class="hint">Busca una canción y añádela a la playlist compartida de TIDAL. Se guarda quién la ha añadido.</p>
+
+  <section class="card pl-card" id="buscador">
+    <div class="scribble">AÑADE UNA CANCIÓN 👇</div>
+
+    <label class="field">
+      <span>Tu nombre</span>
+      <input id="plName" type="text" maxlength="30" autocomplete="off" placeholder="Escribe tu nombre">
+    </label>
+
+    <label class="field">
+      <span>Buscar en TIDAL</span>
+      <input id="plQuery" type="search" maxlength="80" autocomplete="off" placeholder="Canción o artista">
+    </label>
+
+    <p class="msg" id="plMsg" role="status" aria-live="polite"></p>
+    <ul class="pl-list" id="plResults" aria-label="Resultados de la búsqueda"></ul>
+  </section>
+
+  <section class="card pl-card" id="lista">
+    <div class="pl-head">
+      <h2>La playlist <small id="plCount"></small></h2>
+      <a class="mini" id="plOpen" href="https://tidal.com/playlist/c298efe8-c21d-400e-bc5b-16fe0c09625c" target="_blank" rel="noopener noreferrer">Abrir en TIDAL ↗</a>
+    </div>
+    <p class="msg" id="plListMsg" role="status" aria-live="polite"></p>
+    <ul class="pl-list" id="plTracks"></ul>
+  </section>
+
+  <section class="card pl-card" id="plAdmin" hidden>
+    <div class="scribble">SOLO ADMIN 🔧</div>
+    <h2 class="edit-title">Conexión con TIDAL</h2>
+    <p class="hint" id="plAdminState">Comprobando…</p>
+    <div class="pl-admin-row">
+      <a class="btn submit" id="plConnect" href="/api/admin/tidal/connect" target="_blank" rel="noopener">🔗 Conectar con TIDAL</a>
+      <button class="mini danger" id="plDisconnect" type="button" hidden>Desconectar</button>
+    </div>
+    <p class="hint pl-redirect" id="plRedirect"></p>
+    <p class="msg" id="plAdminMsg" role="status" aria-live="polite"></p>
+  </section>
+</main>
+
+<script src="playlist.js?v=1" defer></script>
+</body>
+</html>

@@ -40,6 +40,26 @@ Antes de guardarlas se reducen y se les borra la **ubicación GPS** del móvil.
   o 1.000 transformaciones (cada miniatura cuenta una vez). Para una peña sobra. Puedes mirar el gasto en su panel.
 - Las fotos llevan la etiqueta `traketeros`; solo las que tengan esa etiqueta salen en el álbum.
 
+## 🎧 Playlist TKT (TIDAL) — `/playlist.html`
+Busca canciones en TIDAL y las añade a la playlist compartida (id en `TIDAL_PLAYLIST_ID`, por defecto la de la peña).
+Guarda quién añadió cada canción y el admin puede quitarlas (`/playlist.html?admin=1`, también en el panel).
+Usa la **API oficial de TIDAL** (OAuth 2.0 Authorization Code + PKCE). Los tokens nunca llegan al navegador.
+
+### Puesta en marcha (una sola vez)
+1. En https://developer.tidal.com crea una app. Copia el **Client ID** (y el **Client Secret**, recomendado: permite buscar sin depender de la sesión de nadie).
+2. En la app, añade como **Redirect URI** exactamente: `https://TU-DOMINIO/api/tidal/callback`
+   (en `/playlist.html?admin=1` se muestra la URL exacta que espera el servidor).
+3. Variables de entorno en Render (nunca en el código ni en GitHub):
+   - `TIDAL_CLIENT_ID` (obligatoria) y `TIDAL_CLIENT_SECRET` (recomendada)
+   - `TIDAL_TOKEN_KEY`: clave aleatoria de **32 caracteres o más** con la que se cifran los tokens (ej. `openssl rand -base64 48`). Si la cambias, hay que reconectar.
+   - Opcionales: `PUBLIC_URL` (https://tu-dominio, para construir la Redirect URI), `TIDAL_REDIRECT_URI`, `TIDAL_PLAYLIST_ID`, `TIDAL_COUNTRY` (por defecto `ES`), `TIDAL_SCOPES` (por defecto `playlists.read playlists.write`).
+4. Abre `/playlist.html?admin=1` (o el panel), pulsa **Conectar con TIDAL** e inicia sesión con la cuenta **dueña de la playlist** (o colaboradora con permiso de edición).
+
+### Seguridad
+- Tokens cifrados con AES-256-GCM (`data/tidal_tokens.json` + copia en Cloudinary); se renuevan solos. «Desconectar» los borra de los dos sitios.
+- El navegador solo manda `{ nombre, id de canción }`; el servidor valida todo, limita peticiones y evita duplicados.
+- Quitar canciones exige usuario y clave de admin.
+
 ## Regla de oro
 Todo cambio de diseño se hace en `public/`. Lo que esté fuera de `public/` no se ve en la web.
 Cuando cambies `styles.css` o `app.js`, sube el número de `?v=4` en los HTML para saltarte la caché.

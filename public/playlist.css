@@ -1,0 +1,48 @@
+/* 🎧 Playlist TKT */
+.pl-card { margin-bottom: 26px; }
+.pl-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pl-head h2 { margin: 0; }
+.pl-head h2 small { font-size: 14px; font-weight: 800; opacity: .7; }
+.pl-head .mini { text-decoration: none; color: var(--black); }
+
+.pl-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+.pl-item {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 3px solid var(--black);
+  background: var(--noche-surf, #fff);
+  box-shadow: 4px 4px 0 var(--black);
+}
+.pl-cover {
+  width: 56px; height: 56px;
+  display: grid; place-items: center;
+  font-size: 26px;
+  background: var(--yellow);
+  border: 2px solid var(--black);
+  object-fit: cover;
+}
+.pl-info { min-width: 0; }
+.pl-title { font-weight: 900; line-height: 1.2; overflow-wrap: anywhere; }
+.pl-title a { color: inherit; text-decoration: none; }
+.pl-title a:hover { text-decoration: underline; }
+.pl-artist { font-size: 13px; font-weight: 700; opacity: .8; overflow-wrap: anywhere; }
+.pl-by { margin-top: 3px; font-size: 12px; font-weight: 800; color: var(--dark-red); }
+.pl-explicit { display: inline-block; margin-left: 6px; padding: 0 5px; font-size: 10px; font-weight: 900; border: 2px solid var(--black); vertical-align: middle; }
+.pl-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.pl-actions .mini:disabled { opacity: .55; cursor: default; box-shadow: none; transform: none; }
+.pl-time { font-size: 12px; font-weight: 800; opacity: .7; }
+
+.pl-admin-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.pl-redirect { margin: 14px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.pl-redirect code { background: rgba(0,0,0,.08); padding: 1px 5px; }
+
+@media (max-width: 480px) {
+  .pl-item { grid-template-columns: 48px 1fr; }
+  .pl-cover { width: 48px; height: 48px; }
+  .pl-actions { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; }
+}
+
+.pl-card h2 { font-size: 30px; line-height: 1.1; }
