@@ -361,50 +361,6 @@ footer {
   font-weight: 900;
 }
 
-/* ---------- Página de "pago hecho" ---------- */
-.success {
-  min-height: 55vh;
-  display: grid;
-  place-items: center;
-  text-align: center;
-}
-
-.success-card {
-  background: white;
-  border: 4px solid var(--black);
-  box-shadow: 12px 12px 0 var(--red);
-  padding: 40px 30px;
-  max-width: 560px;
-}
-
-.check {
-  width: 84px;
-  height: 84px;
-  margin: 0 auto 18px;
-  display: grid;
-  place-items: center;
-  background: var(--yellow);
-  border: 4px solid var(--black);
-  border-radius: 50%;
-  box-shadow: 4px 4px 0 var(--black);
-  font-size: 40px;
-  font-weight: 900;
-}
-
-.success h1 {
-  font-size: clamp(48px, 9vw, 76px);
-  line-height: .9;
-  margin: 8px 0 16px;
-}
-
-.success p {
-  font-weight: 600;
-  line-height: 1.6;
-}
-
-.success .who { font-weight: 800; color: var(--red); }
-.success .btn { margin-top: 12px; }
-
 /* ---------- Panel de admin ---------- */
 .admin-head {
   display: flex;
@@ -1315,68 +1271,8 @@ a.mini {
   .tile-emoji { font-size: 28px; }
 }
 
-/* ---------- Aviso de mantenimiento del pago ---------- */
-.mantenimiento-pago {
-  margin-top: 18px;
-  padding: 16px;
-  background: var(--yellow);
-  border: 3px solid var(--black);
-  box-shadow: 4px 4px 0 var(--black);
-  border-radius: 8px;
-}
-.mantenimiento-pago strong {
-  display: block;
-  font-size: 17px;
-  margin-bottom: 6px;
-}
-.mantenimiento-pago p {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.4;
-}
-
-/* ---------- Lista de la cuota (quién ha pagado) ---------- */
-.cuota-box { margin-top: 22px; }
-.cuota-box h3 {
-  font-family: Bangers, Impact, sans-serif;
-  font-size: 30px;
-  margin: 0 0 4px;
-}
-.cuota-hint { margin: 0 0 12px; font-size: 14px; }
-.cuota-list { list-style: none; margin: 0; padding: 0; }
-.cuota-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  background: #ffe3f1;
-  border: 3px solid var(--black);
-  border-radius: 8px;
-}
-.cuota-row.paid { background: #b7f0c1; }
-.cuota-name { font-weight: 900; font-size: 17px; }
-.cuota-btns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.cuota-btns .mini { background: white; }
-.cuota-yes.active { background: #2fbf55; color: white; }
-.cuota-no.active { background: var(--red); color: white; }
-.cuota-upload { display: inline-block; background: var(--yellow); color: white; }
-.cuota-upload.busy { opacity: .6; pointer-events: none; }
-.cuota-send { background: #2fbf55 !important; color: white; }
-.cuota-send:disabled { opacity: .45; cursor: not-allowed; }
-.cuota-file { font-size: 12px; font-weight: 700; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cuota-ok { font-weight: 800; font-size: 13px; }
-.cuota-loading { padding: 12px; font-weight: 700; }
-.cuota-msg { min-height: 1.4em; margin: 10px 0 0; font-size: 14px; font-weight: 800; }
-.cuota-msg.bad { color: #b00020; }
 .mini.danger { background: var(--red); color: white; }
 .add-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
-
-.cuota-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
-.cuota-filters .mini.active { background: #2fbf55; color: white; }
-.cuota-yes:disabled, .cuota-no:disabled { cursor: default; opacity: 1; }
 
 /* ---------- Traketímetro: selector de periodo + admin de fechas ---------- */
 .periodo-bar {

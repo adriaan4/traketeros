@@ -82,10 +82,6 @@ html[data-tema="noche"] h1 span, html[data-tema="noche"] .price, html[data-tema=
 :where(html[data-tema="noche"]) .ranking-table .rk-edit-btn { background: var(--noche-surf); }
 :where(html[data-tema="noche"]) .ranking-vacio { color: #bfaecb; }
 :where(html[data-tema="noche"]) .mantenimiento-pago { color: #1a0018; }
-:where(html[data-tema="noche"]) .cuota-row { background: #43153a; }
-:where(html[data-tema="noche"]) .cuota-row.paid { background: #1b4d2b; }
-:where(html[data-tema="noche"]) .cuota-btns .mini { background: var(--noche-surf); }
-:where(html[data-tema="noche"]) .cuota-msg.bad { color: #ff8e8e; }
 :where(html[data-tema="noche"]) .periodo-field select { background: var(--noche-surf); }
 :where(html[data-tema="noche"]) .periodo-info { color: #bfaecb; }
 :where(html[data-tema="noche"]) .admin-fechas select { background: var(--noche-surf); }

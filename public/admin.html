@@ -29,57 +29,12 @@
 
 <main>
   <nav class="admin-tabs" aria-label="Secciones de administración" role="tablist">
-    <button class="admin-tab active" type="button" role="tab" aria-selected="true" data-tab="suscripciones">Suscripciones</button>
-    <button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="cuota">Cuota</button>
-    <button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="tkt365">TKT365</button>
+    <button class="admin-tab active" type="button" role="tab" aria-selected="true" data-tab="tkt365">TKT365</button>
     <button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="estatutos">Estatutos</button>
     <button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="comunidad">Calendario y avisos</button>
   </nav>
 
-  <section class="admin-tab-panel active" id="tab-suscripciones" data-panel="suscripciones">
-  <div class="admin-head">
-    <div>
-      <div class="eyebrow">PANEL DE CONTROL</div>
-      <h1>Suscripciones</h1>
-    </div>
-    <button class="mini" id="refresh" type="button">Actualizar</button>
-  </div>
-
-  <div class="stats">
-    <div class="stat"><small>CLIENTES</small><b id="stat-customers">—</b></div>
-    <div class="stat"><small>ACTIVOS</small><b id="stat-active">—</b></div>
-    <div class="stat"><small>COBRADO</small><b id="stat-revenue">—</b></div>
-    <div class="stat"><small>PAGOS</small><b id="stat-payments">—</b></div>
-  </div>
-
-  <section class="panel">
-    <div class="panel-head">
-      <h2>Miembros</h2>
-      <input class="search" id="q" type="search" placeholder="Buscar…">
-    </div>
-    <div class="scroll">
-      <table>
-        <thead><tr><th>Cliente</th><th>Estado</th><th>Cuota</th><th>Próximo cobro</th><th></th></tr></thead>
-        <tbody id="members"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="panel">
-    <h2>Facturas</h2>
-    <div class="scroll">
-      <table>
-        <thead><tr><th>Factura</th><th>Email</th><th>Estado</th><th>Importe</th><th>Fecha</th></tr></thead>
-        <tbody id="invoices"></tbody>
-      </table>
-    </div>
-  </section>
-  </section>
-
-  <section class="admin-tab-panel" id="tab-cuota" data-panel="cuota" hidden>
-    <iframe class="admin-embed" title="Administración de cuota" data-src="admin-cuota.html" loading="lazy"></iframe>
-  </section>
-  <section class="admin-tab-panel" id="tab-tkt365" data-panel="tkt365" hidden>
+  <section class="admin-tab-panel active" id="tab-tkt365" data-panel="tkt365">
     <iframe class="admin-embed" title="Administración de TKT365" data-src="admin-tkt365.html" loading="lazy"></iframe>
   </section>
   <section class="admin-tab-panel" id="tab-estatutos" data-panel="estatutos" hidden>
@@ -98,7 +53,6 @@
   .admin-embed{display:block;width:100%;height:calc(100vh - 210px);min-height:720px;border:0;border-radius:12px;background:transparent}
   @media(max-width:650px){.admin-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.admin-tab{padding:10px 7px}.admin-embed{height:calc(100vh - 230px);min-height:760px}}
 </style>
-<script src="admin.js?v=4"></script>
 <script src="admin-panel.js?v=1"></script>
 </body>
 </html>

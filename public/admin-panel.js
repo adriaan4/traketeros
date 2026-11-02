@@ -3,7 +3,7 @@
   const tabs = [...document.querySelectorAll('[data-tab]')];
   const panels = [...document.querySelectorAll('[data-panel]')];
   function activate(name, updateHash = true) {
-    if (!panels.some(p => p.dataset.panel === name)) name = 'suscripciones';
+    if (!panels.some(p => p.dataset.panel === name)) name = 'tkt365';
     tabs.forEach(t => {
       const active = t.dataset.tab === name;
       t.classList.toggle('active', active);
@@ -23,5 +23,5 @@
   }
   tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
   window.addEventListener('hashchange', () => activate(location.hash.slice(1), false));
-  activate(location.hash.slice(1) || 'suscripciones', false);
+  activate(location.hash.slice(1) || 'tkt365', false);
 })();
