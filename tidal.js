@@ -527,10 +527,15 @@ export function registerTidal({ app, adminAuth, cloudinary, cloudinaryOk, dataDi
       let ids;
       if (hit && Date.now() - hit.ts < SEARCH_TTL) ids = hit.ids;
       else {
-        const doc = await api('GET', `/searchResults/${encodeURIComponent(q)}/relationships/tracks`, {
-          as: 'app', query: { countryCode: COUNTRY, include: 'tracks' }
+        // TIDAL cambió su API de búsqueda: ya no vale /searchResults/{query}/relationships/tracks
+        // (eso da 400 "Invalid resource ID"). Ahora hay que mandar la búsqueda como filter[query]
+        // a /searchResults, y la respuesta es una lista (normalmente con un único resultado).
+        const doc = await api('GET', '/searchResults', {
+          as: 'app', query: { 'filter[query]': q, countryCode: COUNTRY, include: 'tracks' }
         });
-        ids = (doc?.data || []).filter((d) => d.type === 'tracks').map((d) => String(d.id)).slice(0, 20);
+        const first = (doc?.data || [])[0];
+        const trackRefs = first?.relationships?.tracks?.data || [];
+        ids = trackRefs.filter((d) => d.type === 'tracks').map((d) => String(d.id)).slice(0, 20);
         searchCache.set(k, { ts: Date.now(), ids });
         if (searchCache.size > 300) searchCache.delete(searchCache.keys().next().value);
       }
