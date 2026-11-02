@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { registerTkt365 } from './tkt365.js';
 import { registerHigherLower } from './higherlower.js';
 import { registerTidal } from './tidal.js';
+import { registerPush } from './push.js';
 
 const app = express();
 
@@ -2259,12 +2260,27 @@ registerHigherLower({
 
 // 🎧 Playlist TKT: búsqueda y alta de canciones en la playlist compartida de TIDAL
 // (API oficial, OAuth con PKCE; credenciales y tokens solo en el servidor). Ver tidal.js.
-registerTidal({
+// Avisos push al admin (notificaciones del navegador) cuando alguien añade una canción. Ver push.js.
+const push = registerPush({
   app,
   adminAuth,
   cloudinary,
   cloudinaryOk: CLOUDINARY_OK,
   dataDir: TRAKE_DATA_DIR
+});
+
+registerTidal({
+  app,
+  adminAuth,
+  cloudinary,
+  cloudinaryOk: CLOUDINARY_OK,
+  dataDir: TRAKE_DATA_DIR,
+  // Mismos nombres que el Traketímetro y TKT365 (incluye a quien solo apuesta)
+  getNombres: async () => {
+    try { await tkt365Api.juegos.listo; } catch { /* sigue con lo que haya */ }
+    return tkt365Api.juegos.usuarios().map((u) => u.name);
+  },
+  onAdd: () => push.notifyAdmin()
 });
 
 // =========================

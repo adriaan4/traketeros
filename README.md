@@ -63,3 +63,12 @@ Usa la **API oficial de TIDAL** (OAuth 2.0 Authorization Code + PKCE). Los token
 ## Regla de oro
 Todo cambio de diseño se hace en `public/`. Lo que esté fuera de `public/` no se ve en la web.
 Cuando cambies `styles.css` o `app.js`, sube el número de `?v=4` en los HTML para saltarte la caché.
+
+### Nombre al añadir una canción
+En `/playlist.html` el nombre ya no se escribe: se elige de una lista con los nombres del **Traketímetro** y de **TKT365** (incluida la gente que solo apuesta). El servidor lo vuelve a comprobar, así que no se puede colar otro nombre.
+
+### 🔔 Avisos al admin cuando alguien añade una canción
+Notificaciones push del navegador (las de Google/Chrome en Android y escritorio; también Safari en iPhone si la web está añadida a la pantalla de inicio). No necesita ninguna dependencia nueva.
+1. En tu ordenador: `node generar-vapid.js` y copia las dos líneas a Render → Environment: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (opcional: `VAPID_SUBJECT=mailto:tu@correo`).
+2. Abre `/playlist.html?admin=1` (entra con usuario y clave de admin), pulsa **🔔 Avisarme en este dispositivo** y acepta el permiso. Con **Probar aviso** compruebas que llega.
+3. Repite en cada dispositivo donde quieras recibirlos (máximo 10). Solo se pueden registrar dispositivos pasando por el login de admin.

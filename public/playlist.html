@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
   <link rel="stylesheet" href="styles.css?v=23">
-  <link rel="stylesheet" href="playlist.css?v=1">
+  <link rel="stylesheet" href="playlist.css?v=2">
   <link rel="stylesheet" href="noche.css?v=5">
   <script src="tema.js?v=2"></script>
 </head>
@@ -45,7 +45,9 @@
 
     <label class="field">
       <span>Tu nombre</span>
-      <input id="plName" type="text" maxlength="30" autocomplete="off" placeholder="Escribe tu nombre">
+      <select id="plName" autocomplete="off">
+        <option value="">Cargando nombres…</option>
+      </select>
     </label>
 
     <label class="field">
@@ -75,10 +77,19 @@
       <button class="mini danger" id="plDisconnect" type="button" hidden>Desconectar</button>
     </div>
     <p class="hint pl-redirect" id="plRedirect"></p>
+
+    <h2 class="edit-title">Avisos de canciones nuevas 🔔</h2>
+    <p class="hint" id="plPushState">Comprobando…</p>
+    <div class="pl-admin-row">
+      <button class="btn submit" id="plPushOn" type="button" hidden>🔔 Avisarme en este dispositivo</button>
+      <button class="mini" id="plPushTest" type="button" hidden>Probar aviso</button>
+      <button class="mini danger" id="plPushOff" type="button" hidden>Desactivar</button>
+    </div>
+    <p class="msg" id="plPushMsg" role="status" aria-live="polite"></p>
     <p class="msg" id="plAdminMsg" role="status" aria-live="polite"></p>
   </section>
 </main>
 
-<script src="playlist.js?v=1" defer></script>
+<script src="playlist.js?v=2" defer></script>
 </body>
 </html>

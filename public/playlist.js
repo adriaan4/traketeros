@@ -3,7 +3,8 @@
 //
 //   GET    /api/tidal/playlist           → canciones de la playlist (con quién las añadió)
 //   GET    /api/tidal/search?q=...       → buscador de canciones de TIDAL
-//   POST   /api/tidal/add                → { name, trackId } añade a la playlist
+//   GET    /api/tidal/names              → nombres del Traketímetro y de las apuestas (TKT365)
+//   POST   /api/tidal/add                → { name, trackId } añade a la playlist (el nombre tiene que ser de la lista)
 //   DELETE /api/admin/tidal/items/:id    → (admin) quitar una canción: abre playlist.html?admin=1
 
 const IS_ADMIN = new URLSearchParams(location.search).get('admin') === '1';
@@ -185,7 +186,7 @@ async function buscar() {
 async function anadir(t, btn) {
   const name = $('plName').value.trim();
   if (!name) {
-    msg('plMsg', 'Pon tu nombre para saber quién añade la canción.', 'err');
+    msg('plMsg', 'Elige tu nombre para saber quién añade la canción.', 'err');
     $('plName').focus();
     return;
   }
@@ -216,7 +217,23 @@ $('plQuery').addEventListener('input', () => {
 $('plQuery').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { clearTimeout(timer); buscar(); }
 });
-$('plName').value = store.get('trake-name');
+
+// ---------- Nombre: solo los del Traketímetro / apuestas ----------
+async function cargarNombres() {
+  const sel = $('plName');
+  try {
+    const { names = [] } = await pedir('/api/tidal/names');
+    const guardado = store.get('trake-name').toLowerCase();
+    sel.replaceChildren(el('option', { value: '', text: names.length ? 'Elige tu nombre…' : 'No hay nombres todavía' }));
+    for (const n of names) sel.append(el('option', { value: n, text: n }));
+    const mio = names.find((n) => n.toLowerCase() === guardado);
+    if (mio) sel.value = mio;
+  } catch (e) {
+    sel.replaceChildren(el('option', { value: '', text: 'No se han podido cargar los nombres' }));
+    msg('plMsg', e.message, 'err');
+  }
+}
+cargarNombres();
 
 // ---------- Admin: conexión con TIDAL ----------
 async function pintarAdmin() {
@@ -267,6 +284,86 @@ $('plDisconnect').addEventListener('click', async () => {
   }
 });
 
+// ---------- Admin: avisos push ----------
+const b64aBytes = (b64) => {
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+};
+const postJson = (url, body) => pedir(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+
+async function pintarPush() {
+  const st = $('plPushState');
+  const on = $('plPushOn'), off = $('plPushOff'), test = $('plPushTest');
+  on.hidden = off.hidden = test.hidden = true;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    st.textContent = 'Este navegador no admite avisos. En iPhone: pulsa Compartir → «Añadir a pantalla de inicio», abre la web desde ese icono y vuelve aquí.';
+    return;
+  }
+  try {
+    const s = await pedir('/api/admin/push/status');
+    if (!s.configured) {
+      st.textContent = '⚠️ Faltan VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY en el servidor (se generan con «node generar-vapid.js»).';
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      st.textContent = '🚫 Has bloqueado las notificaciones de esta web en el navegador. Permítelas en los ajustes del sitio y recarga.';
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      st.textContent = `✅ Este dispositivo recibirá un aviso cuando alguien añada una canción. (${s.devices} dispositivo${s.devices === 1 ? '' : 's'} en total)`;
+      off.hidden = false; test.hidden = false;
+    } else {
+      st.textContent = 'Activa los avisos y te saldrá una notificación en este dispositivo cada vez que alguien añada una canción.';
+      on.hidden = false;
+    }
+  } catch (e) {
+    st.textContent = e.message;
+  }
+}
+
+$('plPushOn').addEventListener('click', async () => {
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { msg('plPushMsg', 'Sin permiso no puedo avisarte. Acepta las notificaciones cuando el navegador lo pregunte.', 'err'); return pintarPush(); }
+    const { publicKey } = await pedir('/api/admin/push/status');
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription())
+      || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aBytes(publicKey) });
+    await postJson('/api/admin/push/subscribe', { subscription: sub.toJSON() });
+    msg('plPushMsg', 'Avisos activados. ✅', 'ok');
+  } catch (e) {
+    msg('plPushMsg', e.message || 'No se han podido activar los avisos.', 'err');
+  }
+  pintarPush();
+});
+
+$('plPushOff').addEventListener('click', async () => {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await postJson('/api/admin/push/unsubscribe', { endpoint: sub.endpoint });
+      await sub.unsubscribe();
+    }
+    msg('plPushMsg', 'Avisos desactivados en este dispositivo.', 'ok');
+  } catch (e) {
+    msg('plPushMsg', e.message, 'err');
+  }
+  pintarPush();
+});
+
+$('plPushTest').addEventListener('click', async () => {
+  try {
+    await postJson('/api/admin/push/test');
+    msg('plPushMsg', 'Aviso enviado: debería llegarte en unos segundos.', 'ok');
+  } catch (e) {
+    msg('plPushMsg', e.message, 'err');
+  }
+});
+
 // ---------- Arranque ----------
 (function iniciar() {
   const t = new URLSearchParams(location.search).get('tidal');
@@ -280,7 +377,7 @@ $('plDisconnect').addEventListener('click', async () => {
     if (textos[t]) msg('plAdminMsg', textos[t][0], textos[t][1]);
     history.replaceState(null, '', location.pathname + '?admin=1');
   }
-  if (IS_ADMIN) pintarAdmin();
+  if (IS_ADMIN) { pintarAdmin(); pintarPush(); }
   cargarLista();
   setInterval(() => { if (!document.hidden) cargarLista(); }, 45_000);
 })();

@@ -37,7 +37,7 @@ const NAME_MAX = 30;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
 
-export function registerTidal({ app, adminAuth, cloudinary, cloudinaryOk, dataDir }) {
+export function registerTidal({ app, adminAuth, cloudinary, cloudinaryOk, dataDir, getNombres, onAdd }) {
   const env = process.env;
   const CLIENT_ID = (env.TIDAL_CLIENT_ID || '').trim();
   const CLIENT_SECRET = (env.TIDAL_CLIENT_SECRET || '').trim();
@@ -126,6 +126,7 @@ export function registerTidal({ app, adminAuth, cloudinary, cloudinaryOk, dataDi
 
   // added = { [trackId]: { by, ts } }
   let added = Object.create(null);
+  let ultima = null; // última canción añadida desde la web (solo en memoria)
 
   function saveTokens() {
     if (!canEncrypt || !tokens) return;
@@ -547,12 +548,35 @@ export function registerTidal({ app, adminAuth, cloudinary, cloudinaryOk, dataDi
     } catch (e) { fail(res, e); }
   });
 
+  // Nombres entre los que se puede elegir: los del Traketímetro y los de TKT365 (apuestas)
+  async function nombresValidos() {
+    try {
+      const lista = await getNombres?.();
+      return [...new Set((lista || []).map(cleanName).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    } catch { return []; }
+  }
+
+  app.get('/api/tidal/names', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ names: await nombresValidos() });
+  });
+
+  // Última canción añadida desde la web (la usa el aviso push del admin para decir qué ha pasado)
+  app.get('/api/tidal/ultima', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json(ultima || {});
+  });
+
   app.post('/api/tidal/add', guard, jsonSameOrigin, addLimiter, async (req, res) => {
     res.set('Cache-Control', 'no-store');
     await ready;
-    const name = cleanName(req.body?.name);
+    const pedido = cleanName(req.body?.name);
     const trackId = String(req.body?.trackId || '');
-    if (!name) return res.status(400).json({ error: 'Pon tu nombre para saber quién añade la canción.' });
+    if (!pedido) return res.status(400).json({ error: 'Elige tu nombre para saber quién añade la canción.' });
+    const nombres = await nombresValidos();
+    if (!nombres.length) return res.status(503).json({ error: 'Todavía no cargan los nombres de la peña. Prueba en unos segundos.' });
+    const name = nombres.find((n) => n.toLowerCase() === pedido.toLowerCase());
+    if (!name) return res.status(400).json({ error: 'Ese nombre no está en el Traketímetro ni en las apuestas. Elige uno de la lista.' });
     if (!validTrackId(trackId)) return res.status(400).json({ error: 'Canción no válida.' });
 
     // Tope global por si alguien reparte la petición entre muchas IPs
@@ -576,6 +600,9 @@ export function registerTidal({ app, adminAuth, cloudinary, cloudinaryOk, dataDi
       added[trackId] = { by: name, ts: Date.now() };
       savePlaylist();
       invalidateList();
+      const m = metas.get(trackId);
+      ultima = { by: name, title: m.title, artists: m.artists || [], ts: added[trackId].ts };
+      try { Promise.resolve(onAdd?.(ultima)).catch(() => {}); } catch { /* el aviso nunca debe romper el alta */ }
       res.json({ ok: true, track: { ...metas.get(trackId), trackId, by: name, addedAt: added[trackId].ts } });
     } catch (e) { fail(res, e); }
   });
