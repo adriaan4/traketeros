@@ -296,6 +296,14 @@ async function pintarPush() {
   const st = $('plPushState');
   const on = $('plPushOn'), off = $('plPushOff'), test = $('plPushTest');
   on.hidden = off.hidden = test.hidden = true;
+  // ntfy (no depende de Chrome): se muestra siempre que haya NTFY_TOPIC en el servidor
+  try {
+    const n = await pedir('/api/admin/push/status');
+    $('plNtfyState').textContent = n.ntfy
+      ? `📲 ntfy activo: instala la app «ntfy» y suscríbete al canal «${n.ntfyTopic}»${n.ntfyUrl && n.ntfyUrl !== 'https://ntfy.sh' ? ' (servidor ' + n.ntfyUrl + ')' : ''}.`
+      : 'Alternativa sin Chrome: pon la variable NTFY_TOPIC en el servidor y recibirás los avisos con la app gratuita «ntfy».';
+    if (n.ntfy) test.hidden = false;
+  } catch { /* lo cuenta el bloque de abajo */ }
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
     st.textContent = 'Este navegador no admite avisos. En iPhone: pulsa Compartir → «Añadir a pantalla de inicio», abre la web desde ese icono y vuelve aquí.';
     return;
@@ -335,7 +343,9 @@ $('plPushOn').addEventListener('click', async () => {
     await postJson('/api/admin/push/subscribe', { subscription: sub.toJSON() });
     msg('plPushMsg', 'Avisos activados. ✅', 'ok');
   } catch (e) {
-    msg('plPushMsg', e.message || 'No se han podido activar los avisos.', 'err');
+    msg('plPushMsg', /push service/i.test(e.message || '')
+      ? 'Chrome no ha podido registrarse con el servicio de avisos de Google en este móvil o red. Usa ntfy (arriba) en su lugar.'
+      : (e.message || 'No se han podido activar los avisos.'), 'err');
   }
   pintarPush();
 });
