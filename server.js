@@ -1926,7 +1926,7 @@ registerTidal({
     try { await tkt365Api.juegos.listo; } catch { /* sigue con lo que haya */ }
     return tkt365Api.juegos.usuarios().map((u) => u.name);
   },
-  onAdd: () => push.notifyAdmin()
+  onAdd: (info) => push.notifyAdmin(info)
 });
 
 // =========================

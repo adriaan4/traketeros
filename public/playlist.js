@@ -311,7 +311,7 @@ async function pintarPush() {
   try {
     const s = await pedir('/api/admin/push/status');
     if (!s.configured) {
-      st.textContent = '⚠️ Faltan VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY en el servidor (se generan con «node generar-vapid.js»).';
+      st.textContent = s.keyProblem ? '⚠️ Claves VAPID mal puestas: ' + s.keyProblem : '⚠️ Faltan VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY en el servidor (se generan con «node generar-vapid.js»).';
       return;
     }
     if (Notification.permission === 'denied') {

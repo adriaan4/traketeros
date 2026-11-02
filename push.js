@@ -13,6 +13,11 @@
 // Variables de entorno (Render):
 //   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY   → se generan con:  node generar-vapid.js
 //   VAPID_SUBJECT  (opcional)             → mailto:tucorreo@gmail.com  (o https://tu-dominio)
+//
+// Segunda vía, sin depender de Chrome ni de Google: ntfy (app gratuita, https://ntfy.sh)
+//   NTFY_TOPIC   nombre secreto del canal (8-64 letras/números/_/-), p. ej. tkt-playlist-x7k2q9w4
+//   NTFY_URL     (opcional) servidor de ntfy; por defecto https://ntfy.sh
+//   PUBLIC_URL   (opcional) https://tu-dominio, para que al tocar el aviso se abra la playlist
 // =====================================================================
 
 import fs from 'fs';
@@ -35,8 +40,13 @@ export function registerPush({ app, adminAuth, cloudinary, cloudinaryOk, dataDir
   const PRIVATE = (process.env.VAPID_PRIVATE_KEY || '').trim();
   const SUBJECT = (process.env.VAPID_SUBJECT || process.env.PUBLIC_URL || 'mailto:trakeballer@gmail.com').trim();
   const FILE = path.join(dataDir, 'push_admin.json');
+  const NTFY_TOPIC = (process.env.NTFY_TOPIC || '').trim();
+  const NTFY_URL = (process.env.NTFY_URL || 'https://ntfy.sh').trim().replace(/\/+$/, '');
+  const ntfyOk = /^[A-Za-z0-9_-]{8,64}$/.test(NTFY_TOPIC);
+  if (NTFY_TOPIC && !ntfyOk) console.warn('NTFY: NTFY_TOPIC no es válido (8-64 caracteres: letras, números, _ y -).');
 
   let privateKey = null;
+  let keyProblem = '';
   try {
     if (PUBLIC && PRIVATE) {
       const pub = Buffer.from(PUBLIC, 'base64url');
@@ -45,9 +55,15 @@ export function registerPush({ app, adminAuth, cloudinary, cloudinaryOk, dataDir
         format: 'jwk',
         key: { kty: 'EC', crv: 'P-256', x: b64url(pub.subarray(1, 33)), y: b64url(pub.subarray(33, 65)), d: PRIVATE }
       });
+      // La privada tiene que corresponder a la pública (si se copió mal una de las dos, se avisa)
+      const j = crypto.createPublicKey(privateKey).export({ format: 'jwk' });
+      if (j.x !== b64url(pub.subarray(1, 33)) || j.y !== b64url(pub.subarray(33, 65))) {
+        throw new Error('VAPID_PRIVATE_KEY no corresponde a VAPID_PUBLIC_KEY (cópialas las dos del mismo par)');
+      }
     }
   } catch (e) {
     console.warn('PUSH: claves VAPID no válidas:', e.message || e);
+    keyProblem = String(e.message || e);
     privateKey = null;
   }
   const configured = Boolean(privateKey);
@@ -106,8 +122,28 @@ export function registerPush({ app, adminAuth, cloudinary, cloudinaryOk, dataDir
     return r.status;
   }
 
-  // Avisa a todos los dispositivos del admin. Nunca lanza error.
-  async function notifyAdmin() {
+  // ntfy: el servidor publica un mensaje y la app del móvil lo recibe (no pasa por Chrome)
+  async function enviarNtfy(info) {
+    if (!ntfyOk) return;
+    const artistas = (info?.artists || []).join(', ');
+    const message = info?.title
+      ? `${info.by || 'Alguien'} ha añadido «${info.title}»${artistas ? ' · ' + artistas : ''}`
+      : 'Alguien ha añadido una canción a la playlist.';
+    const base = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+    const body = { topic: NTFY_TOPIC, title: '🎧 Nueva canción en la playlist', message, tags: ['musical_note'] };
+    if (/^https:\/\//.test(base)) body.click = base + '/playlist.html?admin=1';
+    try {
+      const r = await fetch(NTFY_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body), signal: AbortSignal.timeout(10_000)
+      });
+      if (!r.ok) console.warn('NTFY: respuesta', r.status);
+    } catch (e) { console.warn('NTFY: fallo al avisar:', e.message || e); }
+  }
+
+  // Avisa a todos los dispositivos del admin (push del navegador + ntfy). Nunca lanza error.
+  async function notifyAdmin(info) {
+    enviarNtfy(info).catch(() => {});
     if (!configured) return;
     try {
       await ready;
@@ -138,7 +174,7 @@ export function registerPush({ app, adminAuth, cloudinary, cloudinaryOk, dataDir
   app.get('/api/admin/push/status', adminAuth, async (req, res) => {
     res.set('Cache-Control', 'no-store');
     await ready;
-    res.json({ configured, publicKey: configured ? PUBLIC : null, devices: subs.length });
+    res.json({ configured, publicKey: configured ? PUBLIC : null, devices: subs.length, ntfy: ntfyOk, ntfyTopic: ntfyOk ? NTFY_TOPIC : null, ntfyUrl: NTFY_URL });
   });
 
   app.post('/api/admin/push/subscribe', adminAuth, mismoOrigen, async (req, res) => {
@@ -173,8 +209,8 @@ export function registerPush({ app, adminAuth, cloudinary, cloudinaryOk, dataDir
 
   app.post('/api/admin/push/test', adminAuth, mismoOrigen, async (req, res) => {
     res.set('Cache-Control', 'no-store');
-    if (!configured) return res.status(503).json({ error: 'Faltan las claves VAPID en el servidor.' });
-    await notifyAdmin();
+    if (!configured && !ntfyOk) return res.status(503).json({ error: 'No hay ni claves VAPID ni NTFY_TOPIC en el servidor.' });
+    await notifyAdmin({ by: 'El servidor', title: 'Aviso de prueba', artists: ['funciona ✅'] });
     res.json({ ok: true });
   });
 
