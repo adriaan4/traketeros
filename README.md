@@ -1,13 +1,13 @@
 # Traketeros
 
-Web de la cuota de la peña (8 €/mes con Stripe Checkout) + panel de admin.
+Web de la peña Traketeros: fotos, traketímetro, TKT365, juegos, playlist y panel de admin.
 
 ## Estructura
 - `server.js` → servidor Express. **Solo sirve lo que hay dentro de `public/`.**
-- `public/` → la web: `index.html`, `success.html`, `admin.html`, `fotos.html`, `styles.css` (uno solo para todas), `app.js`, `admin.js`, `fotos.js`, `assets/`.
+- `public/` → la web: `index.html`, `admin.html`, `fotos.html`, `styles.css` (uno solo para todas), `fotos.js`, `assets/`.
 
 ## Variables de entorno (Render → Environment)
-`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `ADMIN_USER`, `ADMIN_PASSWORD`.
+`ADMIN_USER`, `ADMIN_PASSWORD`.
 Fotos: `CLOUDINARY_URL` (obligatoria para el álbum), y opcionales `UPLOAD_CODE`, `MAX_PHOTOS` (mira `.env.example`).
 Nunca subas el archivo `.env` a GitHub.
 
@@ -62,7 +62,7 @@ Usa la **API oficial de TIDAL** (OAuth 2.0 Authorization Code + PKCE). Los token
 
 ## Regla de oro
 Todo cambio de diseño se hace en `public/`. Lo que esté fuera de `public/` no se ve en la web.
-Cuando cambies `styles.css` o `app.js`, sube el número de `?v=4` en los HTML para saltarte la caché.
+Cuando cambies `styles.css`, sube el número de `?v=4` en los HTML para saltarte la caché.
 
 ### Nombre al añadir una canción
 En `/playlist.html` el nombre ya no se escribe: se elige de una lista con los nombres del **Traketímetro** y de **TKT365** (incluida la gente que solo apuesta). El servidor lo vuelve a comprobar, así que no se puede colar otro nombre.
