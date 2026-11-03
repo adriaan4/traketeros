@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
   <link rel="stylesheet" href="styles.css?v=23">
-  <link rel="stylesheet" href="playlist.css?v=2">
+  <link rel="stylesheet" href="playlist.css?v=3">
   <link rel="stylesheet" href="noche.css?v=5">
   <script src="tema.js?v=2"></script>
 </head>
@@ -66,6 +66,53 @@
     </div>
     <p class="msg" id="plListMsg" role="status" aria-live="polite"></p>
     <ul class="pl-list" id="plTracks"></ul>
+  </section>
+
+  <section class="card pl-card pl-guia" id="guia">
+    <div class="scribble">LLÉVATELA A TU APP 🎶</div>
+    <h2 class="edit-title">Pasar la playlist a otra plataforma</h2>
+    <p class="hint">Estas herramientas copian la playlist <b>una vez</b>: no se sincronizan solas. Si se añaden canciones nuevas, hay que repetirlo.</p>
+
+    <details class="pl-paso" open>
+      <summary>🟢 Quiero la playlist en Spotify</summary>
+      <ol>
+        <li>
+          <b>Copia el enlace de la playlist.</b>
+          <div class="pl-copy-row">
+            <input id="plLink" type="text" readonly value="https://tidal.com/playlist/c298efe8-c21d-400e-bc5b-16fe0c09625c" aria-label="Enlace de la playlist">
+            <button class="mini" id="plCopy" type="button">📋 Copiar enlace</button>
+          </div>
+          <p class="msg" id="plCopyMsg" role="status" aria-live="polite"></p>
+        </li>
+        <li>
+          <b>Abre el conversor</b> con TIDAL y Spotify ya elegidos:
+          <a class="mini pl-go" href="https://www.tunemymusic.com/transfer/tidal-to-spotify" target="_blank" rel="noopener noreferrer">Abrir conversor ↗</a>
+        </li>
+        <li><b>Origen: TIDAL.</b> Pega el enlace que copiaste (si te deja) o inicia sesión en TIDAL y elige la playlist <i>TKT</i>.</li>
+        <li><b>Destino: Spotify.</b> Inicia sesión con tu cuenta de Spotify y confirma. Se crea una playlist nueva en tu cuenta.</li>
+        <li>
+          <b>Listo.</b> Ábrela en tu Spotify:
+          <a class="mini pl-go" href="https://open.spotify.com/collection/playlists" target="_blank" rel="noopener noreferrer">Mis playlists de Spotify ↗</a>
+        </li>
+      </ol>
+      <p class="hint">Spotify no tiene una página propia para importar playlists de TIDAL, por eso se usa un conversor externo. Si te pide iniciar sesión en TIDAL, hace falta una cuenta de TIDAL.</p>
+    </details>
+
+    <details class="pl-paso">
+      <summary>🍎 Quiero la playlist en Apple Music</summary>
+      <ol>
+        <li>
+          <b>Copia el enlace de la playlist</b> con el botón de arriba (paso 1 de Spotify).
+        </li>
+        <li>
+          <b>Abre el conversor</b> con TIDAL y Apple Music ya elegidos:
+          <a class="mini pl-go" href="https://www.tunemymusic.com/transfer/tidal-to-apple-music" target="_blank" rel="noopener noreferrer">Abrir conversor ↗</a>
+        </li>
+        <li><b>Origen: TIDAL.</b> Pega el enlace que copiaste (si te deja) o inicia sesión en TIDAL y elige la playlist <i>TKT</i>.</li>
+        <li><b>Destino: Apple Music.</b> Inicia sesión con tu cuenta de Apple y confirma. Se crea una playlist nueva en tu biblioteca.</li>
+      </ol>
+      <p class="hint">Copia una sola vez: no se actualiza sola. Cuando haya canciones nuevas hay que volver a pasarla. Sincronizarla automáticamente solo lo hacen herramientas de pago.</p>
+    </details>
   </section>
 
   <section class="card pl-card" id="plAdmin" hidden>

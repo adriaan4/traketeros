@@ -1,0 +1,18 @@
+Borra estos archivos de tu proyecto (ya no se usan: Stripe y cuota):
+
+public/admin.js
+public/app.js
+public/success.html
+public/admin-cuota.html
+public/admin-cuota.js
+public/cuota.js
+public/server.js
+index.html          (la de la raiz, copia vieja)
+admin.html          (la de la raiz, copia vieja)
+admin.js
+app.js
+success.html
+admin-cuota.html
+admin-cuota.js
+cuota.js
+clubpass_traketeros.zip

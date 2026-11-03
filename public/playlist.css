@@ -46,3 +46,19 @@
 }
 
 .pl-card h2 { font-size: 30px; line-height: 1.1; }
+
+
+/* Guía para pasar la playlist a Spotify / Apple Music */
+.pl-guia { margin-bottom: 26px; }
+.pl-paso { margin-top: 14px; border: 3px solid var(--black); background: var(--noche-surf, #fff); box-shadow: 4px 4px 0 var(--black); }
+.pl-paso summary { cursor: pointer; padding: 12px 14px; font-weight: 900; list-style: none; }
+.pl-paso summary::-webkit-details-marker { display: none; }
+.pl-paso summary::after { content: '▾'; float: right; transition: transform .15s; }
+.pl-paso[open] summary::after { transform: rotate(180deg); }
+.pl-paso ol { margin: 0; padding: 0 14px 6px 36px; display: grid; gap: 12px; }
+.pl-paso li { line-height: 1.4; }
+.pl-paso .hint { margin: 6px 14px 14px; font-size: 13px; }
+.pl-go { display: inline-block; margin-left: 6px; text-decoration: none; color: var(--black); }
+.pl-copy-row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.pl-copy-row input { flex: 1 1 220px; min-width: 0; padding: 8px 10px; border: 3px solid var(--black); font: inherit; font-size: 13px; font-weight: 700; background: #fff; color: #000; }
+.pl-paso li .msg { margin: 4px 0 0; }

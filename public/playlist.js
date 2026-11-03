@@ -374,6 +374,22 @@ $('plPushTest').addEventListener('click', async () => {
   }
 });
 
+// ---------- Guía: copiar el enlace de la playlist ----------
+$('plCopy').addEventListener('click', async () => {
+  const input = $('plLink');
+  // El enlace bueno es el que mande el servidor (si ya lo cargó); si no, el que viene en la página
+  const url = ($('plOpen').href && esUrlTidal($('plOpen').href)) ? $('plOpen').href : input.value;
+  input.value = url;
+  try {
+    await navigator.clipboard.writeText(url);
+    msg('plCopyMsg', 'Enlace copiado. ✅ Pégalo en el conversor.', 'ok');
+  } catch {
+    input.focus(); input.select();
+    try { document.execCommand('copy'); msg('plCopyMsg', 'Enlace copiado. ✅ Pégalo en el conversor.', 'ok'); }
+    catch { msg('plCopyMsg', 'Selecciónalo y cópialo a mano (mantén pulsado).', 'err'); }
+  }
+});
+
 // ---------- Arranque ----------
 (function iniciar() {
   const t = new URLSearchParams(location.search).get('tidal');
