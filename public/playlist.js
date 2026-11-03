@@ -380,15 +380,43 @@ $('plCopy').addEventListener('click', async () => {
   // El enlace bueno es el que mande el servidor (si ya lo cargó); si no, el que viene en la página
   const url = ($('plOpen').href && esUrlTidal($('plOpen').href)) ? $('plOpen').href : input.value;
   input.value = url;
+  const ok = () => msg('plCopyMsg', 'Enlace copiado. ✅ Pégalo en el conversor.', 'ok');
+  // 1) Copia síncrona (dentro del gesto del toque): es la que funciona en iOS/Android
+  if (copiarLegacy(url)) { ok(); return; }
+  // 2) API moderna
   try {
     await navigator.clipboard.writeText(url);
-    msg('plCopyMsg', 'Enlace copiado. ✅ Pégalo en el conversor.', 'ok');
+    ok();
   } catch {
-    input.focus(); input.select();
-    try { document.execCommand('copy'); msg('plCopyMsg', 'Enlace copiado. ✅ Pégalo en el conversor.', 'ok'); }
-    catch { msg('plCopyMsg', 'Selecciónalo y cópialo a mano (mantén pulsado).', 'err'); }
+    input.focus();
+    try { input.setSelectionRange(0, url.length); } catch {}
+    msg('plCopyMsg', 'Selecciónalo y cópialo a mano (mantén pulsado).', 'err');
   }
 });
+
+function copiarLegacy(texto) {
+  const ta = document.createElement('textarea');
+  ta.value = texto;
+  ta.setAttribute('readonly', '');
+  ta.contentEditable = 'true';
+  ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;';
+  document.body.appendChild(ta);
+  try {
+    ta.focus({ preventScroll: true });
+    ta.select();
+    const r = document.createRange();
+    r.selectNodeContents(ta);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    ta.setSelectionRange(0, texto.length);
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    ta.remove();
+  }
+}
 
 // ---------- Arranque ----------
 (function iniciar() {
