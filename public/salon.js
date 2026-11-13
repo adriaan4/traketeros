@@ -114,7 +114,7 @@ function pintarLideres(people, config) {
       <td>${medallas[i] || i + 1}</td>
       <td><a href="perfil.html?name=${encodeURIComponent(p.name)}">${esc(p.name)}</a></td>
       <td>${esc(p.cervezas)}</td><td>${esc(p.cubatas)}</td><td>${esc(p.chupitos)}</td><td>${esc(p.porros)}</td>${conCigarros ? `<td>${esc(p.cigarros)}</td>` : ''}
-      <td><b>${esc(p.puntos)}</b></td>
+      <td><b>${esc(Number(p.puntos).toLocaleString('es-ES'))}</b></td>
     </tr>`).join('') || `<tr><td colspan="${columnas}">Todavía no hay estadísticas.</td></tr>`;
 }
 

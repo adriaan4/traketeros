@@ -85,7 +85,7 @@ if(!requested){
   $('name').textContent=p.name;
   pintarFrase(d.frase);
   document.title='Traketeros · '+p.name;
-  $('totals').innerHTML=Object.entries(labels).map(([k,v])=>`<div class="community-stat"><span>${v}</span><b>${p[k]||0}</b></div>`).join('')+`<div class="community-stat"><span>⭐ Puntos</span><b>${p.puntos||0}</b></div><div class="community-stat"><span>📝 Registros</span><b>${p.apuntes||0}</b></div>`;
+  $('totals').innerHTML=Object.entries(labels).map(([k,v])=>`<div class="community-stat"><span>${v}</span><b>${p[k]||0}</b></div>`).join('')+`<div class="community-stat"><span>⭐ Puntos</span><b>${Number(p.puntos||0).toLocaleString('es-ES')}</b></div><div class="community-stat"><span>📝 Registros</span><b>${p.apuntes||0}</b></div>`;
   $('recent').innerHTML=Object.entries(labels).map(([k,v])=>`<div class="community-stat"><span>${v}</span><b>${d.recent[k]||0}</b></div>`).join('');
   $('activity').innerHTML=(d.activity||[]).map(a=>`<li><div class="community-row"><b>${labels[a.tipo]||esc(a.tipo)} × ${Number(a.cantidad)||1}</b><small>${fmt(a.ts)}</small></div>${a.foto?.url?`<a href="${esc(a.foto.url)}" target="_blank" rel="noopener">Ver foto del registro ↗</a>`:''}</li>`).join('')||'<li class="community-empty">No hay actividad detallada guardada para este perfil.</li>';
   const meta=(d.config&&d.config.cardStatMeta)||{};

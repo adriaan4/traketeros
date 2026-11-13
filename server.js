@@ -808,7 +808,7 @@ app.delete('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res)
 // mientras dura una fecha, lo que se apunta cuenta para el mes Y para esa fecha.
 //
 // Puntuación (oculta, solo sirve para ordenar): porro 3, cubata 3, chupito 2,
-// cerveza 1, cigarro 1 (los cigarros solo cuentan mientras estén activados).
+// cerveza 1, cigarro 0,5 (los cigarros solo cuentan mientras estén activados).
 //
 // Se guarda en memoria, en un fichero local (data/traketimetro.json) como
 // caché rápida, y además se respalda en Cloudinary (como archivo "raw") cada
@@ -822,7 +822,7 @@ app.delete('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res)
 // según esté activado o no (ver trakeSyncTipos), así TKT365 y el Higher or Lower, que
 // reciben esta misma lista, se enteran sin tocar nada más.
 const TRAKE_TIPOS = ['cervezas', 'cubatas', 'chupitos', 'porros'];
-const TRAKE_PUNTOS = { porros: 3, cubatas: 3, chupitos: 2, cervezas: 1, cigarros: 1 };
+const TRAKE_PUNTOS = { porros: 3, cubatas: 3, chupitos: 2, cervezas: 1, cigarros: 0.5 };
 // Los cigarros se activan solos a partir de esta fecha (hora de Madrid), salvo que el
 // admin los fuerce antes ("on") o los apague ("off") desde traketimetro.html?admin=1.
 const CIGARROS_DESDE = '2026-11-01';

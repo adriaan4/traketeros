@@ -139,7 +139,7 @@ function pintarRanking() {
       <td>${p.chupitos}</td>
       <td>${p.porros}</td>
       ${cigarrosActivos() ? `<td>${p.cigarros || 0}</td>` : ''}
-      <td class="rk-total">${p.puntos}</td>
+      <td class="rk-total">${Number(p.puntos).toLocaleString('es-ES')}</td>
       <td class="rk-edit">
         <button class="rk-edit-btn" type="button" data-editar="${escapeHtml(p.name)}" aria-label="Editar cantidades de ${escapeHtml(p.name)}">✏️</button>
         ${IS_ADMIN ? `<button class="rk-edit-btn" type="button" data-borrar="${escapeHtml(p.name)}" aria-label="Borrar a ${escapeHtml(p.name)} del ranking">🗑️</button>` : ''}
@@ -509,7 +509,7 @@ function pintarAdmin() {
   const cEstado = $('cigarrosEstado');
   if (cEstado) {
     cEstado.textContent = cigarrosActivos()
-      ? '🚬 Ahora mismo los cigarros están ACTIVADOS (cuentan 1 punto y salen en ranking, perfiles, Salón de la Fama, Cubata de Oro y TKT365).'
+      ? '🚬 Ahora mismo los cigarros están ACTIVADOS (cuentan 0,5 puntos y salen en ranking, perfiles, Salón de la Fama, Cubata de Oro y TKT365).'
       : `🚬 Ahora mismo los cigarros están DESACTIVADOS. En modo automático se activan el ${formatoFecha(config.cigarros.desde)}.`;
   }
 

@@ -1604,6 +1604,11 @@ a.mini { display: inline-block; text-decoration: none; }
   border: 4px solid var(--black);
   background: white;
   box-shadow: 10px 10px 0 var(--red);
+  /* Historial largo: el cuadro tiene altura máxima y se baja con una barra de scroll */
+  max-height: 380px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .hist-item {
   display: flex;
