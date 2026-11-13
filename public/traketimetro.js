@@ -509,7 +509,7 @@ function pintarAdmin() {
   const cEstado = $('cigarrosEstado');
   if (cEstado) {
     cEstado.textContent = cigarrosActivos()
-      ? '🚬 Ahora mismo los cigarros están ACTIVADOS (cuentan 0,5 puntos y salen en ranking, perfiles, Salón de la Fama, Cubata de Oro y TKT365).'
+      ? '🚬 Ahora mismo los cigarros están ACTIVADOS (cuentan 0,2 puntos y salen en ranking, perfiles, Salón de la Fama, Cubata de Oro y TKT365).'
       : `🚬 Ahora mismo los cigarros están DESACTIVADOS. En modo automático se activan el ${formatoFecha(config.cigarros.desde)}.`;
   }
 

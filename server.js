@@ -809,7 +809,7 @@ app.delete('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res)
 // mientras dura una fecha, lo que se apunta cuenta para el mes Y para esa fecha.
 //
 // Puntuación (oculta, solo sirve para ordenar): porro 3, cubata 3, chupito 2,
-// cerveza 1, cigarro 0,5 (los cigarros solo cuentan mientras estén activados).
+// cerveza 1, cigarro 0,2 (los cigarros solo cuentan mientras estén activados).
 //
 // Se guarda en memoria, en un fichero local (data/traketimetro.json) como
 // caché rápida, y además se respalda en Cloudinary (como archivo "raw") cada
@@ -823,7 +823,17 @@ app.delete('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res)
 // según esté activado o no (ver trakeSyncTipos), así TKT365 y el Higher or Lower, que
 // reciben esta misma lista, se enteran sin tocar nada más.
 const TRAKE_TIPOS = ['cervezas', 'cubatas', 'chupitos', 'porros'];
-const TRAKE_PUNTOS = { porros: 3, cubatas: 3, chupitos: 2, cervezas: 1, cigarros: 0.5 };
+const TRAKE_PUNTOS = { porros: 3, cubatas: 3, chupitos: 2, cervezas: 1, cigarros: 0.2 };
+// Ajustes por persona del valor del cigarro (clave = nombre en minúsculas)
+const TRAKE_PUNTOS_CIGARRO_POR_NOMBRE = { dluri: 0.1 };
+// Puntos de UNA unidad de un tipo para una persona (los cigarros dependen de quién sea)
+function trakePuntosUnidad(tipo, name) {
+  if (tipo === 'cigarros') {
+    const k = String(name || '').trim().toLocaleLowerCase('es');
+    if (k in TRAKE_PUNTOS_CIGARRO_POR_NOMBRE) return TRAKE_PUNTOS_CIGARRO_POR_NOMBRE[k];
+  }
+  return TRAKE_PUNTOS[tipo] || 0;
+}
 // Los cigarros se activan solos a partir de esta fecha (hora de Madrid), salvo que el
 // admin los fuerce antes ("on") o los apague ("off") desde traketimetro.html?admin=1.
 const CIGARROS_DESDE = '2026-11-01';
@@ -1006,7 +1016,8 @@ function trakePersonaVacia(name) {
 
 // ---------- Puntos y ranking ----------
 function trakePuntos(p) {
-  return TRAKE_TIPOS.reduce((s, t) => s + (p[t] || 0) * TRAKE_PUNTOS[t], 0);
+  const total = TRAKE_TIPOS.reduce((s, t) => s + (p[t] || 0) * trakePuntosUnidad(t, p.name), 0);
+  return Math.round(total * 100) / 100; // evita 0,6000000000000001
 }
 
 function trakeTotal(p) {
@@ -1885,6 +1896,7 @@ tkt365Api = registerTkt365({
   getTrake: () => trakeData,
   tipos: TRAKE_TIPOS,
   puntos: TRAKE_PUNTOS,
+  puntosUnidad: trakePuntosUnidad,
   hoy: trakeHoy,
   ready: trakeReady,
   cloudinary,
@@ -1911,6 +1923,7 @@ registerAsistente({
   getTrake: () => trakeData,
   tipos: TRAKE_TIPOS,
   puntos: TRAKE_PUNTOS,
+  puntosUnidad: trakePuntosUnidad,
   hoy: trakeHoy,
   ready: trakeReady
 });

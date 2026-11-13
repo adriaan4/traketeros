@@ -13,7 +13,7 @@
 //   · mes, fecha especial o "en total"  → los totales guardados (incluyen correcciones a mano)
 //   · rangos de fechas, hoy, ayer, semana → el historial con fecha y hora (hora de Madrid)
 // Los puntos se calculan al momento con la misma tabla que el resto de la web
-// (los cigarros cuentan lo que diga TRAKE_PUNTOS, ahora 0,5).
+// (los cigarros cuentan lo que diga TRAKE_PUNTOS, ahora 0,2).
 // =====================================================================
 
 const TZ = 'Europe/Madrid';
@@ -61,7 +61,7 @@ const MES_RE = MESES.join('|');
 // Una fecha escrita: "9", "9 de noviembre", "9 noviembre 2026", "9/11", "09-11-2026"
 const FECHA_RE = `(?:\\d{1,2}[/-]\\d{1,2}(?:[/-]\\d{2,4})?|\\d{1,2}(?:\\s+(?:de\\s+)?(?:${MES_RE}))?(?:\\s+(?:de\\s+)?\\d{4})?)`;
 
-export function registerAsistente({ app, getTrake, tipos, puntos, hoy, ready }) {
+export function registerAsistente({ app, getTrake, tipos, puntos, puntosUnidad, hoy, ready }) {
   // Pequeño límite por IP para que nadie sature el servidor
   const visitas = new Map();
   function limitado(ip) {
@@ -86,7 +86,8 @@ export function registerAsistente({ app, getTrake, tipos, puntos, hoy, ready }) 
 
   const vacio = (name) => { const o = { name, puntos: 0, total: 0 }; for (const k of tipos) o[k] = 0; return o; };
   function cerrar(o) {
-    o.puntos = tipos.reduce((s, k) => s + (o[k] || 0) * (puntos[k] || 0), 0);
+    const pu = (k) => (puntosUnidad ? puntosUnidad(k, o.name) : (puntos[k] || 0));
+    o.puntos = Math.round(tipos.reduce((s, k) => s + (o[k] || 0) * pu(k), 0) * 100) / 100;
     o.total = tipos.reduce((s, k) => s + (o[k] || 0), 0);
     return o;
   }
@@ -360,6 +361,7 @@ export function registerAsistente({ app, getTrake, tipos, puntos, hoy, ready }) 
     // --- Entre todos ---
     if (i.todos && !mencionadas.length && !i.quiereRanking) {
       const suma = cerrar(lista.reduce((s, o) => { for (const k of tipos) s[k] += o[k]; return s; }, vacio('Peña')));
+      suma.puntos = Math.round(lista.reduce((s, o) => s + (o.puntos || 0), 0) * 100) / 100; // suma de los puntos de cada persona
       const que = ms.length ? ms : [];
       const texto = que.length
         ? `Entre todos${sufijo}: ${que.map((k) => `${EMOJI[k]} ${cantidadTxt(k, k === 'puntos' ? suma.puntos : suma[k])}`).join(' · ')}.`

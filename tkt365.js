@@ -94,7 +94,7 @@ const nuevoId = () => Date.now().toString(36) + crypto.randomBytes(5).toString('
 const clean = (s, max) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
 export function registerTkt365({
-  app, adminAuth, getTrake, tipos, puntos, hoy, ready, cloudinary, cloudinaryOk, dataDir
+  app, adminAuth, getTrake, tipos, puntos, puntosUnidad, hoy, ready, cloudinary, cloudinaryOk, dataDir
 }) {
   const FILE = path.join(dataDir, 'tkt365.json');
   const CLOUD_ID = 'traketeros_data/tkt365';
@@ -330,7 +330,8 @@ export function registerTkt365({
     return out;
   }
 
-  const puntosDe = (p) => tipos.reduce((s, k) => s + (p[k] || 0) * puntos[k], 0);
+  // 'id' = nombre en minúsculas (el cigarro puede valer distinto según la persona)
+  const puntosDe = (p, id) => Math.round(tipos.reduce((s, k) => s + (p[k] || 0) * (puntosUnidad ? puntosUnidad(k, id || p.name) : puntos[k]), 0) * 100) / 100;
 
   // userId -> valor de la métrica en el periodo (con datos REALES del Traketímetro)
   function puntuaciones(per, metrica) {
@@ -345,7 +346,7 @@ export function registerTkt365({
         if (metrica === 'primero') v = s.first;
         else if (metrica === 'ultimo') v = s.last;
         else if (metrica === 'apuntes') v = s.count;
-        else if (metrica === 'puntos') v = puntosDe(s);
+        else if (metrica === 'puntos') v = puntosDe(s, id);
         else v = s[metrica] || 0;
         out.set(id, v);
       }
@@ -354,7 +355,7 @@ export function registerTkt365({
       for (const p of Object.values(bucket || {})) {
         const id = String(p.name || '').trim().toLowerCase();
         if (!id) continue;
-        out.set(id, metrica === 'puntos' ? puntosDe(p) : (p[metrica] || 0));
+        out.set(id, metrica === 'puntos' ? puntosDe(p, id) : (p[metrica] || 0));
       }
     }
     return out;
@@ -387,7 +388,7 @@ export function registerTkt365({
         if (antesDe && mesId >= antesDe) continue; // ese mes y los siguientes no cuentan: arrancan de cero
         for (const p of Object.values(b || {})) {
           const id = String(p.name || '').trim().toLowerCase();
-          if (id) inc(id, metrica === 'puntos' ? puntosDe(p) : (p[metrica] || 0));
+          if (id) inc(id, metrica === 'puntos' ? puntosDe(p, id) : (p[metrica] || 0));
         }
       }
     }
