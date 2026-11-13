@@ -1605,11 +1605,17 @@ a.mini { display: inline-block; text-decoration: none; }
   background: white;
   box-shadow: 10px 10px 0 var(--red);
   /* Historial largo: el cuadro tiene altura máxima y se baja con una barra de scroll */
-  max-height: 380px;
-  overflow-y: auto;
+  max-height: 340px;
+  overflow-y: scroll;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: auto;
+  scrollbar-color: var(--black) #eee;
 }
+/* Barra de scroll gordita y siempre visible (también en móvil) */
+.historial-list::-webkit-scrollbar { width: 14px; }
+.historial-list::-webkit-scrollbar-track { background: #eee; border-left: 2px solid var(--black); }
+.historial-list::-webkit-scrollbar-thumb { background: var(--black); border: 2px solid #eee; }
 .hist-item {
   display: flex;
   align-items: center;
