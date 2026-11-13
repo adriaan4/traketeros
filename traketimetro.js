@@ -4,7 +4,8 @@
 //   POST   /api/admin/traketimetro/ganador→ (admin) poner el Cubata de Oro a mano
 //   POST   /api/traketimetro/add          → { name, tipo, cantidad? } (o multipart con foto opcional "foto")
 //   POST   /api/traketimetro/undo         → { name, tipo, cantidad? }
-//   POST   /api/traketimetro/set          → { name, cervezas, cubatas, chupitos, porros } (corregir a mano)
+//   POST   /api/traketimetro/set          → { name, cervezas, cubatas, chupitos, porros, cigarros? } (corregir a mano)
+//   POST   /api/admin/traketimetro/cigarros → (admin) { modo: 'auto' | 'on' | 'off' } activar/apagar los cigarros
 //   DELETE /api/admin/traketimetro/:name  → borrar a alguien del ranking (solo admin: abre traketimetro.html?admin=1)
 //   GET    /api/traketimetro/stream       → avisos en directo (SSE)
 
@@ -16,7 +17,8 @@ const TIPOS = {
   cervezas: { emoji: '🍺', etiqueta: 'Cerveza' },
   cubatas: { emoji: '🍹', etiqueta: 'Cubata' },
   chupitos: { emoji: '🥃', etiqueta: 'Chupito' },
-  porros: { emoji: '🚬', etiqueta: 'Porro' }
+  porros: { emoji: '🌿', etiqueta: 'Porro' },
+  cigarros: { emoji: '🚬', etiqueta: 'Cigarro' } // solo visible cuando están activados (ver config.cigarros)
 };
 
 const store = {
@@ -32,6 +34,8 @@ let periodos = [];
 let fechas = [];
 let historial = [];
 let fotoElegida = null; // foto opcional (ya reducida) para el próximo apunte
+let config = { cigarros: { activo: false, modo: 'auto', desde: '2026-11-01' } };
+const cigarrosActivos = () => Boolean(config.cigarros && config.cigarros.activo);
 
 // Aplica la respuesta del servidor (ranking + lista de periodos + fechas)
 function aplicar(data) {
@@ -41,12 +45,20 @@ function aplicar(data) {
   if (data.periodos) periodos = data.periodos;
   if (data.events) fechas = data.events;
   if (data.historial) historial = data.historial;
+  if (data.config) config = data.config;
+  pintarCigarros();
   actualizarDatalist();
   pintarSelector();
   pintarRanking();
   pintarTotales();
   pintarHistorial();
   pintarAdmin();
+}
+
+// Muestra u oculta todo lo de los cigarros (botón, columnas, campo de edición...)
+function pintarCigarros() {
+  const on = cigarrosActivos();
+  document.querySelectorAll('[data-cigarros]').forEach((el) => { el.style.display = on ? '' : 'none'; });
 }
 
 function pintarSelector() {
@@ -121,12 +133,13 @@ function pintarRanking() {
   tbody.innerHTML = people.map((p, i) => `
     <tr>
       <td class="rk-pos">${medallas[i] || (i + 1)}</td>
-      <td class="rk-name">${escapeHtml(p.name)}</td>
+      <td class="rk-name"><a href="perfil.html?name=${encodeURIComponent(p.name)}" title="Ver perfil de ${escapeHtml(p.name)}">${escapeHtml(p.name)}</a></td>
       <td>${p.cervezas}</td>
       <td>${p.cubatas}</td>
       <td>${p.chupitos}</td>
       <td>${p.porros}</td>
-      <td class="rk-total">${p.puntos}</td>
+      ${cigarrosActivos() ? `<td>${p.cigarros || 0}</td>` : ''}
+      <td class="rk-total">${Number(p.puntos).toLocaleString('es-ES')}</td>
       <td class="rk-edit">
         <button class="rk-edit-btn" type="button" data-editar="${escapeHtml(p.name)}" aria-label="Editar cantidades de ${escapeHtml(p.name)}">✏️</button>
         ${IS_ADMIN ? `<button class="rk-edit-btn" type="button" data-borrar="${escapeHtml(p.name)}" aria-label="Borrar a ${escapeHtml(p.name)} del ranking">🗑️</button>` : ''}
@@ -150,11 +163,12 @@ function pintarTotales() {
   const suma = (k) => totales.reduce((s, p) => s + (p[k] || 0), 0);
   tbody.innerHTML = totales.map((p) => `
     <tr>
-      <td class="rk-name">${escapeHtml(p.name)}</td>
+      <td class="rk-name"><a href="perfil.html?name=${encodeURIComponent(p.name)}" title="Ver perfil de ${escapeHtml(p.name)}">${escapeHtml(p.name)}</a></td>
       <td>${p.cervezas}</td>
       <td>${p.cubatas}</td>
       <td>${p.chupitos}</td>
       <td>${p.porros}</td>
+      ${cigarrosActivos() ? `<td>${p.cigarros || 0}</td>` : ''}
       <td class="rk-total">${p.total}</td>
     </tr>
   `).join('') + `
@@ -164,6 +178,7 @@ function pintarTotales() {
       <td><b>${suma('cubatas')}</b></td>
       <td><b>${suma('chupitos')}</b></td>
       <td><b>${suma('porros')}</b></td>
+      ${cigarrosActivos() ? `<td><b>${suma('cigarros')}</b></td>` : ''}
       <td class="rk-total"><b>${suma('total')}</b></td>
     </tr>`;
 }
@@ -277,18 +292,22 @@ async function reducirFoto(file) {
 function quitarFoto() {
   fotoElegida = null;
   $('foto').value = '';
+  $('fotoCam').value = '';
   const prev = $('fotoPreview');
   if (prev.src.startsWith('blob:')) URL.revokeObjectURL(prev.src);
   prev.removeAttribute('src');
   prev.hidden = true;
   $('fotoQuitar').hidden = true;
-  $('fotoBtn').textContent = '📷 Añadir foto';
 }
 
+// Dos entradas: la cámara (en el móvil abre la cámara directamente, gracias a
+// capture="environment") y la galería. Las dos pasan por el mismo manejador.
+$('fotoCamBtn').addEventListener('click', () => $('fotoCam').click());
 $('fotoBtn').addEventListener('click', () => $('foto').click());
 $('fotoQuitar').addEventListener('click', quitarFoto);
-$('foto').addEventListener('change', async () => {
-  const f = $('foto').files[0];
+
+async function fotoSeleccionada(input) {
+  const f = input.files[0];
   if (!f) return;
   const reducida = await reducirFoto(f);
   if (reducida.size > 12 * 1024 * 1024) {
@@ -302,9 +321,10 @@ $('foto').addEventListener('change', async () => {
   prev.src = URL.createObjectURL(reducida);
   prev.hidden = false;
   $('fotoQuitar').hidden = false;
-  $('fotoBtn').textContent = '📷 Cambiar foto';
   decirEstado('');
-});
+}
+$('foto').addEventListener('change', () => fotoSeleccionada($('foto')));
+$('fotoCam').addEventListener('change', () => fotoSeleccionada($('fotoCam')));
 
 // ---------- Historial (día y hora de Madrid) ----------
 const fmtDia = new Intl.DateTimeFormat('es-ES', {
@@ -377,6 +397,7 @@ function abrirEditor(name) {
   $('editCubatas').value = p.cubatas;
   $('editChupitos').value = p.chupitos;
   $('editPorros').value = p.porros;
+  $('editCigarros').value = p.cigarros || 0;
   $('editMsg').textContent = '';
   $('editMsg').className = 'msg';
 
@@ -429,6 +450,8 @@ $('editSave').addEventListener('click', async () => {
     chupitos: numeroEditor('editChupitos'),
     porros: numeroEditor('editPorros')
   };
+  // Con los cigarros apagados no se manda el campo: el servidor conserva lo que hubiera
+  if (cigarrosActivos()) body.cigarros = numeroEditor('editCigarros');
 
   const saveBtn = $('editSave');
   saveBtn.disabled = true;
@@ -480,6 +503,15 @@ function pintarAdmin() {
         <button class="rk-edit-btn" type="button" data-fecha-borrar="${escapeHtml(e.id)}" aria-label="Borrar ${escapeHtml(e.name)}">🗑️</button>
       </li>`).join('')
     : '<li class="fechas-vacio">Todavía no hay fechas.</li>';
+
+  const modoSel = $('cigarrosModo');
+  if (modoSel && document.activeElement !== modoSel) modoSel.value = config.cigarros.modo;
+  const cEstado = $('cigarrosEstado');
+  if (cEstado) {
+    cEstado.textContent = cigarrosActivos()
+      ? '🚬 Ahora mismo los cigarros están ACTIVADOS (cuentan 0,5 puntos y salen en ranking, perfiles, Salón de la Fama, Cubata de Oro y TKT365).'
+      : `🚬 Ahora mismo los cigarros están DESACTIVADOS. En modo automático se activan el ${formatoFecha(config.cigarros.desde)}.`;
+  }
 
   const sel = $('ganadorPeriodo');
   const previo = sel.value;
@@ -533,6 +565,16 @@ if (IS_ADMIN) {
       msgAdmin('fechaMsg', 'Fecha borrada 🗑️', 'ok');
     } catch (err) {
       msgAdmin('fechaMsg', err.message, 'err');
+    }
+  });
+
+  $('cigarrosSave').addEventListener('click', async () => {
+    try {
+      const data = await llamarAdmin('/api/admin/traketimetro/cigarros', 'POST', { modo: $('cigarrosModo').value });
+      aplicar(data);
+      msgAdmin('cigarrosMsg', 'Guardado 🚬', 'ok');
+    } catch (err) {
+      msgAdmin('cigarrosMsg', err.message, 'err');
     }
   });
 

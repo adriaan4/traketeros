@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import Stripe from 'stripe';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -8,18 +7,12 @@ import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import sharp from 'sharp';
 import { fileURLToPath } from 'url';
+import { registerTkt365 } from './tkt365.js';
+import { registerHigherLower } from './higherlower.js';
+import { registerTidal } from './tidal.js';
+import { registerPush } from './push.js';
 
 const app = express();
-
-// Fijamos la versión de la API de Stripe explícitamente. Sin esto, Stripe usa
-// la versión "por defecto" de la cuenta, que puede ser antigua y no soportar
-// billing_cycle_anchor_config en Checkout Sessions (se añadió el 24/06/2026).
-// Si no se fija, Stripe IGNORA ese parámetro sin avisar y ancla la
-// suscripción a "hoy + 1 mes" en vez de al día 1, que es justo el bug que
-// estabas viendo (factura el 22 oct en vez del 1 oct).
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2026-06-24.dahlia'
-});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,13 +36,18 @@ function adminAuth(req, res, next) {
   const raw = Buffer.from(h.slice(6), 'base64').toString();
   const i = raw.indexOf(':');
 
-  const u = raw.slice(0, i);
-  const p = raw.slice(i + 1);
+  const u = i === -1 ? raw : raw.slice(0, i);
+  const p = i === -1 ? '' : raw.slice(i + 1);
 
-  if (
-    u !== process.env.ADMIN_USER ||
-    p !== process.env.ADMIN_PASSWORD
-  ) {
+  // Comparación en tiempo constante (evita adivinar la clave midiendo tiempos)
+  const igual = (a, b) => {
+    if (typeof b !== 'string' || !b.length) return false;
+    const ha = crypto.createHash('sha256').update(String(a)).digest();
+    const hb = crypto.createHash('sha256').update(b).digest();
+    return crypto.timingSafeEqual(ha, hb);
+  };
+
+  if (!igual(u, process.env.ADMIN_USER) || !igual(p, process.env.ADMIN_PASSWORD)) {
     return res
       .set('WWW-Authenticate', 'Basic realm="Admin"')
       .status(401)
@@ -58,31 +56,6 @@ function adminAuth(req, res, next) {
 
   next();
 }
-
-// =========================
-// STRIPE WEBHOOK
-// =========================
-
-app.post(
-  '/api/webhook',
-  express.raw({ type: 'application/json' }),
-  async (req, res) => {
-    try {
-      const event = stripe.webhooks.constructEvent(
-        req.body,
-        req.headers['stripe-signature'],
-        process.env.STRIPE_WEBHOOK_SECRET
-      );
-
-      console.log('Stripe:', event.type);
-
-      res.json({ received: true });
-    } catch (e) {
-      console.error('Webhook Error:', e.message);
-      res.status(400).send(`Webhook Error: ${e.message}`);
-    }
-  }
-);
 
 // =========================
 // WEBHOOK CLOUDINARY (borrado al instante)
@@ -119,6 +92,7 @@ app.post(
           (body.resources || []).map((r) => r.public_id)
         );
         photoIndex = photoIndex.filter((p) => !borrados.has(p.publicId));
+        pastIndex = pastIndex.filter((p) => !borrados.has(p.publicId));
         console.log(`Webhook Cloudinary: ${borrados.size} foto(s) quitada(s) al instante`);
         broadcastPhotosChanged();
       }
@@ -170,7 +144,7 @@ app.post(
 );
 
 // JSON
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Endpoint ligero para keep-alive / monitorización
 app.get('/health', (req, res) => {
@@ -178,326 +152,48 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, uptime: Math.round(process.uptime()) });
 });
 
+// =========================
+// PANEL DE CONTROL (solo admin)
+// =========================
+// Reúne todas las subwebs de admin en una sola página. El HTML vive en /private
+// (fuera de public/), así que NO se sirve como archivo normal: solo sale por esta
+// ruta y solo después de pedir usuario y clave. No está enlazado desde ninguna
+// página ni listado en robots.txt (para no delatar la ruta); además va con noindex.
+app.get(['/panel', '/panel/'], adminAuth, (req, res) => {
+  res.set({
+    'Cache-Control': 'no-store',
+    'X-Robots-Tag': 'noindex, nofollow, noarchive'
+  });
+  res.sendFile(path.join(__dirname, 'private', 'panel.html'));
+});
+
 // Archivos de la web
+// Splash con el logo de la peña: se añade solo a todas las páginas (menos las de admin),
+// sin tener que editar cada HTML. Es un <script> que se coloca justo al abrir <head>.
+const PWA_TAGS = '<link rel="manifest" href="/manifest.webmanifest">'
+  + '<meta name="mobile-web-app-capable" content="yes">'
+  + '<meta name="apple-mobile-web-app-capable" content="yes">'
+  + '<link rel="apple-touch-icon" href="/assets/icon-192.png">'
+  + '<script>if("serviceWorker"in navigator)addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){})})</script>';
+const SPLASH_TAG = '<script src="/splash.js?v=1"></script>' + PWA_TAGS;
+app.use((req, res, next) => {
+  if (req.method !== 'GET') return next();
+  let p;
+  try { p = decodeURIComponent(req.path); } catch { return next(); }
+  if (p.endsWith('/')) p += 'index.html';
+  if (!p.endsWith('.html') || /^\/admin/i.test(p)) return next();
+  const base = path.join(__dirname, 'public');
+  const file = path.join(base, p);
+  if (!file.startsWith(base + path.sep)) return next();
+  fs.readFile(file, 'utf8', (err, html) => {
+    if (err) return next();
+    if (!html.includes('/splash.js')) html = html.replace(/<head[^>]*>/i, (m) => m + SPLASH_TAG);
+    res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+    res.send(html);
+  });
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
-
-// =========================
-// CREAR CHECKOUT STRIPE
-// =========================
-
-app.post('/api/create-checkout-session', async (req, res) => {
-  try {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return res.status(500).json({
-        error: 'Falta STRIPE_SECRET_KEY.'
-      });
-    }
-
-    if (!process.env.STRIPE_PRICE_ID) {
-      return res.status(500).json({
-        error: 'Falta STRIPE_PRICE_ID.'
-      });
-    }
-
-    // Detectar automáticamente la URL de la web
-    const protocol =
-      req.headers['x-forwarded-proto'] ||
-      req.protocol ||
-      'http';
-
-    const host =
-      req.headers['x-forwarded-host'] ||
-      req.get('host');
-
-    const domain = `${protocol}://${host}`;
-
-    // Cogemos el precio de la cuota mensual para poder cobrar hoy exactamente
-    // esa misma cantidad como "cuota de entrada" (pago único), además de
-    // arrancar la suscripción.
-    const price = await stripe.prices.retrieve(process.env.STRIPE_PRICE_ID);
-
-    // Día 1 del mes que viene, a las 00:00 UTC: ahí es cuando arranca de
-    // verdad el cobro mensual recurrente.
-    //
-    // NOTA: antes esto se hacía con billing_cycle_anchor_config +
-    // proration_behavior: 'none', pero Stripe NO permite combinar
-    // proration_behavior: 'none' con un precio de pago único (price_data)
-    // en la misma Checkout Session — de ahí el error "You cannot set
-    // proration_behavior to none in a Checkout Session with one-time
-    // prices". Por eso ahora se usa un periodo de prueba (trial_end) que
-    // termina justo ese día: durante ese periodo no se genera ningún cargo
-    // de la suscripción (así no se cobra dos veces por los días entre hoy
-    // y el día 1), y sí es compatible con la cuota de entrada de pago único.
-    const ahora = new Date();
-    const dia1ProximoMes = new Date(Date.UTC(
-      ahora.getUTCFullYear(),
-      ahora.getUTCMonth() + 1,
-      1, 0, 0, 0
-    ));
-    const trialEnd = Math.floor(dia1ProximoMes.getTime() / 1000);
-
-    console.log('Dominio:', domain);
-    console.log('Price ID:', process.env.STRIPE_PRICE_ID);
-
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-
-      line_items: [
-        {
-          // Cuota de entrada: se cobra HOY, una sola vez, por el mismo
-          // importe que la mensualidad.
-          price_data: {
-            currency: price.currency,
-            product: price.product,
-            unit_amount: price.unit_amount
-          },
-          quantity: 1
-        },
-        {
-          // La suscripción recurrente. No cobra nada hasta que acabe el
-          // periodo de prueba (trialEnd = día 1 del mes que viene), porque
-          // ese primer tramo ya se cobra arriba como cuota de entrada.
-          price: process.env.STRIPE_PRICE_ID,
-          quantity: 1
-        }
-      ],
-
-      payment_method_types: ['card'],
-
-      billing_address_collection: 'auto',
-
-      allow_promotion_codes: true,
-
-      // La suscripción arranca "en pausa" (trial) hasta el día 1 del mes
-      // que viene. Ese día Stripe cobra ya la cuota completa y a partir de
-      // ahí sigue cobrando cada día 1. El cliente sí paga HOY la cuota de
-      // entrada (arriba), así que no se queda ningún día sin cobrar.
-      subscription_data: {
-        trial_end: trialEnd
-      },
-
-      success_url:
-        `${domain}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-
-      cancel_url:
-        `${domain}/?cancelled=1`
-    });
-
-    res.json({
-      url: session.url
-    });
-
-  } catch (e) {
-    console.error('Error creando Checkout:', e);
-
-    res.status(500).json({
-      error: e.message || 'No se pudo iniciar el pago'
-    });
-  }
-});
-
-// =========================
-// CONSULTAR SUSCRIPCIÓN
-// =========================
-
-app.get('/api/subscription/:id', async (req, res) => {
-  try {
-    const s = await stripe.checkout.sessions.retrieve(
-      req.params.id,
-      {
-        expand: ['subscription']
-      }
-    );
-
-    res.json({
-      status: s.status,
-      subscription_status:
-        s.subscription?.status || null,
-      email:
-        s.customer_details?.email || null
-    });
-
-  } catch (e) {
-    console.error(e);
-
-    res.status(404).json({
-      error: 'No encontrada'
-    });
-  }
-});
-
-// =========================
-// ADMIN - OVERVIEW
-// =========================
-
-app.get('/api/admin/overview', adminAuth, async (req, res) => {
-  try {
-    const [
-      customers,
-      subs,
-      invoices,
-      payments
-    ] = await Promise.all([
-      stripe.customers.list({
-        limit: 100
-      }),
-
-      stripe.subscriptions.list({
-        limit: 100,
-        status: 'all',
-        expand: [
-          'data.customer',
-          'data.items.data.price'
-        ]
-      }),
-
-      stripe.invoices.list({
-        limit: 100,
-        expand: ['data.customer']
-      }),
-
-      stripe.paymentIntents.list({
-        limit: 100
-      })
-    ]);
-
-    const active = subs.data.filter(
-      s =>
-        s.status === 'active' ||
-        s.status === 'trialing'
-    );
-
-    const revenue = invoices.data
-      .filter(i => i.status === 'paid')
-      .reduce(
-        (a, i) => a + (i.amount_paid || 0),
-        0
-      );
-
-    const members = customers.data.map(c => {
-      const ss = subs.data
-        .filter(
-          s =>
-            (
-              typeof s.customer === 'string'
-                ? s.customer
-                : s.customer?.id
-            ) === c.id
-        )
-        .sort(
-          (a, b) => b.created - a.created
-        );
-
-      const s = ss[0];
-
-      return {
-        name: c.name || '—',
-        email: c.email || '—',
-
-        subscription: s
-          ? {
-              id: s.id,
-              status: s.status,
-              cancel: s.cancel_at_period_end,
-
-              amount:
-                s.items.data[0]?.price?.unit_amount ||
-                0,
-
-              interval:
-                s.items.data[0]?.price?.recurring?.interval ||
-                'month',
-
-              next: s.items.data[0]?.current_period_end ?? s.current_period_end
-            }
-          : null
-      };
-    });
-
-    res.json({
-      stats: {
-        customers: customers.data.length,
-        active: active.length,
-        revenue: revenue / 100,
-        payments:
-          payments.data.filter(
-            p => p.status === 'succeeded'
-          ).length
-      },
-
-      members,
-
-      invoices: invoices.data.map(i => ({
-        number: i.number || i.id,
-        email: i.customer?.email || '—',
-        status: i.status,
-        amount: i.amount_paid / 100,
-        date: i.created
-      }))
-    });
-
-  } catch (e) {
-    console.error(e);
-
-    res.status(500).json({
-      error: e.message
-    });
-  }
-});
-
-// =========================
-// ADMIN - CANCELAR
-// =========================
-
-app.post('/api/admin/cancel', adminAuth, async (req, res) => {
-  try {
-    const s = await stripe.subscriptions.update(
-      req.body.subscriptionId,
-      {
-        cancel_at_period_end: true
-      }
-    );
-
-    res.json({
-      ok: true,
-      cancel: s.cancel_at_period_end
-    });
-
-  } catch (e) {
-    res.status(500).json({
-      error: e.message
-    });
-  }
-});
-
-// =========================
-// ADMIN - REACTIVAR
-// =========================
-
-app.post(
-  '/api/admin/reactivate',
-  adminAuth,
-  async (req, res) => {
-    try {
-      const s = await stripe.subscriptions.update(
-        req.body.subscriptionId,
-        {
-          cancel_at_period_end: false
-        }
-      );
-
-      res.json({
-        ok: true,
-        cancel: s.cancel_at_period_end
-      });
-
-    } catch (e) {
-      res.status(500).json({
-        error: e.message
-      });
-    }
-  }
-);
 
 // =========================
 // FOTOS DE LA PEÑA (se guardan en Cloudinary)
@@ -839,7 +535,270 @@ app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
 });
 
 // =========================
-// TRAKETÍMETRO (marcador de cervezas, cubatas, chupitos y porros)
+// FOTOS DEL PASADO (San Miguel, San Roque, Pilares... de años anteriores)
+// =========================
+// Van aparte del álbum normal: etiqueta propia en Cloudinary ('traketeros_pasado')
+// y carpeta propia ('fotos_pasado/'), así que NO se mezclan con las fotos que ya
+// hay ni las tocan. Cualquiera puede verlas; solo el admin puede subirlas o borrarlas.
+// La fiesta, el año y la descripción se guardan en el "context" de cada foto en
+// Cloudinary, que es lo que sobrevive a los redeploys de Render.
+
+const PAST_TAG = 'traketeros_pasado';
+const PAST_FOLDER = 'fotos_pasado';
+const PAST_PREFIX = PAST_FOLDER + '/';
+const PAST_MIN_YEAR = 1950;
+// Código que tiene que poner la gente para añadir fotos del pasado (el admin no lo necesita).
+// Se puede cambiar con la variable PAST_UPLOAD_CODE en Render.
+const PAST_UPLOAD_CODE = (process.env.PAST_UPLOAD_CODE || 'gorilaso').trim();
+
+// Las fotos del pasado se suben en tandas más grandes que el álbum normal (hasta 20 por petición).
+// Las de más de 10 MB se rechazan para no llenar la memoria del servidor.
+const PAST_MAX_PER_REQUEST = 20;
+const pastUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: PAST_MAX_PER_REQUEST, fields: 5, fieldSize: 200 },
+  fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp)$/i.test(file.mimetype))
+});
+
+function pastUploadErrorMessage(err) {
+  if (err.code === 'LIMIT_FILE_SIZE') return 'Una de las fotos pesa demasiado (máximo 10 MB).';
+  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') return `Máximo ${PAST_MAX_PER_REQUEST} fotos cada vez.`;
+  return 'No se han podido subir las fotos.';
+}
+
+let pastIndex = [];            // [{ id, publicId, version, fiesta, year, desc, date }]
+let pastLastRefresh = 0;
+let pastRefreshing = null;
+
+function toPast(r) {
+  if (!r.public_id?.startsWith(PAST_PREFIX)) return null;
+  const id = r.public_id.slice(PAST_PREFIX.length);
+  if (!ID_RE.test(id)) return null;
+  const ctx = r.context?.custom ?? r.context ?? {};
+  const year = Number(ctx.year);
+  return {
+    id,
+    publicId: r.public_id,
+    version: r.version,
+    fiesta: String(ctx.fiesta || 'Otras fiestas'),
+    year: Number.isInteger(year) ? year : 0,
+    desc: String(ctx.desc || ''),
+    date: Date.parse(r.created_at) || Date.now()
+  };
+}
+
+function refreshPast() {
+  if (pastRefreshing) return pastRefreshing;
+  pastRefreshing = (async () => {
+    const items = [];
+    let cursor;
+    do {
+      const opts = { max_results: 500, context: true };
+      if (cursor) opts.next_cursor = cursor;
+      const r = await cloudinary.api.resources_by_tag(PAST_TAG, opts);
+      for (const x of r.resources || []) {
+        const p = toPast(x);
+        if (p) items.push(p);
+      }
+      cursor = r.next_cursor;
+    } while (cursor && items.length < MAX_PHOTOS);
+
+    items.sort((a, b) => a.date - b.date);
+    pastIndex = items;
+    pastLastRefresh = Date.now();
+    console.log(`Fotos del pasado en Cloudinary: ${items.length}`);
+  })().finally(() => { pastRefreshing = null; });
+  return pastRefreshing;
+}
+
+if (CLOUDINARY_OK) {
+  refreshPast().catch((e) => console.error('No se pudieron leer las fotos del pasado:', e.message || e));
+}
+
+function publicPast(p) {
+  const base = { secure: true, version: p.version };
+  return {
+    id: p.id,
+    past: true,
+    fiesta: p.fiesta,
+    year: p.year,
+    desc: p.desc,
+    date: p.date,
+    thumb: cloudinary.url(p.publicId, {
+      ...base,
+      transformation: [
+        { width: 480, height: 480, crop: 'fill', gravity: 'auto' },
+        { quality: 'auto', fetch_format: 'auto' }
+      ]
+    }),
+    url: cloudinary.url(p.publicId, { ...base, format: 'jpg' }),
+    download: cloudinary.url(p.publicId, { ...base, format: 'jpg', flags: 'attachment' })
+  };
+}
+
+// Lista pública de las fotos del pasado
+app.get('/api/photos/past', photosOnly, async (req, res) => {
+  try {
+    if (Date.now() - pastLastRefresh > REFRESH_MS) await refreshPast();
+  } catch (e) {
+    console.error('Error leyendo las fotos del pasado:', e.message || e);
+    if (!pastLastRefresh) {
+      return res.status(502).json({ error: 'No se han podido cargar las fotos del pasado. Inténtalo en un rato.' });
+    }
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json({ photos: pastIndex.map(publicPast) });
+});
+
+// Sirve para que el navegador pida usuario y clave al abrir fotos.html?admin=1
+app.get('/api/admin/ping', adminAuth, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true });
+});
+
+// Subir fotos del pasado. Campos: fiesta, year, desc + photos (+ code si no es admin).
+// Con requireCode = false (ruta del admin, ya autenticada) no se pide el código.
+function pastUploadHandler(requireCode) {
+  return (req, res) => {
+  pastUpload.array('photos', PAST_MAX_PER_REQUEST)(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: pastUploadErrorMessage(err) });
+
+    try {
+      if (requireCode && !sameSecret(String(req.body?.code || '').trim(), PAST_UPLOAD_CODE)) {
+        return res.status(403).json({ error: 'La contraseña no es correcta.' });
+      }
+
+      const files = req.files || [];
+      if (!files.length) {
+        return res.status(400).json({ error: 'No he recibido ninguna foto válida (JPG, PNG o WEBP).' });
+      }
+
+      const fiesta = sanitizeText(req.body?.fiesta, 30);
+      const year = Number(req.body?.year);
+      const maxYear = Number(trakeHoy().slice(0, 4));
+      if (!fiesta) return res.status(400).json({ error: 'Elige la fiesta (San Miguel, San Roque, Pilares...).' });
+      if (!Number.isInteger(year) || year < PAST_MIN_YEAR || year > maxYear) {
+        return res.status(400).json({ error: `Pon un año válido (entre ${PAST_MIN_YEAR} y ${maxYear}).` });
+      }
+      if (pastIndex.length + files.length > MAX_PHOTOS) {
+        return res.status(409).json({ error: 'Ya hay demasiadas fotos del pasado.' });
+      }
+
+      const desc = sanitizeText(req.body?.desc, 140);
+      let added = 0;
+      let unreadable = 0;
+      let saveFailed = 0;
+
+      for (const f of files) {
+        let jpeg;
+        try {
+          // Igual que el álbum normal: se aplica la orientación y se borran los datos EXIF (GPS)
+          jpeg = await sharp(f.buffer, { failOn: 'error' })
+            .rotate()
+            .flatten({ background: '#ffffff' })
+            .resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 82 })
+            .toBuffer();
+        } catch (e) {
+          unreadable++;
+          console.error('Foto del pasado no válida:', e.message);
+          continue;
+        }
+
+        try {
+          const id = Date.now().toString(36) + crypto.randomBytes(5).toString('hex');
+          const context = { fiesta, year: String(year) };
+          if (desc) context.desc = desc;
+          const r = await sendToCloudinary(jpeg, {
+            public_id: PAST_PREFIX + id,
+            tags: [PAST_TAG],
+            resource_type: 'image',
+            overwrite: false,
+            context
+          });
+          pastIndex.push({
+            id,
+            publicId: r.public_id,
+            version: r.version,
+            fiesta,
+            year,
+            desc,
+            date: Date.parse(r.created_at) || Date.now()
+          });
+          added++;
+        } catch (e) {
+          saveFailed++;
+          console.error('Cloudinary no ha guardado la foto del pasado:', e.message || e);
+        }
+      }
+
+      if (!added) {
+        return saveFailed
+          ? res.status(502).json({ error: 'No se han podido guardar las fotos. Inténtalo otra vez.' })
+          : res.status(400).json({ error: 'No se ha podido leer ninguna de las fotos. Prueba con JPG o PNG.' });
+      }
+      res.json({ ok: true, added, failed: unreadable + saveFailed });
+    } catch (e) {
+      console.error('Error subiendo fotos del pasado:', e);
+      res.status(500).json({ error: 'Ha habido un error en el servidor. Inténtalo otra vez.' });
+    }
+  });
+  };
+}
+
+// Público (con contraseña) y admin (sin contraseña)
+app.post('/api/photos/past', photosOnly, uploadLimiter, pastUploadHandler(true));
+app.post('/api/admin/photos/past', adminAuth, photosOnly, pastUploadHandler(false));
+
+// Mover una foto del pasado a otra fiesta/año (SOLO admin). Body: { fiesta, year }
+app.patch('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res) => {
+  const { id } = req.params;
+  if (!ID_RE.test(id)) return res.status(400).json({ error: 'Id no válido' });
+
+  const p = pastIndex.find((x) => x.id === id);
+  if (!p) return res.status(404).json({ error: 'No encuentro esa foto.' });
+
+  const fiesta = sanitizeText(req.body?.fiesta, 30);
+  const year = Number(req.body?.year);
+  const maxYear = Number(trakeHoy().slice(0, 4));
+  if (!fiesta) return res.status(400).json({ error: 'Escribe la fiesta.' });
+  if (!Number.isInteger(year) || year < PAST_MIN_YEAR || year > maxYear) {
+    return res.status(400).json({ error: `Pon un año válido (entre ${PAST_MIN_YEAR} y ${maxYear}).` });
+  }
+
+  try {
+    await cloudinary.api.update(p.publicId, {
+      resource_type: 'image',
+      type: 'upload',
+      // Cloudinary espera el contexto como "clave=valor|clave=valor" (ya vienen sin '|' ni '=')
+      context: `fiesta=${fiesta}|year=${year}|desc=${p.desc || ''}`
+    });
+    p.fiesta = fiesta;
+    p.year = year;
+    res.json({ ok: true, fiesta, year });
+  } catch (e) {
+    console.error('No se pudo mover la foto del pasado:', e.message || e);
+    res.status(500).json({ error: 'No se pudo mover la foto.' });
+  }
+});
+
+// Borrar una foto del pasado (SOLO admin)
+app.delete('/api/admin/photos/past/:id', adminAuth, photosOnly, async (req, res) => {
+  const { id } = req.params;
+  if (!ID_RE.test(id)) return res.status(400).json({ error: 'Id no válido' });
+
+  try {
+    await cloudinary.uploader.destroy(PAST_PREFIX + id, { resource_type: 'image', invalidate: true });
+    pastIndex = pastIndex.filter((p) => p.id !== id);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'No se pudo borrar la foto.' });
+  }
+});
+
+// =========================
+// TRAKETÍMETRO (marcador de cervezas, cubatas, chupitos, porros y cigarros)
 // =========================
 // Los datos se organizan por MESES: cada mes tiene su propio ranking y al
 // empezar un mes nuevo arranca de cero solo (el mes se calcula con la hora de
@@ -849,7 +808,7 @@ app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
 // mientras dura una fecha, lo que se apunta cuenta para el mes Y para esa fecha.
 //
 // Puntuación (oculta, solo sirve para ordenar): porro 3, cubata 3, chupito 2,
-// cerveza 1.
+// cerveza 1, cigarro 0,5 (los cigarros solo cuentan mientras estén activados).
 //
 // Se guarda en memoria, en un fichero local (data/traketimetro.json) como
 // caché rápida, y además se respalda en Cloudinary (como archivo "raw") cada
@@ -859,8 +818,14 @@ app.delete('/api/admin/photos/:id', adminAuth, photosOnly, async (req, res) => {
 // primero desde ahí; el fichero local es solo un plan B si Cloudinary no
 // está configurado o falla justo en ese momento.
 
+// TRAKE_TIPOS es una lista "viva": 'cigarros' se añade o se quita EN SITIO (mismo array)
+// según esté activado o no (ver trakeSyncTipos), así TKT365 y el Higher or Lower, que
+// reciben esta misma lista, se enteran sin tocar nada más.
 const TRAKE_TIPOS = ['cervezas', 'cubatas', 'chupitos', 'porros'];
-const TRAKE_PUNTOS = { porros: 3, cubatas: 3, chupitos: 2, cervezas: 1 };
+const TRAKE_PUNTOS = { porros: 3, cubatas: 3, chupitos: 2, cervezas: 1, cigarros: 0.5 };
+// Los cigarros se activan solos a partir de esta fecha (hora de Madrid), salvo que el
+// admin los fuerce antes ("on") o los apague ("off") desde traketimetro.html?admin=1.
+const CIGARROS_DESDE = '2026-11-01';
 const TRAKE_DATA_DIR = path.join(__dirname, 'data');
 const TRAKE_FILE = path.join(TRAKE_DATA_DIR, 'traketimetro.json');
 const TRAKE_CLOUD_ID = 'traketeros_data/traketimetro'; // public_id del respaldo en Cloudinary
@@ -872,12 +837,14 @@ const MESES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio'
 //   months:    { 'YYYY-MM': { <nombre en minúsculas>: { name, cervezas, cubatas, chupitos, porros } } },
 //   events:    [ { id, name, start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' } ],
 //   eventData: { <id>: { <nombre en minúsculas>: {...} } },
-//   overrides: { 'm:YYYY-MM' | 'e:<id>': 'Nombre del ganador a mano' }
+//   overrides: { 'm:YYYY-MM' | 'e:<id>': 'Nombre del ganador a mano' },
+//   settings:  { cigarros: 'auto' | 'on' | 'off' }   (auto = se activan solos el 2026-11-01)
+//   log:       [ { id, name, tipo, cantidad, ts, foto?: { id, publicId?, url? } } ]   (historial con fecha/hora y foto opcional)
 // }
 let trakeData = trakeEmpty();
 
 function trakeEmpty() {
-  return { version: 2, months: {}, events: [], eventData: {}, overrides: {} };
+  return { version: 2, months: {}, events: [], eventData: {}, overrides: {}, settings: { cigarros: 'auto' }, log: [] };
 }
 
 // Los datos antiguos eran un único ranking sin fechas. Eran los de septiembre
@@ -890,7 +857,10 @@ function trakeNormalize(raw) {
       months: raw.months,
       events: Array.isArray(raw.events) ? raw.events : [],
       eventData: raw.eventData || {},
-      overrides: raw.overrides || {}
+      overrides: raw.overrides || {},
+      settings: { cigarros: ['auto', 'on', 'off'].includes(raw.settings?.cigarros) ? raw.settings.cigarros : 'auto' },
+      // Datos anteriores no tienen historial: se queda vacío, sin tocar nada más
+      log: Array.isArray(raw.log) ? raw.log : []
     };
   }
   const d = trakeEmpty();
@@ -937,9 +907,14 @@ async function trakeSaveCloud() {
 
 // Guarda en ambos sitios: fichero local (rápido, por si Cloudinary tarda) y
 // Cloudinary (el que de verdad sobrevive a un redeploy).
+// TKT365 se engancha aquí: cada vez que cambian los datos del Traketímetro (nuevo
+// registro, deshacer, edición del admin...) se recalculan las cuotas de TKT365.
+let tkt365Api = null;
+
 function trakeSave() {
   trakeSaveLocal();
   trakeSaveCloud();
+  try { tkt365Api?.recalcularCuotas('registro'); } catch (e) { console.error('TKT365: no se pudieron recalcular las cuotas:', e.message || e); }
 }
 
 // Intenta cargar el respaldo desde Cloudinary; si no hay o falla, usa el
@@ -960,13 +935,14 @@ async function trakeLoad() {
     }
   }
   if (!loaded) trakeLoadLocal();
+  trakeSyncTipos();
   if (trakeMigrated) {
     console.log('Traketímetro: datos antiguos pasados al mes 2026-09.');
     trakeSave();
   }
 }
 
-trakeLoad();
+const trakeReady = trakeLoad();
 
 // ---------- Fechas (hora de Madrid) ----------
 function trakeHoy() {
@@ -995,6 +971,38 @@ function trakeEstadoEvento(ev, hoy) {
   return 'en_curso';
 }
 
+// ---------- Cigarros: activación ----------
+// modo 'auto': activos desde CIGARROS_DESDE (hora de Madrid) · 'on': activos ya · 'off': apagados.
+function trakeCigarrosModo() {
+  const m = trakeData.settings?.cigarros;
+  return m === 'on' || m === 'off' ? m : 'auto';
+}
+
+function trakeCigarrosActivos() {
+  const modo = trakeCigarrosModo();
+  if (modo === 'on') return true;
+  if (modo === 'off') return false;
+  return trakeHoy() >= CIGARROS_DESDE;
+}
+
+// Deja TRAKE_TIPOS (lista compartida con TKT365 y Higher or Lower) al día. Devuelve true si ha cambiado.
+function trakeSyncTipos() {
+  const quiere = trakeCigarrosActivos();
+  const i = TRAKE_TIPOS.indexOf('cigarros');
+  if (quiere && i === -1) { TRAKE_TIPOS.push('cigarros'); return true; }
+  if (!quiere && i !== -1) { TRAKE_TIPOS.splice(i, 1); return true; }
+  return false;
+}
+
+function trakeConfig() {
+  return { cigarros: { activo: trakeCigarrosActivos(), modo: trakeCigarrosModo(), desde: CIGARROS_DESDE } };
+}
+
+// Persona a cero con todos los tipos (los datos antiguos sin 'cigarros' se leen como 0)
+function trakePersonaVacia(name) {
+  return { name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0, cigarros: 0 };
+}
+
 // ---------- Puntos y ranking ----------
 function trakePuntos(p) {
   return TRAKE_TIPOS.reduce((s, t) => s + (p[t] || 0) * TRAKE_PUNTOS[t], 0);
@@ -1018,6 +1026,7 @@ function trakeListOf(bucket) {
       cubatas: p.cubatas || 0,
       chupitos: p.chupitos || 0,
       porros: p.porros || 0,
+      cigarros: p.cigarros || 0,
       total: trakeTotal(p),
       puntos: trakePuntos(p)
     }))
@@ -1095,20 +1104,94 @@ function trakeSalon() {
   };
 }
 
+// Totales de siempre por persona: suma de todos los meses (las fechas
+// especiales no se suman porque ya cuentan dentro del mes).
+function trakeTotalesHistoricos() {
+  const acc = new Map();
+  for (const bucket of Object.values(trakeData.months)) {
+    for (const p of Object.values(bucket || {})) {
+      const key = String(p.name || '').trim().toLowerCase();
+      if (!key) continue;
+      const cur = acc.get(key) || trakePersonaVacia(p.name);
+      for (const t of TRAKE_TIPOS) cur[t] += p[t] || 0;
+      acc.set(key, cur);
+    }
+  }
+  return [...acc.values()]
+    .map((p) => ({ ...p, total: trakeTotal(p) }))
+    .filter((p) => p.total > 0)
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'es'));
+}
+
 function trakeRespuesta(periodo) {
   const p = trakePeriodoValido(periodo) ? periodo : 'm:' + trakeMesActual();
   return {
     ok: true,
     periodo: p,
     people: trakeListOf(trakeBucket(p)),
+    totales: trakeTotalesHistoricos(),
     periodos: trakePeriodos(),
     salon: trakeSalon(),
-    events: trakeData.events
+    events: trakeData.events,
+    historial: trakeHistorial(p),
+    config: trakeConfig()
   };
 }
 
 function periodoDe(req) {
   return String(req.query?.periodo || req.body?.periodo || '');
+}
+
+// ---------- Historial (fecha, día y hora de cada apunte + foto opcional) ----------
+const TRAKE_LOG_MAX = 3000;          // máximo de apuntes que se guardan en el historial
+const TRAKE_LOG_VISIBLES = 60;       // cuántos se envían a la web (los más recientes)
+const TRAKE_FOTOS_DIR = path.join(TRAKE_DATA_DIR, 'traketimetro_fotos'); // copia local de las fotos
+const TRAKE_FOTO_TAG = 'traketimetro';          // etiqueta propia: NO salen en el álbum de /fotos.html
+const TRAKE_FOTO_FOLDER = 'traketimetro_fotos'; // carpeta en Cloudinary
+
+const trakeDiaFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit'
+});
+
+function trakeFotoPublica(f) {
+  if (!f || !ID_RE.test(String(f.id || ''))) return null;
+  let thumb = `/api/traketimetro/foto/${f.id}`;
+  if (CLOUDINARY_OK && f.publicId) {
+    try {
+      thumb = cloudinary.url(f.publicId, {
+        secure: true, width: 480, height: 480, crop: 'limit', quality: 'auto', fetch_format: 'auto', version: f.version
+      });
+    } catch { /* se usa la copia local */ }
+  }
+  return { url: `/api/traketimetro/foto/${f.id}`, thumb };
+}
+
+function trakeHistorial(periodo) {
+  const ev = periodo.startsWith('e:') ? trakeData.events.find((e) => e.id === periodo.slice(2)) : null;
+  const mes = periodo.startsWith('m:') ? periodo.slice(2) : '';
+  const out = [];
+  for (let i = trakeData.log.length - 1; i >= 0 && out.length < TRAKE_LOG_VISIBLES; i--) {
+    const l = trakeData.log[i];
+    if (!TRAKE_TIPOS.includes(l.tipo)) continue; // p. ej. cigarros mientras estén apagados
+    const dia = trakeDiaFmt.format(new Date(l.ts));
+    if (mes && dia.slice(0, 7) !== mes) continue;
+    if (ev && !(ev.start <= dia && dia <= (ev.end || ev.start))) continue;
+    out.push({
+      id: l.id, name: l.name, tipo: l.tipo, cantidad: l.cantidad, ts: l.ts,
+      foto: trakeFotoPublica(l.foto)
+    });
+  }
+  return out;
+}
+
+// Borra la foto de un apunte (Cloudinary + copia local). No bloquea ni lanza errores.
+function trakeBorrarFoto(foto) {
+  if (!foto || !ID_RE.test(String(foto.id || ''))) return;
+  fs.promises.unlink(path.join(TRAKE_FOTOS_DIR, foto.id + '.jpg')).catch(() => {});
+  if (CLOUDINARY_OK && foto.publicId) {
+    cloudinary.uploader.destroy(foto.publicId, { resource_type: 'image', invalidate: true })
+      .catch((e) => console.error('No se pudo borrar la foto del traketímetro en Cloudinary:', e.message || e));
+  }
 }
 
 // ---------- Directo (SSE) ----------
@@ -1145,11 +1228,25 @@ setInterval(() => {
 let trakeUltimoDia = trakeHoy();
 setInterval(() => {
   const hoy = trakeHoy();
-  if (hoy !== trakeUltimoDia) {
+  const cambioTipos = trakeSyncTipos(); // p. ej. los cigarros se activan solos el 1 de noviembre
+  if (cambioTipos) {
+    try { tkt365Api?.recalcularCuotas('cigarros'); } catch (e) { console.error('TKT365: no se pudieron recalcular las cuotas:', e.message || e); }
+  }
+  if (hoy !== trakeUltimoDia || cambioTipos) {
     trakeUltimoDia = hoy;
     broadcastTrakeChanged();
   }
 }, 30_000).unref();
+
+// Antes de atender cualquier petición de la API se deja al día la lista de tipos
+// (así los cigarros aparecen/desaparecen justo a tiempo, sin esperar al reloj de arriba).
+app.use('/api', (req, res, next) => {
+  if (trakeSyncTipos()) {
+    try { tkt365Api?.recalcularCuotas('cigarros'); } catch { /* se recalcula en el siguiente registro */ }
+    broadcastTrakeChanged();
+  }
+  next();
+});
 
 // ---------- API pública ----------
 // Ranking de un periodo (por defecto el mes actual) + salón + fechas
@@ -1161,7 +1258,7 @@ app.get('/api/traketimetro', (req, res) => {
 // Solo el salón (lo usa la pantalla principal)
 app.get('/api/traketimetro/salon', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ salon: trakeSalon(), events: trakeData.events, hoy: trakeHoy() });
+  res.json({ salon: trakeSalon(), events: trakeData.events, hoy: trakeHoy(), config: trakeConfig() });
 });
 
 function trakeValidate(req, res) {
@@ -1175,7 +1272,7 @@ function trakeValidate(req, res) {
     return null;
   }
   if (!TRAKE_TIPOS.includes(tipo)) {
-    res.status(400).json({ error: 'Tipo no válido.' });
+    res.status(400).json({ error: tipo === 'cigarros' ? 'Los cigarros todavía no están activados.' : 'Tipo no válido.' });
     return null;
   }
   return { name, tipo, cantidad };
@@ -1197,19 +1294,131 @@ function trakeBucketsActivos(crear) {
   return out;
 }
 
-// Sumar una o varias consumiciones de golpe
-app.post('/api/traketimetro/add', (req, res) => {
+// Foto opcional al apuntar (multipart, campo "foto"). Si llega JSON normal, todo funciona como antes.
+const trakeUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024, files: 1, fields: 8, fieldSize: 500 },
+  fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp|heic|heif)$/i.test(file.mimetype))
+});
+
+function trakeAddUpload(req, res, next) {
+  if (!req.is('multipart/form-data')) return next();
+  trakeUpload.single('foto')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        error: err.code === 'LIMIT_FILE_SIZE' ? 'El archivo pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.'
+      });
+    }
+    next();
+  });
+}
+
+// Procesa la foto (quita GPS, reduce tamaño), la guarda en la web (copia local) y la sube a Cloudinary.
+// Devuelve { id, publicId?, version? } o null si no se ha podido guardar en ningún sitio.
+async function trakeGuardarFoto(buffer) {
+  let jpeg;
+  try {
+    jpeg = await sharp(buffer, { failOn: 'error' })
+      .rotate()
+      .flatten({ background: '#ffffff' })
+      .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toBuffer();
+  } catch (e) {
+    console.error('Traketímetro: foto no válida:', e.message);
+    return null;
+  }
+
+  const id = Date.now().toString(36) + crypto.randomBytes(5).toString('hex');
+  const foto = { id };
+  let guardada = false;
+
+  try {
+    await fs.promises.mkdir(TRAKE_FOTOS_DIR, { recursive: true });
+    await fs.promises.writeFile(path.join(TRAKE_FOTOS_DIR, id + '.jpg'), jpeg);
+    guardada = true;
+  } catch (e) {
+    console.error('Traketímetro: no se pudo guardar la foto en la web:', e.message || e);
+  }
+
+  if (CLOUDINARY_OK) {
+    try {
+      const r = await sendToCloudinary(jpeg, {
+        public_id: `${TRAKE_FOTO_FOLDER}/${id}`,
+        tags: [TRAKE_FOTO_TAG],
+        resource_type: 'image',
+        overwrite: false
+      });
+      foto.publicId = r.public_id;
+      foto.version = r.version;
+      foto.url = r.secure_url;
+      guardada = true;
+    } catch (e) {
+      console.error('Traketímetro: Cloudinary no ha guardado la foto:', e.message || e);
+    }
+  }
+  return guardada ? foto : null;
+}
+
+// Sumar una o varias consumiciones de golpe (con foto opcional)
+app.post('/api/traketimetro/add', trakeAddUpload, async (req, res) => {
+  const ts = Date.now(); // momento exacto del apunte
   const v = trakeValidate(req, res);
   if (!v) return;
 
+  let foto = null;
+  let fotoFallo = false;
+  if (req.file) {
+    // Mismo límite que el álbum: 20 fotos por hora y por IP
+    let limitado = false;
+    uploadLimiter(req, { status: () => ({ json: () => { limitado = true; } }) }, () => {});
+    if (limitado) {
+      fotoFallo = true;
+    } else {
+      foto = await trakeGuardarFoto(req.file.buffer);
+      if (!foto) fotoFallo = true;
+    }
+  }
+
   const key = v.name.toLowerCase();
   for (const bucket of trakeBucketsActivos(true)) {
-    if (!bucket[key]) bucket[key] = { name: v.name, cervezas: 0, cubatas: 0, chupitos: 0, porros: 0 };
+    if (!bucket[key]) bucket[key] = trakePersonaVacia(v.name);
     bucket[key][v.tipo] = (bucket[key][v.tipo] || 0) + v.cantidad;
   }
+
+  const entrada = {
+    id: Date.now().toString(36) + crypto.randomBytes(4).toString('hex'),
+    name: v.name,
+    tipo: v.tipo,
+    cantidad: v.cantidad,
+    ts
+  };
+  if (foto) entrada.foto = foto;
+  trakeData.log.push(entrada);
+  if (trakeData.log.length > TRAKE_LOG_MAX) trakeData.log.splice(0, trakeData.log.length - TRAKE_LOG_MAX);
+
   trakeSave();
   broadcastTrakeChanged();
-  res.json(trakeRespuesta(periodoDe(req)));
+  const out = trakeRespuesta(periodoDe(req));
+  if (fotoFallo) out.fotoFallo = true;
+  res.json(out);
+});
+
+// Foto de un apunte: copia local si existe; si no (p. ej. tras un redeploy), la de Cloudinary
+app.get('/api/traketimetro/foto/:id', (req, res) => {
+  const { id } = req.params;
+  if (!ID_RE.test(id)) return res.status(400).end();
+  const file = path.join(TRAKE_FOTOS_DIR, id + '.jpg');
+  if (fs.existsSync(file)) {
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.type('jpg').sendFile(file);
+  }
+  const l = trakeData.log.find((x) => x.foto?.id === id);
+  const url = l?.foto?.url || (l?.foto?.publicId && CLOUDINARY_OK
+    ? cloudinary.url(l.foto.publicId, { secure: true, version: l.foto.version, format: 'jpg' })
+    : '');
+  if (url) return res.redirect(302, url);
+  res.status(404).end();
 });
 
 // Deshacer la última pulsación (por si te equivocas de nombre o de cuadro)
@@ -1226,6 +1435,15 @@ app.post('/api/traketimetro/undo', (req, res) => {
     }
   }
   if (cambio) {
+    // Quita el apunte más reciente igual (mismo nombre, tipo y cantidad) del historial
+    for (let i = trakeData.log.length - 1; i >= 0; i--) {
+      const l = trakeData.log[i];
+      if (String(l.name).toLowerCase() === key && l.tipo === v.tipo && l.cantidad === v.cantidad) {
+        trakeBorrarFoto(l.foto);
+        trakeData.log.splice(i, 1);
+        break;
+      }
+    }
     trakeSave();
     broadcastTrakeChanged();
   }
@@ -1254,7 +1472,9 @@ app.post('/api/traketimetro/set', adminAuth, (req, res) => {
     cervezas: clamp(req.body?.cervezas),
     cubatas: clamp(req.body?.cubatas),
     chupitos: clamp(req.body?.chupitos),
-    porros: clamp(req.body?.porros)
+    porros: clamp(req.body?.porros),
+    // Si la petición no trae cigarros (página antigua en caché) se respeta lo que ya había
+    cigarros: req.body?.cigarros === undefined ? (bucket[key].cigarros || 0) : clamp(req.body.cigarros)
   };
   trakeSave();
   broadcastTrakeChanged();
@@ -1314,6 +1534,18 @@ app.delete('/api/admin/traketimetro/fechas/:id', adminAuth, (req, res) => {
   res.json(trakeRespuesta(periodoDe(req)));
 });
 
+// Cigarros: 'auto' (se activan solos el 1 de noviembre), 'on' (activarlos ya) u 'off' (apagarlos).
+// Al apagarlos no se borra nada: los datos se quedan guardados y vuelven a verse al reactivarlos.
+app.post('/api/admin/traketimetro/cigarros', adminAuth, (req, res) => {
+  const modo = String(req.body?.modo || '');
+  if (!['auto', 'on', 'off'].includes(modo)) return res.status(400).json({ error: 'Modo no válido.' });
+  trakeData.settings = { ...(trakeData.settings || {}), cigarros: modo };
+  trakeSyncTipos();
+  trakeSave(); // también recalcula las cuotas de TKT365
+  broadcastTrakeChanged();
+  res.json(trakeRespuesta(periodoDe(req)));
+});
+
 // Poner (o quitar, dejando el nombre vacío) a mano el Cubata de Oro de un mes
 // o de una fecha: body { periodo: 'm:2026-09' | 'e:<id>', name }
 app.post('/api/admin/traketimetro/ganador', adminAuth, (req, res) => {
@@ -1329,292 +1561,601 @@ app.post('/api/admin/traketimetro/ganador', adminAuth, (req, res) => {
 });
 
 // =========================
-// CUOTA: quién ha pagado + justificante por correo
+// COMUNIDAD: calendario, avisos y dashboard/perfiles
 // =========================
-// El estado (quién ha marcado "He pagado" y si ha mandado justificante) se
-// guarda igual que el traketímetro: en memoria, en un fichero local y con
-// respaldo en Cloudinary (en Render el disco se borra al redesplegar).
-//
-// Los justificantes se mandan por correo con Resend (por HTTP, porque Render
-// gratis bloquea el SMTP). Variables de entorno:
-//   RESEND_API_KEY   (obligatoria para enviar justificantes)
-//   CUOTA_EMAIL_TO   (opcional, por defecto trakeballer@gmail.com)
-//   RESEND_FROM      (opcional, por defecto onboarding@resend.dev)
-
-const CUOTA_NOMBRES_INICIALES = [
-  'Adrián', 'Miguel', 'Isabel', 'Laura', 'Lucía', 'Aurora', 'Carlota', 'Carol',
-  'Cristina', 'David', 'Elisa', 'Paula', 'Rubén', 'Silvia', 'Xulia'
-];
-const CUOTA_EMAIL_TO = (process.env.CUOTA_EMAIL_TO || 'trakeballer@gmail.com').trim();
-const CUOTA_EMAIL_FROM = (process.env.RESEND_FROM || 'Traketeros <onboarding@resend.dev>').trim();
-const CUOTA_FILE = path.join(TRAKE_DATA_DIR, 'cuota.json');
-const CUOTA_CLOUD_ID = 'traketeros_data/cuota';
-
-let cuotaPeople = [...CUOTA_NOMBRES_INICIALES]; // la lista se puede cambiar desde el admin
-let cuotaData = {}; // nombre -> { paid: boolean, receipt: boolean }
-
-function cuotaSnapshot() {
-  return JSON.stringify({ people: cuotaPeople, status: cuotaData });
-}
-
-// Acepta el formato nuevo ({ people, status }) y el antiguo (solo el estado)
-function cuotaApply(raw) {
-  if (raw && Array.isArray(raw.people)) {
-    cuotaPeople = raw.people.map(String);
-    cuotaData = raw.status || {};
-  } else {
-    cuotaPeople = [...CUOTA_NOMBRES_INICIALES];
-    cuotaData = raw || {};
+const COMMUNITY_FILE = path.join(TRAKE_DATA_DIR, 'community.json');
+const COMMUNITY_CLOUD_ID = 'traketeros_data/community';
+let communityData = { events: [], notices: [], cardPhotos: {}, cardStats: ['cervezas', 'cubatas', 'chupitos', 'porros'], perfilFrases: {} };
+// Categorías de estadísticas que puede mostrar la Carta del Salón de la Fama.
+// El admin decide cuáles se ven (botón "añadir"/"borrar" en admin-comunidad.html).
+const CARD_STAT_META = {
+  cervezas: { emoji: '🍺', label: 'Cervezas' },
+  cubatas: { emoji: '🍹', label: 'Cubatas' },
+  chupitos: { emoji: '🥃', label: 'Chupitos' },
+  porros: { emoji: '🌿', label: 'Porros' },
+  cigarros: { emoji: '🚬', label: 'Cigarros' }
+};
+function communityNormalize(raw) {
+  const cardStats = Array.isArray(raw?.cardStats)
+    ? raw.cardStats.filter((k) => CARD_STAT_META[k])
+    : ['cervezas', 'cubatas', 'chupitos', 'porros'];
+  const cardPhotos = {};
+  if (raw?.cardPhotos && typeof raw.cardPhotos === 'object') {
+    for (const [key, v] of Object.entries(raw.cardPhotos)) {
+      if (!v || !v.url) continue;
+      cardPhotos[key] = {
+        name: String(v.name || key).slice(0, 80),
+        url: String(v.url),
+        publicId: v.publicId ? String(v.publicId) : undefined,
+        sinFondo: Boolean(v.sinFondo),
+        updatedAt: Number(v.updatedAt) || Date.now()
+      };
+    }
   }
+  return {
+    events: Array.isArray(raw?.events) ? raw.events : [],
+    notices: Array.isArray(raw?.notices) ? raw.notices : [],
+    cardStats,
+    cardPhotos,
+    // frase de cada persona (clave = nombre en minúsculas), la pone ella misma o el admin
+    perfilFrases: (() => {
+      const out = {};
+      if (raw?.perfilFrases && typeof raw.perfilFrases === 'object') {
+        for (const [k, v] of Object.entries(raw.perfilFrases)) {
+          const texto = String(v?.texto || '').trim().slice(0, 200);
+          if (texto) out[String(k).slice(0, 80)] = { texto, ts: Number(v.ts) || Date.now() };
+        }
+      }
+      return out;
+    })()
+  };
 }
-
-function cuotaSaveLocal() {
+function communitySave() {
   try {
     fs.mkdirSync(TRAKE_DATA_DIR, { recursive: true });
-    fs.writeFileSync(CUOTA_FILE, cuotaSnapshot(), 'utf8');
+    fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(communityData), 'utf8');
+  } catch (e) { console.error('No se pudo guardar calendario/avisos:', e.message || e); }
+  if (CLOUDINARY_OK) {
+    const b64 = Buffer.from(JSON.stringify(communityData)).toString('base64');
+    cloudinary.uploader.upload(`data:application/json;base64,${b64}`, {
+      resource_type: 'raw', public_id: COMMUNITY_CLOUD_ID, overwrite: true, invalidate: true
+    }).catch((e) => console.error('No se pudo respaldar calendario/avisos:', e.message || e));
+  }
+}
+async function communityLoad() {
+  if (CLOUDINARY_OK) {
+    try {
+      const info = await cloudinary.api.resource(COMMUNITY_CLOUD_ID, { resource_type: 'raw' });
+      const resp = await fetch(info.secure_url, { cache: 'no-store' });
+      if (resp.ok) { communityData = communityNormalize(await resp.json()); communitySaveLocalOnly(); return; }
+    } catch (_) {}
+  }
+  try { communityData = communityNormalize(JSON.parse(fs.readFileSync(COMMUNITY_FILE, 'utf8'))); }
+  catch { communityData = communityNormalize(null); }
+}
+function communitySaveLocalOnly() {
+  try { fs.mkdirSync(TRAKE_DATA_DIR, { recursive: true }); fs.writeFileSync(COMMUNITY_FILE, JSON.stringify(communityData), 'utf8'); } catch (_) {}
+}
+communityLoad();
+function trakeAggregate() {
+  const byName = new Map();
+  const add = (row) => {
+    const name = String(row?.name || '').trim(); if (!name) return;
+    const key = name.toLocaleLowerCase('es');
+    if (!byName.has(key)) byName.set(key, { ...trakePersonaVacia(name), puntos: 0, apuntes: 0, ultimaActividad: 0 });
+    const x = byName.get(key);
+    for (const tipo of TRAKE_TIPOS) x[tipo] += Math.max(0, Number(row?.[tipo]) || 0);
+    x.puntos = trakePuntos(x);
+  };
+  for (const mes of Object.values(trakeData.months || {})) for (const row of Object.values(mes || {})) add(row);
+  // Log is authoritative for activity/recent consumption, while monthly buckets provide lifetime totals.
+  for (const row of (trakeData.log || [])) {
+    const key = String(row.name || '').trim().toLocaleLowerCase('es');
+    if (!key) continue;
+    if (!byName.has(key)) add({ name: row.name });
+    const x = byName.get(key); x.apuntes += 1; x.ultimaActividad = Math.max(x.ultimaActividad, Number(row.ts) || 0);
+  }
+  const list = [...byName.values()].sort((a,b) => b.puntos-a.puntos || a.name.localeCompare(b.name, 'es'));
+  // ---------- Carta del Salón de la Fama: foto (si tiene) + notas tipo FC ----------
+  // Todas las notas van de 60 a 99 y son PROPORCIONALES al consumo TOTAL (histórico, no mensual) del Traketímetro:
+  //  - cada categoría (cervezas, cubatas...): 99 para quien más lleva; el resto, en proporción (60 si no ha consumido)
+  //  - media (el número grande de arriba): lo mismo con los puntos totales
+  const NOTA_MIN = 60, NOTA_MAX = 99;
+  const nota = (v, max) => (max > 0 && v > 0 ? Math.round(NOTA_MIN + ((NOTA_MAX - NOTA_MIN) * Math.min(v, max)) / max) : NOTA_MIN);
+  const maxPuntos = list.reduce((m, p) => Math.max(m, p.puntos), 0);
+  const maxPorTipo = {};
+  for (const k of Object.keys(CARD_STAT_META)) maxPorTipo[k] = list.reduce((m, p) => Math.max(m, Number(p[k]) || 0), 0);
+  list.forEach((p, i) => {
+    const key = p.name.toLocaleLowerCase('es');
+    const foto = communityData.cardPhotos[key];
+    p.foto = foto ? { url: foto.url, updatedAt: foto.updatedAt, sinFondo: Boolean(foto.sinFondo) } : null;
+    p.tieneFotoPropia = Boolean(foto);
+    p.puesto = i + 1;
+    p.media = nota(p.puntos, maxPuntos);
+    p.rating = {};
+    for (const k of Object.keys(CARD_STAT_META)) p.rating[k] = nota(Number(p[k]) || 0, maxPorTipo[k]);
+  });
+  return list;
+}
+// Categorías que se ven en la Carta: lo que el admin tiene activado, pero los
+// cigarros solo cuentan mientras estén encendidos (igual que en el resto de la web).
+function cardConfig() {
+  const disponibles = TRAKE_TIPOS.slice(); // ya incluye 'cigarros' si está activo (ver trakeSyncTipos)
+  const activas = communityData.cardStats.filter((k) => disponibles.includes(k));
+  // Los cigarros salen solos en la carta en cuanto están activados en el Traketímetro
+  if (disponibles.includes('cigarros') && !activas.includes('cigarros')) activas.push('cigarros');
+  return { cardStats: activas, cardStatsDisponibles: disponibles, cardStatMeta: CARD_STAT_META };
+}
+app.get('/api/community/overview', (req, res) => {
+  const people = trakeAggregate();
+  const upcoming = [...communityData.events, ...(trakeData.events || []).map(e => ({ ...e, source: 'traketimetro' }))]
+    .filter(e => e.date || e.start).sort((a,b) => String(a.date || a.start).localeCompare(String(b.date || b.start)));
+  const notices = [...communityData.notices].sort((a,b) => (Number(b.createdAt)||0)-(Number(a.createdAt)||0));
+  res.json({ people, totalRegistros: (trakeData.log || []).length, upcoming: upcoming.filter(e => String(e.date || e.start) >= new Date().toISOString().slice(0,10)).slice(0,5), notices: notices.slice(0,5), events: upcoming, lastActivity: [...(trakeData.log || [])].sort((a,b)=>(b.ts||0)-(a.ts||0))[0] || null, config: { ...trakeConfig(), ...cardConfig() } });
+});
+app.get('/api/community/profile', (req, res) => {
+  const requested = String(req.query.name || '').trim();
+  if (!requested) return res.status(400).json({ error: 'Indica un nombre.' });
+  const people = trakeAggregate();
+  const person = people.find(p => p.name.toLocaleLowerCase('es') === requested.toLocaleLowerCase('es'));
+  if (!person) return res.status(404).json({ error: 'No existe ese nombre en el Traketímetro.' });
+  const key = person.name.toLocaleLowerCase('es');
+  const activity = (trakeData.log || []).filter(x => String(x.name||'').trim().toLocaleLowerCase('es') === key).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,50);
+  const recent = { cervezas: 0, cubatas: 0, chupitos: 0, porros: 0, cigarros: 0 };
+  const cutoff = Date.now() - 30*24*60*60*1000;
+  for (const x of activity) if ((Number(x.ts)||0) >= cutoff && recent[x.tipo] !== undefined && TRAKE_TIPOS.includes(x.tipo)) recent[x.tipo] += Number(x.cantidad)||0;
+  res.json({ person, activity: activity.filter(x => TRAKE_TIPOS.includes(x.tipo)), recent, frase: communityData.perfilFrases[key]?.texto || '', config: { ...trakeConfig(), ...cardConfig() } });
+});
+// ---------- Foto de la Carta: MISMA identidad que TKT365 (token del dispositivo -> nombre) ----------
+// Un dispositivo solo puede subir la foto del nombre que ya tiene elegido en TKT365 (api.post('/claim')).
+// Así nadie puede tocar la foto de otro, igual que nadie puede apostar en nombre de otro.
+const cardUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024, files: 1, fields: 4, fieldSize: 200 },
+  // Se acepta cualquier imagen (o tipo vacío/genérico, como mandan algunos móviles para .gif); luego se comprueba el contenido real.
+  fileFilter: (req, file, cb) => cb(null, /^(image\/|application\/octet-stream$|$)/i.test(file.mimetype || ''))
+});
+async function cardGuardarFoto(buffer) {
+  // GIF animado (el navegador convierte los vídeos a GIF): se guarda tal cual, con su fondo y su animación.
+  if (buffer.length > 6 && /^GIF8[79]a$/.test(buffer.subarray(0, 6).toString('latin1'))) {
+    const gifId = `traketeros_cartas/${crypto.randomUUID()}`;
+    const g = await sendToCloudinary(buffer, { public_id: gifId, resource_type: 'image', overwrite: true });
+    return { url: g.secure_url, publicId: g.public_id, sinFondo: false };
+  }
+  // ¿Viene ya recortada (sin fondo)? El navegador quita el fondo antes de subirla y manda un PNG/WebP con transparencia.
+  let sinFondo = false;
+  try {
+    const meta = await sharp(buffer).metadata();
+    if (meta.hasAlpha) {
+      const alfa = (await sharp(buffer).stats()).channels[3];
+      sinFondo = Boolean(alfa && alfa.min < 250);
+    }
+  } catch { /* se trata como foto normal */ }
+
+  let img, extra;
+  if (sinFondo) {
+    // Se conserva la transparencia: WebP con alfa (sin aplanar a blanco)
+    img = await sharp(buffer, { failOn: 'error' })
+      .rotate()
+      .resize({ width: 600, height: 800, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 90, alphaQuality: 95 })
+      .toBuffer();
+    extra = { format: 'webp' };
+  } else {
+    img = await sharp(buffer, { failOn: 'error' })
+      .rotate()
+      .flatten({ background: '#ffffff' })
+      .resize({ width: 600, height: 600, fit: 'cover' })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    extra = {};
+  }
+  const publicId = `traketeros_cartas/${crypto.randomUUID()}`;
+  const r = await sendToCloudinary(img, { public_id: publicId, resource_type: 'image', overwrite: true, ...extra });
+  return { url: r.secure_url, publicId: r.public_id, sinFondo };
+}
+// Dice a un dispositivo quién es (según lo que ya haya elegido en TKT365), igual que usa el Higher or Lower.
+app.get('/api/community/quien-soy', (req, res) => {
+  const id = tkt365Api?.juegos?.duenoDe(req.query.token) || null;
+  const name = id ? tkt365Api.juegos.nombreDe(id) : null;
+  res.json({ id, name });
+});
+app.post('/api/community/card-photo', uploadLimiter, (req, res) => {
+  cardUpload.single('foto')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'El archivo pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.' });
+    try {
+      const name = String(req.body?.name || '').trim().slice(0, 80);
+      if (!name) return res.status(400).json({ error: 'Indica tu nombre.' });
+      if (!req.file) return res.status(400).json({ error: 'Formato no válido. Sube una foto, un GIF o un vídeo.' });
+      const key = name.toLocaleLowerCase('es');
+      const yo = tkt365Api?.juegos?.duenoDe(req.body?.token);
+      if (!yo || yo !== key) {
+        return res.status(403).json({ error: 'Esta carta es de otra persona. Para subir tu foto, entra en tu propio perfil (hace falta tener tu nombre elegido en TKT365, igual que para apostar).' });
+      }
+      const foto = await cardGuardarFoto(req.file.buffer);
+      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, sinFondo: foto.sinFondo, updatedAt: Date.now() };
+      communitySave();
+      res.json({ ok: true, url: foto.url });
+    } catch (e) {
+      console.error('Carta: no se pudo guardar la foto:', e.message || e);
+      res.status(500).json({ error: 'No se pudo guardar la foto. Inténtalo de nuevo.' });
+    }
+  });
+});
+// El admin puede poner/cambiar la foto de cualquiera (sin necesitar el token de su dispositivo).
+app.post('/api/admin/community/card-photo', adminAuth, (req, res) => {
+  cardUpload.single('foto')(req, res, async (err) => {
+    if (err) {
+      console.error('Admin carta: error leyendo la foto:', err.code || err.message || err);
+      return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'El archivo pesa demasiado (máximo 12 MB).' : 'No se ha podido leer la foto.' });
+    }
+    try {
+      const name = String(req.body?.name || '').trim().slice(0, 80);
+      if (!name) return res.status(400).json({ error: 'Indica el nombre.' });
+      if (!req.file) return res.status(400).json({ error: 'Formato no válido. Sube una foto, un GIF o un vídeo.' });
+      const key = name.toLocaleLowerCase('es');
+      const foto = await cardGuardarFoto(req.file.buffer);
+      communityData.cardPhotos[key] = { name, url: foto.url, publicId: foto.publicId, sinFondo: foto.sinFondo, updatedAt: Date.now() };
+      communitySave();
+      res.json({ ok: true, url: foto.url });
+    } catch (e) {
+      console.error('Admin carta: no se pudo guardar la foto:', e.message || e);
+      const formato = /unsupported|corrupt|invalid|Input buffer|heif|bad seek/i.test(String(e.message || e));
+      res.status(formato ? 415 : 500).json({ error: formato ? 'No se pudo procesar esa imagen (formato no soportado). Prueba con JPG o PNG.' : 'No se pudo guardar la foto (' + String(e.message || 'error del servidor').slice(0, 120) + ').' });
+    }
+  });
+});
+app.delete('/api/admin/community/card-photo/:name', adminAuth, (req, res) => {
+  const key = String(req.params.name || '').trim().toLocaleLowerCase('es');
+  delete communityData.cardPhotos[key];
+  communitySave();
+  res.json({ ok: true });
+});
+// Categorías de estadísticas que se ven en la Carta (el admin añade/quita)
+app.post('/api/admin/community/card-stats', adminAuth, (req, res) => {
+  const key = String(req.body?.key || '').trim();
+  if (!CARD_STAT_META[key]) return res.status(400).json({ error: 'Categoría no válida.' });
+  if (!communityData.cardStats.includes(key)) communityData.cardStats.push(key);
+  communitySave();
+  res.json({ ok: true, cardStats: communityData.cardStats });
+});
+app.delete('/api/admin/community/card-stats/:key', adminAuth, (req, res) => {
+  communityData.cardStats = communityData.cardStats.filter((k) => k !== req.params.key);
+  communitySave();
+  res.json({ ok: true, cardStats: communityData.cardStats });
+});
+// ---------- Frase del perfil: cada persona pone la suya (misma identidad que TKT365) y el admin puede poner/quitar la de cualquiera ----------
+function fraseLimpia(t) { return String(t || '').replace(/\s+/g, ' ').trim().slice(0, 200); }
+function fraseGuardar(key, name, texto) {
+  if (texto) communityData.perfilFrases[key] = { texto, ts: Date.now() };
+  else delete communityData.perfilFrases[key];
+  communitySave();
+}
+app.post('/api/community/frase', (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0, 80);
+  const key = name.toLocaleLowerCase('es');
+  const persona = key && trakeAggregate().find((p) => p.name.toLocaleLowerCase('es') === key);
+  if (!persona) return res.status(404).json({ error: 'No existe ese nombre en el Traketímetro.' });
+  const yo = tkt365Api?.juegos?.duenoDe(req.body?.token);
+  if (!yo || yo !== key) return res.status(403).json({ error: 'Solo puedes cambiar la frase de tu propio perfil (hace falta tener tu nombre elegido en TKT365).' });
+  const texto = fraseLimpia(req.body?.texto);
+  fraseGuardar(key, persona.name, texto);
+  res.json({ ok: true, frase: texto });
+});
+app.post('/api/admin/community/perfil-frase', adminAuth, (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0, 80);
+  const key = name.toLocaleLowerCase('es');
+  const persona = key && trakeAggregate().find((p) => p.name.toLocaleLowerCase('es') === key);
+  if (!persona) return res.status(404).json({ error: 'No existe ese nombre en el Traketímetro.' });
+  const texto = fraseLimpia(req.body?.texto);
+  fraseGuardar(key, persona.name, texto);
+  res.json({ ok: true, frases: communityData.perfilFrases });
+});
+app.get('/api/community/admin', adminAuth, (req, res) => res.json(communityData));
+app.post('/api/community/events', adminAuth, (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0,100);
+  const date = String(req.body?.date || '').slice(0,10);
+  if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Nombre y fecha válida son obligatorios.' });
+  const event = { id: crypto.randomUUID(), name, date, time: String(req.body?.time||'').slice(0,5), place: String(req.body?.place||'').trim().slice(0,120), description: String(req.body?.description||'').trim().slice(0,500), createdAt: Date.now() };
+  communityData.events.push(event); communitySave(); res.json({ ok: true, event, data: communityData });
+});
+app.delete('/api/community/events/:id', adminAuth, (req, res) => {
+  communityData.events = communityData.events.filter(e => e.id !== req.params.id); communitySave(); res.json({ ok: true, data: communityData });
+});
+app.post('/api/community/notices', adminAuth, (req, res) => {
+  const title = String(req.body?.title || '').trim().slice(0,120);
+  const body = String(req.body?.body || '').trim().slice(0,1500);
+  if (!title || !body) return res.status(400).json({ error: 'Título y aviso son obligatorios.' });
+  const notice = { id: crypto.randomUUID(), title, body, pinned: Boolean(req.body?.pinned), createdAt: Date.now() };
+  communityData.notices.unshift(notice); communityData.notices = communityData.notices.slice(0,100); communitySave(); res.json({ ok: true, notice, data: communityData });
+});
+app.delete('/api/community/notices/:id', adminAuth, (req, res) => {
+  communityData.notices = communityData.notices.filter(n => n.id !== req.params.id); communitySave(); res.json({ ok: true, data: communityData });
+});
+
+// =========================
+// TKT365: apuestas virtuales con puntos TKT (sin dinero real)
+// =========================
+// Los usuarios salen SIEMPRE del Trakímetro (ver tkt365.js). No se toca nada
+// del Trakímetro: solo se leen sus datos.
+tkt365Api = registerTkt365({
+  app,
+  adminAuth,
+  getTrake: () => trakeData,
+  tipos: TRAKE_TIPOS,
+  puntos: TRAKE_PUNTOS,
+  hoy: trakeHoy,
+  ready: trakeReady,
+  cloudinary,
+  cloudinaryOk: CLOUDINARY_OK,
+  dataDir: TRAKE_DATA_DIR
+});
+
+// Higher or Lower (Juegos): mismos jugadores que TKT365/Traketímetro, premios en TKT.
+registerHigherLower({
+  app,
+  getTrake: () => trakeData,
+  tipos: TRAKE_TIPOS,
+  hoy: trakeHoy,
+  ready: trakeReady,
+  tkt: tkt365Api.juegos,
+  cloudinary,
+  cloudinaryOk: CLOUDINARY_OK,
+  dataDir: TRAKE_DATA_DIR
+});
+
+// 🎧 Playlist TKT: búsqueda y alta de canciones en la playlist compartida de TIDAL
+// (API oficial, OAuth con PKCE; credenciales y tokens solo en el servidor). Ver tidal.js.
+// Avisos push al admin (notificaciones del navegador) cuando alguien añade una canción. Ver push.js.
+const push = registerPush({
+  app,
+  adminAuth,
+  cloudinary,
+  cloudinaryOk: CLOUDINARY_OK,
+  dataDir: TRAKE_DATA_DIR
+});
+
+registerTidal({
+  app,
+  adminAuth,
+  cloudinary,
+  cloudinaryOk: CLOUDINARY_OK,
+  dataDir: TRAKE_DATA_DIR,
+  // Mismos nombres que el Traketímetro y TKT365 (incluye a quien solo apuesta)
+  getNombres: async () => {
+    try { await tkt365Api.juegos.listo; } catch { /* sigue con lo que haya */ }
+    return tkt365Api.juegos.usuarios().map((u) => u.name);
+  },
+  onAdd: (info) => push.notifyAdmin(info)
+});
+
+// =========================
+// ESTATUTOS (privado con contraseña) + SUGERENCIAS
+// =========================
+//
+// El PDF vive en /private (fuera de public/), así que solo se sirve si hay una
+// cookie de sesión válida, que se consigue con la contraseña. Las sugerencias
+// se guardan igual que el resto: memoria + fichero local + respaldo en
+// Cloudinary. Desde /admin-estatutos.html puedes descargar todo en un JSON y
+// volver a importarlo después de un deploy.
+//
+// Variables de entorno (opcionales):
+//   (la contraseña de los estatutos está fija en el código: Estraketeros26)
+//   ESTATUTOS_SECRET    clave para firmar la sesión (por defecto sale de ADMIN_PASSWORD)
+
+const ESTATUTOS_PDF = path.join(__dirname, 'private', 'estatutos.pdf');
+const ESTATUTOS_FILE = path.join(TRAKE_DATA_DIR, 'estatutos_sugerencias.json');
+const ESTATUTOS_CLOUD_ID = 'traketeros_data/estatutos_sugerencias';
+const ESTATUTOS_COOKIE = 'trk_estatutos';
+const ESTATUTOS_SESION_MS = 7 * 24 * 60 * 60 * 1000;
+const ESTATUTOS_MAX_SUG = 1000;
+const ESTATUTOS_MAX_TEXTO = 1500;
+
+// Contraseña fija (ya no depende de ninguna variable de entorno de Render).
+// Se aceptan las dos variantes por si la "?" no era parte de la contraseña.
+const ESTATUTOS_PASSWORDS = ['Estraketeros26', 'Estraketeros26?'];
+
+const sha = (v) => crypto.createHash('sha256').update(String(v)).digest();
+function estatutosPasswordOk(pw) {
+  const h = sha(pw);
+  let ok = false;
+  for (const good of ESTATUTOS_PASSWORDS) {
+    if (crypto.timingSafeEqual(h, sha(good))) ok = true;
+  }
+  return ok;
+}
+
+const ESTATUTOS_SECRET = process.env.ESTATUTOS_SECRET || ('estatutos|' + (process.env.ADMIN_PASSWORD || 'traketeros'));
+const estatutosFirma = (exp) => crypto.createHmac('sha256', ESTATUTOS_SECRET).update(String(exp)).digest('hex');
+
+function estatutosToken() {
+  const exp = Date.now() + ESTATUTOS_SESION_MS;
+  return exp + '.' + estatutosFirma(exp);
+}
+
+function estatutosCookie(req) {
+  const m = (req.headers.cookie || '').split(';').map((c) => c.trim()).find((c) => c.startsWith(ESTATUTOS_COOKIE + '='));
+  return m ? decodeURIComponent(m.slice(ESTATUTOS_COOKIE.length + 1)) : '';
+}
+
+function estatutosAuth(req, res, next) {
+  const [exp, sig] = estatutosCookie(req).split('.');
+  const good = exp && sig && Number(exp) > Date.now() && sig.length === 64 &&
+    crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(estatutosFirma(exp)));
+  if (!good) return res.status(401).json({ error: 'Hace falta la contraseña.' });
+  next();
+}
+
+// ---------- Almacenamiento de sugerencias ----------
+let estatutosSug = []; // [{ id, name, text, date (ISO) }]
+
+function estatutosLimpiar(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((x) => x && typeof x.text === 'string' && x.text.trim())
+    .map((x) => ({
+      id: String(x.id || crypto.randomUUID()).slice(0, 64),
+      name: String(x.name || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40),
+      text: String(x.text).replace(/\r/g, '').trim().slice(0, ESTATUTOS_MAX_TEXTO),
+      date: isNaN(Date.parse(x.date)) ? new Date().toISOString() : new Date(x.date).toISOString()
+    }));
+}
+
+function estatutosSnapshot() {
+  return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), suggestions: estatutosSug });
+}
+
+function estatutosSaveLocal() {
+  try {
+    fs.mkdirSync(TRAKE_DATA_DIR, { recursive: true });
+    fs.writeFileSync(ESTATUTOS_FILE, estatutosSnapshot(), 'utf8');
   } catch (e) {
-    console.error('No se pudo guardar la cuota localmente:', e.message || e);
+    console.error('No se pudieron guardar las sugerencias localmente:', e.message || e);
   }
 }
 
-async function cuotaSaveCloud() {
+async function estatutosSaveCloud() {
   if (!CLOUDINARY_OK) return;
   try {
-    const b64 = Buffer.from(cuotaSnapshot()).toString('base64');
+    const b64 = Buffer.from(estatutosSnapshot()).toString('base64');
     await cloudinary.uploader.upload(`data:application/json;base64,${b64}`, {
       resource_type: 'raw',
-      public_id: CUOTA_CLOUD_ID,
+      public_id: ESTATUTOS_CLOUD_ID,
       overwrite: true,
       invalidate: true
     });
   } catch (e) {
-    console.error('No se pudo respaldar la cuota en Cloudinary:', e.message || e);
+    console.error('No se pudieron respaldar las sugerencias en Cloudinary:', e.message || e);
   }
 }
 
-function cuotaSave() {
-  cuotaSaveLocal();
-  cuotaSaveCloud();
+function estatutosSave() {
+  estatutosSaveLocal();
+  estatutosSaveCloud();
 }
 
-async function cuotaLoad() {
+async function estatutosLoad() {
   if (CLOUDINARY_OK) {
     try {
-      const info = await cloudinary.api.resource(CUOTA_CLOUD_ID, { resource_type: 'raw' });
+      const info = await cloudinary.api.resource(ESTATUTOS_CLOUD_ID, { resource_type: 'raw' });
       const resp = await fetch(info.secure_url, { cache: 'no-store' });
       if (resp.ok) {
-        cuotaApply(await resp.json());
-        console.log('Cuota: datos cargados desde Cloudinary.');
+        const j = await resp.json();
+        estatutosSug = estatutosLimpiar(j.suggestions);
+        console.log('Estatutos: sugerencias cargadas desde Cloudinary.');
         return;
       }
     } catch (e) {
-      console.warn('Cuota: no se pudo cargar el respaldo de Cloudinary (usando plan B):', e.message || e);
+      console.warn('Estatutos: no se pudo cargar el respaldo de Cloudinary (usando plan B):', e.message || e);
     }
   }
   try {
-    cuotaApply(JSON.parse(fs.readFileSync(CUOTA_FILE, 'utf8')));
+    estatutosSug = estatutosLimpiar(JSON.parse(fs.readFileSync(ESTATUTOS_FILE, 'utf8')).suggestions);
   } catch {
-    cuotaApply(null);
+    estatutosSug = [];
   }
 }
 
-cuotaLoad();
+estatutosLoad();
 
-function cuotaList() {
-  return cuotaPeople.map((name) => ({
-    name,
-    paid: Boolean(cuotaData[name]?.paid),
-    receipt: Boolean(cuotaData[name]?.receipt)
-  }));
+// ---------- Límite de intentos (en memoria, por IP) ----------
+function estatutosLimiter(max, windowMs, msg) {
+  const hits = new Map();
+  return (req, res, next) => {
+    const now = Date.now();
+    const arr = (hits.get(req.ip) || []).filter((t) => now - t < windowMs);
+    if (arr.length >= max) return res.status(429).json({ error: msg });
+    arr.push(now);
+    hits.set(req.ip, arr);
+    if (hits.size > 2000) for (const [k, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(k);
+    next();
+  };
 }
+const estatutosLoginLimit = estatutosLimiter(8, 10 * 60 * 1000, 'Demasiados intentos. Prueba dentro de un rato.');
+const estatutosSendLimit = estatutosLimiter(10, 10 * 60 * 1000, 'Has mandado muchas sugerencias seguidas. Prueba dentro de un rato.');
 
-// Solo se aceptan los nombres de la lista (evita que se cuelen otros)
-function cuotaNombre(req, res) {
-  const name = String(req.body?.name || '').trim();
-  if (!cuotaPeople.includes(name)) {
-    res.status(400).json({ error: 'Ese nombre no está en la lista.' });
-    return null;
-  }
-  return name;
-}
+// ---------- Rutas públicas (con contraseña) ----------
+app.post('/api/estatutos/login', estatutosLoginLimit, (req, res) => {
+  const pw = String(req.body?.password ?? '').slice(0, 200);
+  if (!estatutosPasswordOk(pw)) return res.status(401).json({ error: 'Contraseña incorrecta.' });
+  const secure = req.secure ? '; Secure' : '';
+  res.set('Set-Cookie',
+    `${ESTATUTOS_COOKIE}=${encodeURIComponent(estatutosToken())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ESTATUTOS_SESION_MS / 1000}${secure}`);
+  res.json({ ok: true });
+});
 
-function escHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
+app.post('/api/estatutos/logout', (req, res) => {
+  res.set('Set-Cookie', `${ESTATUTOS_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  res.json({ ok: true });
+});
 
-// Lista pública
-app.get('/api/cuota', (req, res) => {
+app.get('/api/estatutos/session', estatutosAuth, (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ people: cuotaList() });
+  res.json({ ok: true });
 });
 
-// Marcar "He pagado" / "No he pagado"
-app.post('/api/cuota/status', (req, res) => {
-  const name = cuotaNombre(req, res);
-  if (!name) return;
-
-  // Desde la web pública solo se puede marcar "He pagado". Quitarlo lo hace el admin.
-  if (req.body?.paid !== true) {
-    return res.status(403).json({ error: 'Solo el admin puede quitar un pago.' });
-  }
-  cuotaData[name] = { paid: true, receipt: Boolean(cuotaData[name]?.receipt) };
-  cuotaSave();
-  res.json({ ok: true, people: cuotaList() });
-});
-
-// Límite sencillo por IP: 10 justificantes por hora
-const receiptHits = new Map();
-setInterval(() => {
-  const limit = Date.now() - 3600_000;
-  for (const [ip, times] of receiptHits) {
-    const recent = times.filter((t) => t > limit);
-    if (recent.length) receiptHits.set(ip, recent);
-    else receiptHits.delete(ip);
-  }
-}, 10 * 60_000).unref();
-
-function receiptLimiter(req, res, next) {
-  const now = Date.now();
-  const recent = (receiptHits.get(req.ip) || []).filter((t) => now - t < 3600_000);
-  if (recent.length >= 10) {
-    return res.status(429).json({ error: 'Demasiados intentos seguidos. Prueba otra vez dentro de un rato.' });
-  }
-  recent.push(now);
-  receiptHits.set(req.ip, recent);
-  next();
-}
-
-const receiptUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024, files: 1, fields: 5, fieldSize: 200 },
-  fileFilter: (req, file, cb) => cb(null, /^image\//i.test(file.mimetype))
-});
-
-// Subir el justificante: se reduce la foto y se manda por correo
-app.post('/api/cuota/receipt', receiptLimiter, (req, res) => {
-  receiptUpload.single('receipt')(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({
-        error: err.code === 'LIMIT_FILE_SIZE'
-          ? 'La foto pesa demasiado (máximo 15 MB).'
-          : 'No se ha podido subir la foto.'
-      });
-    }
-
-    try {
-      const name = cuotaNombre(req, res);
-      if (!name) return;
-
-      if (!cuotaData[name]?.paid) {
-        return res.status(400).json({ error: 'Primero pulsa "He pagado".' });
-      }
-      if (!req.file) {
-        return res.status(400).json({ error: 'No he recibido ninguna imagen.' });
-      }
-      if (!process.env.RESEND_API_KEY) {
-        return res.status(503).json({ error: 'El envío de justificantes todavía no está configurado.' });
-      }
-
-      let jpeg;
-      try {
-        jpeg = await sharp(req.file.buffer, { failOn: 'error' })
-          .rotate()
-          .flatten({ background: '#ffffff' })
-          .resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 85 })
-          .toBuffer();
-      } catch (e) {
-        console.error('Justificante no válido:', e.message);
-        return res.status(400).json({ error: 'No he podido leer esa imagen. Prueba con una captura o foto JPG/PNG.' });
-      }
-
-      const r = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: CUOTA_EMAIL_FROM,
-          to: [CUOTA_EMAIL_TO],
-          subject: `${name} ha pagado su cuota mensual`,
-          html: `<p><b>${escHtml(name)}</b> ha pagado su cuota mensual. Justificante adjunto.</p>`,
-          attachments: [
-            { filename: `justificante-${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')}.jpg`, content: jpeg.toString('base64') }
-          ]
-        })
-      });
-
-      if (!r.ok) {
-        const raw = await r.text().catch(() => '');
-        console.error('Resend error:', r.status, raw);
-        let detail = '';
-        try { detail = JSON.parse(raw).message || ''; } catch {}
-        return res.status(502).json({
-          error: 'No se ha podido enviar el correo.' + (detail ? ` Resend dice (${r.status}): ${detail}` : ` (código ${r.status})`)
-        });
-      }
-
-      cuotaData[name] = { paid: true, receipt: true };
-      cuotaSave();
-      res.json({ ok: true, people: cuotaList() });
-    } catch (e) {
-      console.error('Error enviando justificante:', e);
-      res.status(500).json({ error: 'Ha habido un error en el servidor. Inténtalo otra vez.' });
-    }
+app.get('/api/estatutos/pdf', estatutosAuth, (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  res.set('Content-Type', 'application/pdf');
+  res.set('Content-Disposition', (req.query.download ? 'attachment' : 'inline') + '; filename="Estatutos-Traketeros.pdf"');
+  res.sendFile(ESTATUTOS_PDF, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'No se encuentra el documento.' });
   });
 });
 
-// ADMIN: ver el estado (sirve para que el navegador pida usuario y clave)
-app.get('/api/admin/cuota', adminAuth, (req, res) => {
+app.get('/api/estatutos/sugerencias', estatutosAuth, (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ people: cuotaList() });
+  res.json({ suggestions: [...estatutosSug].sort((a, b) => b.date.localeCompare(a.date)) });
 });
 
-// ADMIN: marcar a una persona como pagado / no pagado
-app.post('/api/admin/cuota/status', adminAuth, (req, res) => {
-  const name = String(req.body?.name || '');
-  if (!cuotaPeople.includes(name)) return res.status(400).json({ error: 'Ese nombre no está en la lista.' });
-  const paid = req.body?.paid === true;
-  cuotaData[name] = { paid, receipt: paid ? Boolean(cuotaData[name]?.receipt) : false };
-  cuotaSave();
-  res.json({ ok: true, people: cuotaList() });
+app.post('/api/estatutos/sugerencias', estatutosAuth, estatutosSendLimit, (req, res) => {
+  const text = String(req.body?.text ?? '').replace(/\r/g, '').trim();
+  if (!text) return res.status(400).json({ error: 'Escribe tu sugerencia.' });
+  if (text.length > ESTATUTOS_MAX_TEXTO) return res.status(400).json({ error: `Máximo ${ESTATUTOS_MAX_TEXTO} caracteres.` });
+  if (estatutosSug.length >= ESTATUTOS_MAX_SUG) return res.status(409).json({ error: 'Ya hay demasiadas sugerencias.' });
+  const [nueva] = estatutosLimpiar([{ id: crypto.randomUUID(), name: req.body?.name, text, date: new Date().toISOString() }]);
+  estatutosSug.push(nueva);
+  estatutosSave();
+  res.json({ ok: true, suggestion: nueva });
 });
 
-// ADMIN: reiniciar a todos, o solo a uno si viene "name"
-app.post('/api/admin/cuota/reset', adminAuth, (req, res) => {
-  const name = req.body?.name;
-  if (name !== undefined) {
-    if (!cuotaPeople.includes(name)) return res.status(400).json({ error: 'Ese nombre no está en la lista.' });
-    delete cuotaData[name];
+// ---------- Admin ----------
+app.get('/api/admin/estatutos', adminAuth, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ suggestions: [...estatutosSug].sort((a, b) => b.date.localeCompare(a.date)) });
+});
+
+// Descarga todo en un JSON
+app.get('/api/admin/estatutos/export', adminAuth, (req, res) => {
+  const dia = new Date().toISOString().slice(0, 10);
+  res.set('Cache-Control', 'no-store');
+  res.set('Content-Type', 'application/json; charset=utf-8');
+  res.set('Content-Disposition', `attachment; filename="sugerencias-estatutos-${dia}.json"`);
+  res.send(JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), suggestions: estatutosSug }, null, 2));
+});
+
+// Importa un JSON exportado antes. mode "merge" (por defecto) añade las que no
+// existan ya; mode "replace" sustituye todo por lo importado.
+app.post('/api/admin/estatutos/import', adminAuth, (req, res) => {
+  const body = req.body || {};
+  const incoming = estatutosLimpiar(Array.isArray(body) ? body : (body.data?.suggestions ?? body.data ?? body.suggestions));
+  if (!incoming.length) return res.status(400).json({ error: 'El JSON no tiene ninguna sugerencia válida.' });
+  if (body.mode === 'replace') {
+    estatutosSug = incoming.slice(0, ESTATUTOS_MAX_SUG);
   } else {
-    cuotaData = {};
+    const ids = new Set(estatutosSug.map((x) => x.id));
+    for (const x of incoming) if (!ids.has(x.id) && estatutosSug.length < ESTATUTOS_MAX_SUG) estatutosSug.push(x);
   }
-  cuotaSave();
-  res.json({ ok: true, people: cuotaList() });
+  estatutosSave();
+  res.json({ ok: true, total: estatutosSug.length, imported: incoming.length });
 });
 
-// ADMIN: quitar a una persona de la lista
-app.post('/api/admin/cuota/remove', adminAuth, (req, res) => {
-  const name = String(req.body?.name || '');
-  if (!cuotaPeople.includes(name)) return res.status(400).json({ error: 'Ese nombre no está en la lista.' });
-  cuotaPeople = cuotaPeople.filter((n) => n !== name);
-  delete cuotaData[name];
-  cuotaSave();
-  res.json({ ok: true, people: cuotaList() });
-});
-
-// ADMIN: añadir a una persona a la lista (por si quitas a alguien sin querer)
-app.post('/api/admin/cuota/add', adminAuth, (req, res) => {
-  const name = String(req.body?.name || '').replace(/[\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 30);
-  if (!name) return res.status(400).json({ error: 'Falta el nombre.' });
-  if (cuotaPeople.some((n) => n.toLowerCase() === name.toLowerCase())) {
-    return res.status(409).json({ error: 'Ya está en la lista.' });
-  }
-  if (cuotaPeople.length >= 60) return res.status(400).json({ error: 'La lista está llena.' });
-  cuotaPeople.push(name);
-  cuotaSave();
-  res.json({ ok: true, people: cuotaList() });
+app.delete('/api/admin/estatutos/:id', adminAuth, (req, res) => {
+  const antes = estatutosSug.length;
+  estatutosSug = estatutosSug.filter((x) => x.id !== req.params.id);
+  if (estatutosSug.length === antes) return res.status(404).json({ error: 'No existe esa sugerencia.' });
+  estatutosSave();
+  res.json({ ok: true, total: estatutosSug.length });
 });
 
 // =========================

@@ -10,7 +10,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=12">
+  <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="noche.css?v=5">
+  <script src="tema.js?v=2"></script>
 </head>
 <body>
 
@@ -23,9 +25,13 @@
     <small>LA PEÑA DE LOS TRAKETOS 🍻</small>
   </div>
   <nav class="nav-links">
-    <a class="header-link" href="/">La cuota</a>
+    <a class="header-link" href="/">🏠 El Local</a>
     <a class="header-link" href="fotos.html">📸 Fotos</a>
     <a class="header-link" href="juegos.html">🎮 Juegos</a>
+    <a class="header-link" href="tkt365.html">🎰 TKT365</a>
+    <a class="header-link" href="salon-fama.html">🏆 Salón de la Fama</a>
+    <a class="header-link" href="calendario.html">📅 Calendario</a>  
+    <a class="header-link" href="playlist.html">🎧 Playlist</a>
   </nav>
 </header>
 
@@ -49,10 +55,12 @@
     </label>
 
     <div class="field foto-field">
-      <span>📷 Foto (opcional)</span>
+      <span>📷 Foto (opcional) si vas a subir foto subela antes de añadir lo que consumes</span>
       <input id="foto" type="file" accept="image/*" hidden>
+      <input id="fotoCam" type="file" accept="image/*" capture="environment" hidden>
       <div class="foto-row">
-        <button class="mini" id="fotoBtn" type="button">📷 Añadir foto</button>
+        <button class="mini" id="fotoCamBtn" type="button">📸 Hacer foto</button>
+        <button class="mini" id="fotoBtn" type="button">🖼️ Galería</button>
         <button class="mini" id="fotoQuitar" type="button" hidden>✖ Quitar</button>
       </div>
       <img class="foto-preview" id="fotoPreview" alt="Vista previa de la foto" hidden>
@@ -72,8 +80,12 @@
         <span>Chupito</span>
       </button>
       <button class="tile" id="tile-porros" type="button">
-        <span class="tile-emoji">🚬</span>
+        <span class="tile-emoji">🌿</span>
         <span>Porro</span>
+      </button>
+      <button class="tile" id="tile-cigarros" type="button" data-cigarros style="display:none;grid-column:1 / -1">
+        <span class="tile-emoji">🚬</span>
+        <span>Cigarro</span>
       </button>
     </div>
 
@@ -118,6 +130,19 @@
     </label>
     <button class="btn submit" id="ganadorSave" type="button">Guardar ganador</button>
     <p class="msg" id="ganadorMsg" role="status" aria-live="polite"></p>
+
+    <h3 class="admin-sub">🚬 Cigarros</h3>
+    <p class="hint" id="cigarrosEstado"></p>
+    <label class="field">
+      <span>Modo</span>
+      <select id="cigarrosModo">
+        <option value="auto">Automático (se activan solos el 1 de noviembre)</option>
+        <option value="on">Activados ya</option>
+        <option value="off">Desactivados</option>
+      </select>
+    </label>
+    <button class="btn submit" id="cigarrosSave" type="button">Guardar cigarros</button>
+    <p class="msg" id="cigarrosMsg" role="status" aria-live="polite"></p>
   </section>
 
   <section class="ranking">
@@ -129,7 +154,8 @@
       <span>🍺 Cerveza = 1</span>
       <span>🥃 Chupito = 2</span>
       <span>🍹 Cubata = 3</span>
-      <span>🚬 Porro = 3</span>
+      <span>🌿 Porro = 3</span>
+      <span data-cigarros style="display:none">🚬 Cigarro = 0,5</span>
     </p>
 
     <div class="periodo-bar">
@@ -149,7 +175,8 @@
             <th>🍺</th>
             <th>🍹</th>
             <th>🥃</th>
-            <th>🚬</th>
+            <th>🌿</th>
+            <th data-cigarros style="display:none">🚬</th>
             <th>Puntos</th>
             <th></th>
           </tr>
@@ -164,7 +191,7 @@
     <div class="gallery-head">
       <h2>Historial <span class="live-dot" aria-hidden="true"></span></h2>
     </div>
-    <p class="hint">Cuándo se apuntó cada cosa (día y hora de Madrid), del periodo que estás viendo. Si alguien puso foto, sale aquí.</p>
+    <p class="hint">Cuándo se apuntó cada cosa. Las fotos que subais se verán aqui.</p>
 
     <ul class="historial-list" id="historialList"></ul>
     <p class="ranking-vacio" id="historialVacio">Todavía no hay apuntes con fecha en este periodo. 🕒</p>
@@ -184,7 +211,8 @@
             <th>🍺</th>
             <th>🍹</th>
             <th>🥃</th>
-            <th>🚬</th>
+            <th>🌿</th>
+            <th data-cigarros style="display:none">🚬</th>
             <th>Total</th>
           </tr>
         </thead>
@@ -213,8 +241,12 @@
       <input id="editChupitos" type="number" inputmode="numeric" min="0" max="999" step="1">
     </label>
     <label class="field">
-      <span>🚬 Porros</span>
+      <span>🌿 Porros</span>
       <input id="editPorros" type="number" inputmode="numeric" min="0" max="999" step="1">
+    </label>
+    <label class="field" data-cigarros style="display:none">
+      <span>🚬 Cigarros</span>
+      <input id="editCigarros" type="number" inputmode="numeric" min="0" max="999" step="1">
     </label>
 
     <p class="msg" id="editMsg" role="status" aria-live="polite"></p>
@@ -242,6 +274,6 @@
   TRAKETEROS ❤️ · Aquí venimos a disfrutar · 2026
 </footer>
 
-<script src="traketimetro.js?v=6"></script>
+<script src="traketimetro.js?v=9"></script>
 </body>
 </html>
