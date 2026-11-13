@@ -9,6 +9,7 @@ import sharp from 'sharp';
 import { fileURLToPath } from 'url';
 import { registerTkt365 } from './tkt365.js';
 import { registerHigherLower } from './higherlower.js';
+import { registerAsistente } from './asistente.js';
 import { registerTidal } from './tidal.js';
 import { registerPush } from './push.js';
 
@@ -1902,6 +1903,16 @@ registerHigherLower({
   cloudinary,
   cloudinaryOk: CLOUDINARY_OK,
   dataDir: TRAKE_DATA_DIR
+});
+
+// 🤖 Asistente: contesta preguntas en español sobre el Traketímetro (solo lee datos). Ver asistente.js.
+registerAsistente({
+  app,
+  getTrake: () => trakeData,
+  tipos: TRAKE_TIPOS,
+  puntos: TRAKE_PUNTOS,
+  hoy: trakeHoy,
+  ready: trakeReady
 });
 
 // 🎧 Playlist TKT: búsqueda y alta de canciones en la playlist compartida de TIDAL
